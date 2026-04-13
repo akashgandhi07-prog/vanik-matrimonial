@@ -1,0 +1,80 @@
+# https://supabase.com/docs/guides/cli/config
+project_id = "vanik-matrimonial"
+
+[api]
+enabled = true
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["https://*.vercel.app"]
+
+[auth.email]
+enable_confirmations = true
+
+# Gateway JWT checks often return 401 "Invalid JWT" (stale token, env mismatch, etc.).
+# Each function still verifies the user with supabase.auth.getUser() + service role where needed.
+[functions.serve-photo]
+verify_jwt = false
+
+[functions.validate-coupon]
+verify_jwt = false
+
+[functions.submit-registration]
+verify_jwt = false
+
+[functions.admin-approve-member]
+verify_jwt = false
+
+[functions.admin-reject-member]
+verify_jwt = false
+
+[functions.submit-contact-request]
+verify_jwt = false
+
+[functions.request-account-deletion]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.expire-memberships]
+verify_jwt = false
+
+[functions.send-feedback-reminders]
+verify_jwt = false
+
+[functions.send-renewal-reminders]
+verify_jwt = false
+
+[functions.send-admin-digest]
+verify_jwt = false
+
+[functions.cleanup-unverified-accounts]
+verify_jwt = false
+
+[functions.archive-lapsed-members]
+verify_jwt = false
+
+[functions.feedback-flow]
+verify_jwt = false
+
+[functions.resend-webhook]
+verify_jwt = false
+
+[functions.admin-mark-matched]
+verify_jwt = false
+
+[functions.admin-resolve-pending-photo]
+verify_jwt = false
+
+[functions.admin-manage-users]
+verify_jwt = false
+
+[functions.billing-status]
+verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false

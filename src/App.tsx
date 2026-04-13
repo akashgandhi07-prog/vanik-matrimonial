@@ -1,0 +1,63 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import AdminCoupons from './pages/admin/AdminCoupons';
+import AdminEmailLog from './pages/admin/AdminEmailLog';
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminMemberDetail from './pages/admin/AdminMemberDetail';
+import AdminMembers from './pages/admin/AdminMembers';
+import AdminOverview from './pages/admin/AdminOverview';
+import AdminRequests from './pages/admin/AdminRequests';
+import AdminSettings from './pages/admin/AdminSettings';
+import Feedback from './pages/Feedback';
+import ForgotPassword from './pages/ForgotPassword';
+import Landing from './pages/Landing';
+import Login from './pages/Login';
+import MemberBrowse from './pages/MemberBrowse';
+import MemberMyProfile from './pages/MemberMyProfile';
+import MemberRequests from './pages/MemberRequests';
+import MemberSaved from './pages/MemberSaved';
+import MemberShell from './pages/MemberShell';
+import MembershipExpired from './pages/MembershipExpired';
+import Privacy from './pages/Privacy';
+import Register from './pages/Register';
+import RegistrationPending from './pages/RegistrationPending';
+import RegistrationRejected from './pages/RegistrationRejected';
+import ResetPassword from './pages/ResetPassword';
+import VerifyEmailSuccess from './pages/VerifyEmailSuccess';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
+        <Route path="/registration-pending" element={<RegistrationPending />} />
+        <Route path="/registration-rejected" element={<RegistrationRejected />} />
+        <Route path="/membership-expired" element={<MembershipExpired />} />
+        <Route path="/renew-membership" element={<MembershipExpired />} />
+        <Route path="/dashboard" element={<MemberShell />}>
+          <Route index element={<Navigate to="browse" replace />} />
+          <Route path="browse" element={<MemberBrowse />} />
+          <Route path="saved" element={<MemberSaved />} />
+          <Route path="requests" element={<MemberRequests />} />
+          <Route path="my-profile" element={<MemberMyProfile />} />
+        </Route>
+        <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverview />} />
+          <Route path="members" element={<AdminMembers />} />
+          <Route path="members/:id" element={<AdminMemberDetail />} />
+          <Route path="requests" element={<AdminRequests />} />
+          <Route path="coupons" element={<AdminCoupons />} />
+          <Route path="email-log" element={<AdminEmailLog />} />
+          <Route path="settings" element={<AdminSettings />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

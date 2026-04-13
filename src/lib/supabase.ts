@@ -1,0 +1,212 @@
+import { createClient } from '@supabase/supabase-js';
+
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+if (!url || !anon) {
+  console.warn('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
+}
+
+export const supabase = createClient(url ?? '', anon ?? '');
+
+function functionsBase(): string {
+  return (url ?? '').replace(/\/$/, '');
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+/**
+ * Call Edge Functions with explicit headers. Also set verify_jwt = false in supabase/config.toml
+ * for each function and redeploy — otherwise the gateway often returns 401 Invalid JWT even when
+ * the function would accept the token.
+ */
+export async function invokeFunction(name: string, body?: object) {
+  if (!url || !anon) {
+    throw new Error(
+      'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env — add them with the VITE_ prefix and restart npm run dev.'
+    );
+  }
+
+  await supabase.auth.refreshSession().catch(() => {
+    /* ignore; fall back to existing session */
+  });
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
+  if (!token) {
+    throw new Error('Not authenticated — please log in again.');
+  }
+
+  const res = await fetch(`${functionsBase()}/functions/v1/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anon,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body ?? {}),
+  }).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Could not reach Edge Function: ${msg}. Deploy functions and check network / ad blockers.`
+    );
+  });
+
+  const text = await res.text();
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      /* plain text body */
+    }
+  }
+
+  if (res.status === 402) {
+    const o = json as { code?: string; error?: string } | null;
+    if (o?.code === 'PAYMENT_REQUIRED') {
+      throw new Error('PAYMENT_REQUIRED');
+    }
+  }
+
+  if (!res.ok) {
+    const o = json as { error?: string; message?: string; code?: number } | null;
+    const msg =
+      (o && typeof o.message === 'string' && o.message) ||
+      (o && typeof o.error === 'string' && o.error) ||
+      text.slice(0, 400) ||
+      res.statusText;
+    if (res.status === 401 && msg.includes('JWT')) {
+      throw new Error(
+        `${msg} — Redeploy functions so config.toml has verify_jwt = false for this function, or sign out and sign in again with keys from the same Supabase project as VITE_SUPABASE_URL.`
+      );
+    }
+    throw new Error(msg);
+  }
+
+  return (json ?? {}) as Record<string, unknown>;
+}
+
+/** Edge Function callable without a user session (uses anon key). */
+export async function invokePublicFunction(name: string, body?: object) {
+  if (!url || !anon) {
+    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+  }
+  const res = await fetch(`${functionsBase()}/functions/v1/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${anon}`,
+      apikey: anon,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body ?? {}),
+  }).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Could not reach Edge Function: ${msg}`);
+  });
+  const text = await res.text();
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      /* plain */
+    }
+  }
+  if (!res.ok) {
+    const o = json as { error?: string; message?: string } | null;
+    const msg =
+      (o && typeof o.message === 'string' && o.message) ||
+      (o && typeof o.error === 'string' && o.error) ||
+      text.slice(0, 400) ||
+      res.statusText;
+    throw new Error(msg);
+  }
+  return (json ?? {}) as Record<string, unknown>;
+}
+
+export async function fetchPublicFunction(pathAndQuery: string) {
+  if (!url || !anon) {
+    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+  }
+  const path = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+  const res = await fetch(`${functionsBase()}/functions/v1${path}`, {
+    headers: { Authorization: `Bearer ${anon}`, apikey: anon },
+  }).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Could not reach Edge Function: ${msg}`);
+  });
+  const text = await res.text();
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      /* plain */
+    }
+  }
+  if (!res.ok) {
+    const o = json as { error?: string } | null;
+    throw new Error((o && typeof o.error === 'string' && o.error) || text.slice(0, 400) || res.statusText);
+  }
+  return (json ?? {}) as Record<string, unknown>;
+}
+
+/** POST with optional Bearer (session); falls back to anon when token is null. */
+export async function postFunctionOptionalAuth(
+  name: string,
+  body: object,
+  accessToken: string | null
+) {
+  if (!url || !anon) {
+    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+  }
+  const token = accessToken ?? anon;
+  const res = await fetch(`${functionsBase()}/functions/v1/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anon,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  }).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Could not reach Edge Function: ${msg}`);
+  });
+  const text = await res.text();
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      /* plain */
+    }
+  }
+  if (!res.ok) {
+    const o = json as { error?: string; message?: string } | null;
+    const msg =
+      (o && typeof o.message === 'string' && o.message) ||
+      (o && typeof o.error === 'string' && o.error) ||
+      text.slice(0, 400) ||
+      res.statusText;
+    throw new Error(msg);
+  }
+  return (json ?? {}) as Record<string, unknown>;
+}
+
+export async function fetchPhotoSignedUrl(profileId: string): Promise<string | null> {
+  const token = await getAccessToken();
+  if (!token || !url || !anon) return null;
+  const res = await fetch(
+    `${functionsBase()}/functions/v1/serve-photo?profile_id=${encodeURIComponent(profileId)}`,
+    { headers: { Authorization: `Bearer ${token}`, apikey: anon } }
+  ).catch(() => null);
+  if (!res || !res.ok) return null;
+  const j = (await res.json()) as { signedUrl?: string };
+  return j.signedUrl ?? null;
+}
