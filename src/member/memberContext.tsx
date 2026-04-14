@@ -15,7 +15,6 @@ export type ProfileRow = {
   education: string | null;
   job_title: string | null;
   height_cm: number | null;
-  weight_kg: number | null;
   diet: string | null;
   religion: string | null;
   community: string | null;

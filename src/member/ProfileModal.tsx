@@ -57,7 +57,6 @@ export function ProfileModal({
   const heightDisplay = c.height_cm
     ? `${c.height_cm} cm (${cmToFeetInches(c.height_cm)})`
     : null;
-  const weightDisplay = c.weight_kg ? `${c.weight_kg} kg` : null;
 
   return (
     <div
@@ -138,7 +137,6 @@ export function ProfileModal({
           <Row label="Family origin" value={c.town_country_of_origin} />
           <Row label="Diet" value={c.diet} />
           <Row label="Height" value={heightDisplay} />
-          <Row label="Weight" value={weightDisplay} />
           <Row label="Education" value={c.education} />
           <Row label="Settlement plans" value={c.future_settlement_plans} />
 

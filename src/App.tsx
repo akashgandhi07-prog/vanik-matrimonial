@@ -1,11 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import AdminAddMember from './pages/admin/AdminAddMember';
 import AdminCoupons from './pages/admin/AdminCoupons';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
+import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminMemberDetail from './pages/admin/AdminMemberDetail';
 import AdminMembers from './pages/admin/AdminMembers';
 import AdminOverview from './pages/admin/AdminOverview';
 import AdminRequests from './pages/admin/AdminRequests';
+import AdminScheduledJobs from './pages/admin/AdminScheduledJobs';
 import AdminSettings from './pages/admin/AdminSettings';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
@@ -52,6 +55,9 @@ export default function App() {
           <Route path="members" element={<AdminMembers />} />
           <Route path="members/:id" element={<AdminMemberDetail />} />
           <Route path="requests" element={<AdminRequests />} />
+          <Route path="feedback" element={<AdminFeedback />} />
+          <Route path="add-member" element={<AdminAddMember />} />
+          <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
           <Route path="coupons" element={<AdminCoupons />} />
           <Route path="email-log" element={<AdminEmailLog />} />
           <Route path="settings" element={<AdminSettings />} />

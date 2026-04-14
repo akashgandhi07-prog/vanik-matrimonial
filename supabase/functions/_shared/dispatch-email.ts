@@ -142,12 +142,10 @@ export async function dispatchEmail(
     case 'candidate_notification': {
       const { profile } = await fetchProfile(recipientProfileId!);
       if (!profile) return { ok: false, error: 'Profile not found' };
-      const reqRef = stripHtml(String(extraData.requester_reference ?? ''), 20);
-      const reqFirst = stripHtml(String(extraData.requester_first_name ?? ''), 60);
       const reqGender = stripHtml(String(extraData.requester_gender ?? ''), 20);
       subject = 'Your profile was viewed — Vanik Matrimonial Register';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register (reference: <strong>${reqRef}</strong>, first name: <strong>${reqFirst}</strong>).</p>
+        <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register.</p>
         <p>If you have any concerns, please contact us at <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
       break;
     }

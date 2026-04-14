@@ -39,12 +39,15 @@ verify_jwt = false
 
 [functions.expire-memberships]
 verify_jwt = false
+schedule = "0 7 * * *"
 
 [functions.send-feedback-reminders]
 verify_jwt = false
+schedule = "0 8 * * *"
 
 [functions.send-renewal-reminders]
 verify_jwt = false
+schedule = "0 8 * * *"
 
 [functions.send-admin-digest]
 verify_jwt = false
@@ -77,4 +80,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.stripe-webhook]
+verify_jwt = false
+
+[functions.admin-add-member]
 verify_jwt = false

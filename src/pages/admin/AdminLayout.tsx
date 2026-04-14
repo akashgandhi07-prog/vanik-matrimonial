@@ -76,6 +76,15 @@ export default function AdminLayout() {
         <NavLink to="/admin/requests" className={navCls} onClick={() => setSidebarOpen(false)}>
           Requests
         </NavLink>
+        <NavLink to="/admin/feedback" className={navCls} onClick={() => setSidebarOpen(false)}>
+          Feedback
+        </NavLink>
+        <NavLink to="/admin/add-member" className={navCls} onClick={() => setSidebarOpen(false)}>
+          Add member
+        </NavLink>
+        <NavLink to="/admin/scheduled-jobs" className={navCls} onClick={() => setSidebarOpen(false)}>
+          Scheduled jobs
+        </NavLink>
         <NavLink to="/admin/coupons" className={navCls} onClick={() => setSidebarOpen(false)}>
           Coupons
         </NavLink>

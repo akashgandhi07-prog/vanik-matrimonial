@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
+type UsageRow = {
+  profile_id: string;
+  coupon_used: string;
+  profiles: {
+    first_name: string;
+    reference_number: string | null;
+    created_at: string;
+  } | null;
+};
+
 type Coupon = {
   code: string;
   type: string;
@@ -22,6 +32,8 @@ function randomCode(len = 8) {
 
 export default function AdminCoupons() {
   const [rows, setRows] = useState<Coupon[]>([]);
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageFilter, setUsageFilter] = useState<string>('');
   const [form, setForm] = useState({
     code: '',
     type: 'free' as 'free' | 'discount_percent',
@@ -34,6 +46,13 @@ export default function AdminCoupons() {
   const load = useCallback(async () => {
     const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
     setRows((data ?? []) as Coupon[]);
+
+    const { data: usage } = await supabase
+      .from('member_private')
+      .select('profile_id, coupon_used, profiles(first_name, reference_number, created_at)')
+      .not('coupon_used', 'is', null)
+      .order('profile_id');
+    setUsageRows((usage ?? []) as UsageRow[]);
   }, []);
 
   useEffect(() => {
@@ -202,6 +221,53 @@ export default function AdminCoupons() {
           </tbody>
         </table>
       </div>
+
+      <h2 style={{ marginTop: 32 }}>Usage history</h2>
+
+      <div style={{ marginBottom: 12 }}>
+        <span className="label">Filter by coupon code</span>
+        <select value={usageFilter} onChange={(e) => setUsageFilter(e.target.value)} style={{ maxWidth: 240 }}>
+          <option value="">All coupons</option>
+          {[...new Set(usageRows.map((u) => u.coupon_used))].sort().map((code) => (
+            <option key={code} value={code}>{code}</option>
+          ))}
+        </select>
+      </div>
+
+      {usageRows.length === 0 ? (
+        <p style={{ color: '#6b7280' }}>No coupon usage recorded yet.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                <th style={{ textAlign: 'left', padding: 8 }}>Coupon code</th>
+                <th style={{ textAlign: 'left', padding: 8 }}>Member name</th>
+                <th style={{ textAlign: 'left', padding: 8 }}>Ref</th>
+                <th style={{ textAlign: 'left', padding: 8 }}>Date registered</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usageRows
+                .filter((u) => !usageFilter || u.coupon_used === usageFilter)
+                .map((u) => (
+                  <tr key={u.profile_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: 8 }}>
+                      <strong>{u.coupon_used}</strong>
+                    </td>
+                    <td style={{ padding: 8 }}>{u.profiles?.first_name ?? '—'}</td>
+                    <td style={{ padding: 8 }}>{u.profiles?.reference_number ?? '—'}</td>
+                    <td style={{ padding: 8 }}>
+                      {u.profiles?.created_at
+                        ? new Date(u.profiles.created_at).toLocaleDateString('en-GB')
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

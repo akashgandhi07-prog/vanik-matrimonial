@@ -21,7 +21,6 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
   const [nationality, setNationality] = useState(p.nationality ?? '');
   const [town, setTown] = useState(p.town_country_of_origin ?? '');
   const [height, setHeight] = useState<number | ''>(p.height_cm ?? '');
-  const [weight, setWeight] = useState(p.weight_kg != null ? String(p.weight_kg) : '');
   const [diet, setDiet] = useState(p.diet ?? 'Veg');
   const [pwCur, setPwCur] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -46,7 +45,6 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
         nationality: sanitizeText(nationality, 100),
         town_country_of_origin: sanitizeText(town, 200),
         height_cm: height === '' ? null : Number(height),
-        weight_kg: weight ? Number(weight) : null,
         diet,
       })
       .eq('id', p.id);
@@ -192,19 +190,6 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
                 </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="mp-weight">
-              Weight (kg)
-            </label>
-            <input
-              id="mp-weight"
-              type="number"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              min={30}
-              max={200}
-            />
           </div>
           <div>
             <label className="label" htmlFor="mp-diet">

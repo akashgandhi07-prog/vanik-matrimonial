@@ -194,7 +194,6 @@ Deno.serve(async (req) => {
     education: stripHtml(String(body.education ?? ''), 500),
     job_title: stripHtml(String(body.job_title ?? ''), 200),
     height_cm: Number(body.height_cm) || null,
-    weight_kg: body.weight_kg != null ? Number(body.weight_kg) : null,
     diet: body.diet as string,
     religion: body.religion as string,
     community: body.community as string,

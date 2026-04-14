@@ -65,29 +65,43 @@ Deno.serve(async (req) => {
     .eq('profile_id', requester.id)
     .single();
 
+  // Weekly limit: max 3 total candidate slots in a rolling 7-day window.
   const weekStart = new Date(Date.now() - 7 * 864e5).toISOString();
-  const weekCount = await admin
+  const { data: recentRequests } = await admin
     .from('requests')
-    .select('id', { count: 'exact', head: true })
+    .select('candidate_ids, created_at')
     .eq('requester_id', requester.id)
-    .gte('created_at', weekStart);
+    .gte('created_at', weekStart)
+    .order('created_at', { ascending: true });
 
-  if ((weekCount.count ?? 0) >= 3) {
-    const { data: oldestRecent } = await admin
-      .from('requests')
-      .select('created_at')
-      .eq('requester_id', requester.id)
-      .gte('created_at', weekStart)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    const reset = oldestRecent?.created_at
-      ? new Date(new Date(oldestRecent.created_at as string).getTime() + 7 * 864e5)
+  const usedCandidateIds = new Set<string>();
+  let oldestCreatedAt: string | null = null;
+  for (const r of recentRequests ?? []) {
+    for (const cid of (r.candidate_ids as string[]) ?? []) usedCandidateIds.add(cid);
+    if (!oldestCreatedAt) oldestCreatedAt = r.created_at as string;
+  }
+  const slotsUsed = usedCandidateIds.size;
+  const slotsRemaining = Math.max(0, 3 - slotsUsed);
+
+  if (slotsRemaining === 0) {
+    const reset = oldestCreatedAt
+      ? new Date(new Date(oldestCreatedAt).getTime() + 7 * 864e5)
       : new Date(Date.now() + 7 * 864e5);
     return jsonResponse(
       {
         error: 'weekly_limit',
-        message: `Limit reached. Resets on ${reset.toLocaleDateString('en-GB')}.`,
+        message: `Weekly limit reached (3 candidates). Resets on ${reset.toLocaleDateString('en-GB')}.`,
+      },
+      400
+    );
+  }
+
+  if (ids.length > slotsRemaining) {
+    return jsonResponse(
+      {
+        error: 'weekly_limit',
+        message: `You have ${slotsRemaining} candidate slot${slotsRemaining === 1 ? '' : 's'} remaining this week. Please reduce your selection.`,
+        slots_remaining: slotsRemaining,
       },
       400
     );

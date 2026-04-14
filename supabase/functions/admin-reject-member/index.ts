@@ -48,6 +48,20 @@ Deno.serve(async (req) => {
 
   const admin = getAdminClient();
 
+  // Delete ID document on rejection (GDPR — passport scans must not be retained)
+  const { data: priv } = await admin
+    .from('member_private')
+    .select('id_document_url')
+    .eq('profile_id', profileId)
+    .maybeSingle();
+  if (priv?.id_document_url) {
+    await admin.storage.from('id-documents').remove([priv.id_document_url]);
+    await admin
+      .from('member_private')
+      .update({ id_document_url: null, id_document_deleted_at: new Date().toISOString() })
+      .eq('profile_id', profileId);
+  }
+
   const { error: upProf } = await admin
     .from('profiles')
     .update({

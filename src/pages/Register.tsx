@@ -6,7 +6,6 @@ import { ageFromDob } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
 import {
-  isValidOptionalWeight,
   isValidPersonName,
   isValidPlaceField,
   isValidUkMobile,
@@ -43,7 +42,6 @@ type FormState = {
   education: string;
   job_title: string;
   height_cm: number | '';
-  weight_kg: string;
   diet: string;
   hobbies: string;
   photo_path: string;
@@ -79,7 +77,6 @@ const defaultState: FormState = {
   education: '',
   job_title: '',
   height_cm: '',
-  weight_kg: '',
   diet: '',
   hobbies: '',
   photo_path: '',
@@ -151,8 +148,6 @@ function validateStep3(form: FormState): Record<string, string> {
   if (!form.consent_contact) e.consent_contact = 'You must consent to share contact details for this service.';
   if (!form.consent_age) e.consent_age = 'You must confirm you are 18 or over.';
   if (!form.consent_privacy) e.consent_privacy = 'You must accept the privacy policy.';
-  if (!isValidOptionalWeight(form.weight_kg))
-    e.weight_kg = 'If provided, weight must be between 30 and 200 kg.';
   return e;
 }
 
@@ -179,7 +174,6 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   education: 'reg-education',
   job_title: 'reg-job',
   height_cm: 'reg-height',
-  weight_kg: 'reg-weight',
   diet: 'reg-diet-veg',
   hobbies: 'reg-hobbies',
   photo_path: 'reg-photo',
@@ -453,7 +447,6 @@ export default function Register() {
         education: sanitizeText(form.education, 500),
         job_title: sanitizeText(form.job_title, 200),
         height_cm: form.height_cm === '' ? null : form.height_cm,
-        weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
         diet: form.diet,
         hobbies: sanitizeText(form.hobbies, 400),
         stripe_checkout_session_id: stripeCheckoutSessionId ?? '',
@@ -1277,28 +1270,6 @@ export default function Register() {
                   ))}
                 </select>
                 {fieldErrors.height_cm && <p className="field-error">{fieldErrors.height_cm}</p>}
-              </div>
-              <div>
-                <label className="label" htmlFor="reg-weight">
-                  Weight (kg) <span className="badge badge-muted">optional</span>
-                </label>
-                <input
-                  id="reg-weight"
-                  name="weight"
-                  type="number"
-                  inputMode="decimal"
-                  min={30}
-                  max={200}
-                  autoComplete="off"
-                  placeholder="e.g. 70"
-                  value={form.weight_kg}
-                  onChange={(e) => {
-                    update({ weight_kg: e.target.value });
-                    clearFieldError('weight_kg');
-                  }}
-                  aria-invalid={fieldErrors.weight_kg ? true : undefined}
-                />
-                {fieldErrors.weight_kg && <p className="field-error">{fieldErrors.weight_kg}</p>}
               </div>
               <div>
                 <span className="label" id="reg-diet-label">
