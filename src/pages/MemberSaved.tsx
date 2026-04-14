@@ -65,7 +65,7 @@ export default function MemberSaved() {
             >
               <div
                 role="img"
-                aria-label={`${c.first_name}'s profile photo — no longer available`}
+                aria-label={`${c.first_name}'s profile photo, no longer available`}
                 style={{
                   aspectRatio: '1',
                   background: '#e5e7eb',

@@ -117,7 +117,7 @@ export default function AdminAddMember() {
     <div>
       <h1>Add member</h1>
       <p style={{ color: '#6b7280', marginBottom: 24 }}>
-        Manually add a member (e.g. migrating from spreadsheet). A random password will be set — the
+        Manually add a member (e.g. migrating from spreadsheet). A random password will be set. The
         member should use "forgot password" to set their own.
       </p>
 
@@ -201,7 +201,7 @@ export default function AdminAddMember() {
                 value={form.height_cm}
                 onChange={(e) => set('height_cm', e.target.value)}
               >
-                <option value="">— select —</option>
+                <option value="">Select height</option>
                 {HEIGHT_OPTIONS.map((h) => (
                   <option key={h.cm} value={String(h.cm)}>
                     {h.label}

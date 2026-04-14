@@ -20,7 +20,7 @@ type Profile = {
 const FILTERS = ['all', 'pending', 'active', 'expired', 'rejected', 'archived', 'matched', 'lapsed90'] as const;
 
 function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');

@@ -69,7 +69,7 @@ export default function AdminEmailLog() {
               <tr key={r.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 8 }}>{new Date(r.sent_at).toLocaleString('en-GB')}</td>
                 <td style={{ padding: 8 }}>{r.email_type}</td>
-                <td style={{ padding: 8 }}>{r.recipient_email ?? '—'}</td>
+                <td style={{ padding: 8 }}>{r.recipient_email ?? '-'}</td>
                 <td style={{ padding: 8 }}>
                   {r.status}
                   {r.failure_detail && (
@@ -78,7 +78,7 @@ export default function AdminEmailLog() {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: 8, fontSize: 12 }}>{r.resend_message_id ?? '—'}</td>
+                <td style={{ padding: 8, fontSize: 12 }}>{r.resend_message_id ?? '-'}</td>
                 <td style={{ padding: 8 }}>
                   {(r.status === 'failed' || r.status === 'bounced') && (
                     <button type="button" className="btn btn-secondary" onClick={() => void resend(r)}>

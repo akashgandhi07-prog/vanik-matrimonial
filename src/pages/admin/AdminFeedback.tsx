@@ -33,7 +33,7 @@ function fmtDate(iso: string): string {
 }
 
 function truncate(s: string | null, len: number): string {
-  if (!s) return '—';
+  if (!s) return '-';
   return s.length > len ? s.slice(0, len) + '…' : s;
 }
 
@@ -171,7 +171,7 @@ export default function AdminFeedback() {
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
                         {fmtDate(row.created_at)}
                       </td>
-                      <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '—'}</td>
+                      <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <span
                           style={{
@@ -184,7 +184,7 @@ export default function AdminFeedback() {
                             fontWeight: row.recommend_retain ? 600 : undefined,
                           }}
                         >
-                          {row.recommend_retain ?? '—'}
+                          {row.recommend_retain ?? '-'}
                         </span>
                       </td>
                       <td style={{ padding: '6px 8px', maxWidth: 300 }}>

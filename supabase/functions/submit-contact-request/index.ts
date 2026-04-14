@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
     });
     candidatesHtmlParts.push(
       `<div style="margin:16px 0;padding:12px;border:1px solid #e5e7eb;border-radius:8px;">
-        <p><strong>${fullName}</strong> — Ref ${stripHtml(p.reference_number ?? '', 20)}</p>
+        <p><strong>${fullName}</strong> - Ref ${stripHtml(p.reference_number ?? '', 20)}</p>
         <p>Mobile: ${stripHtml(m.mobile_phone, 40)}<br/>Email: ${stripHtml(m.email, 120)}</p>
         <p>Father: ${stripHtml(m.father_name ?? '', 120)}<br/>Mother: ${stripHtml(m.mother_name ?? '', 120)}</p>
       </div>`

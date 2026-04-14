@@ -100,8 +100,24 @@ Deno.serve(async (req) => {
       return jsonResponse({ received: true, skipped: 'profile_mismatch' });
     }
 
+    // Belt-and-braces: warn if Stripe customer_email doesn't match registered email
+    const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+    if (customerEmail) {
+      const { data: privRow } = await admin
+        .from('member_private')
+        .select('email')
+        .eq('profile_id', profileId)
+        .maybeSingle();
+      const registeredEmail = privRow?.email as string | null | undefined;
+      if (registeredEmail && registeredEmail.toLowerCase() !== customerEmail.toLowerCase()) {
+        console.warn(
+          `stripe-webhook renewal: customer_email ${customerEmail} does not match registered email ${registeredEmail} for profile ${profileId} — proceeding (authUserId check passed)`
+        );
+      }
+    }
+
     const st = prof.status as string;
-    if (st !== 'active' && st !== 'expired') {
+    if (st !== 'active' && st !== 'expired' && st !== 'archived') {
       return jsonResponse({ received: true, skipped: 'bad_status' });
     }
 

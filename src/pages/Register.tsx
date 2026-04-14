@@ -603,7 +603,7 @@ export default function Register() {
                 {resendBusy ? 'Sending…' : 'Resend verification email'}
               </button>
             </div>
-            <p className="field-hint">Wrong address? Enter a new email — we will send a fresh link.</p>
+            <p className="field-hint">Wrong address? Enter a new email and we will send a fresh link.</p>
             <div className="register-actions" style={{ alignItems: 'flex-start' }}>
               <input
                 id="register-new-email"
@@ -674,7 +674,7 @@ export default function Register() {
               <div className="register-progress-fill" style={{ width: `${progress}%` }} />
             </div>
             <p className="register-step-meta">
-              Step {step} of 3 — {stepLabels[step - 1]}
+              Step {step} of 3: {stepLabels[step - 1]}
             </p>
           </div>
 
@@ -946,7 +946,7 @@ export default function Register() {
                 />
                 {form.coupon_hint === 'valid' && (
                   <p style={{ color: 'var(--color-success)', fontSize: 14, margin: '6px 0 0' }}>
-                    Valid — membership free
+                    Valid: membership free
                   </p>
                 )}
                 {form.coupon_hint === 'invalid' && form.coupon_code.trim() && (
@@ -957,8 +957,8 @@ export default function Register() {
                 {form.coupon_hint !== 'valid' && (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     {billingEnabled
-                      ? 'Membership fee: £10/year — you will pay securely online before submitting your application (final step).'
-                      : 'Membership fee: £10/year — our team will contact you to arrange payment after approval.'}
+                      ? 'Membership fee: £10/year. You will pay securely online before submitting your application (final step).'
+                      : 'Membership fee: £10/year. Our team will contact you to arrange payment after approval.'}
                   </p>
                 )}
               </div>
@@ -1301,7 +1301,7 @@ export default function Register() {
                   Hobbies and interests <span aria-hidden="true">*</span>
                 </label>
                 <p className="field-hint">
-                  Tell us what you enjoy — e.g. travelling, cooking, cricket, reading (max 400 characters)
+                  Tell us what you enjoy, for example: travelling, cooking, cricket, reading (max 400 characters)
                 </p>
                 <textarea
                   id="reg-hobbies"
@@ -1407,7 +1407,7 @@ export default function Register() {
                 className="register-fieldset register-consent"
                 style={{ background: 'var(--color-surface)' }}
               >
-                <legend>Consent — all required</legend>
+                <legend>Consent (all required)</legend>
                 <label htmlFor="reg-consent-contact">
                   <input
                     id="reg-consent-contact"

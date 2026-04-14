@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { isAdminUser } from '../lib/auth';
@@ -76,6 +76,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     { id: string; created_at: string; candidate_ids: string[]; email_status: string }[]
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
+  const mountedRef = useRef(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -195,11 +196,19 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void loadAll();
-  }, [loadAll]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') void loadAll();
+      if (event === 'SIGNED_IN') {
+        // Skip the first SIGNED_IN event which fires on session restore at mount —
+        // the mount effect above handles that initial load.
+        if (!mountedRef.current) {
+          mountedRef.current = true;
+          return;
+        }
+        void loadAll();
+      }
       if (event === 'SIGNED_OUT') {
         // Clear stale member state immediately so the auth gate redirects correctly
         setUser(null);

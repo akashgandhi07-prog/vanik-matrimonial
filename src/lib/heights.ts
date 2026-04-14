@@ -11,7 +11,7 @@ export const HEIGHT_OPTIONS: { label: string; cm: number }[] = (() => {
 })();
 
 export function cmToFeetInches(cm: number | null | undefined): string {
-  if (cm == null) return '—';
+  if (cm == null) return '-';
   const inches = Math.round(cm / 2.54);
   const ft = Math.floor(inches / 12);
   const inch = inches % 12;

@@ -52,7 +52,7 @@ export default function AdminCoupons() {
       .select('profile_id, coupon_used, profiles(first_name, reference_number, created_at)')
       .not('coupon_used', 'is', null)
       .order('profile_id');
-    setUsageRows((usage ?? []) as UsageRow[]);
+    setUsageRows((usage ?? []) as unknown as UsageRow[]);
   }, []);
 
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function AdminCoupons() {
                   {c.max_uses != null ? ` / ${c.max_uses}` : ''}
                 </td>
                 <td style={{ padding: 8 }}>
-                  {c.expires_at ? new Date(c.expires_at).toLocaleString('en-GB') : '—'}
+                  {c.expires_at ? new Date(c.expires_at).toLocaleString('en-GB') : '-'}
                 </td>
                 <td style={{ padding: 8 }}>{c.is_active ? 'Yes' : 'No'}</td>
                 <td style={{ padding: 8 }}>
@@ -255,12 +255,12 @@ export default function AdminCoupons() {
                     <td style={{ padding: 8 }}>
                       <strong>{u.coupon_used}</strong>
                     </td>
-                    <td style={{ padding: 8 }}>{u.profiles?.first_name ?? '—'}</td>
-                    <td style={{ padding: 8 }}>{u.profiles?.reference_number ?? '—'}</td>
+                    <td style={{ padding: 8 }}>{u.profiles?.first_name ?? '-'}</td>
+                    <td style={{ padding: 8 }}>{u.profiles?.reference_number ?? '-'}</td>
                     <td style={{ padding: 8 }}>
                       {u.profiles?.created_at
                         ? new Date(u.profiles.created_at).toLocaleDateString('en-GB')
-                        : '—'}
+                        : '-'}
                     </td>
                   </tr>
                 ))}

@@ -30,13 +30,13 @@ function statusColor(status: string): string {
 }
 
 function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso).toLocaleString('en-GB');
 }
 
 function resultSummary(run: CronJobRun | undefined): string {
-  if (!run) return '—';
-  if (!run.result) return '—';
+  if (!run) return '-';
+  if (!run.result) return '-';
   return Object.entries(run.result)
     .map(([k, v]) => `${k}: ${String(v)}`)
     .join(', ');

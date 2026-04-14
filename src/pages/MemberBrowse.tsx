@@ -127,7 +127,7 @@ export default function MemberBrowse() {
                 style={{ width: 72 }}
                 aria-label="Minimum age"
               />
-              <span aria-hidden="true">–</span>
+              <span aria-hidden="true">to</span>
               <label htmlFor="browse-age-max" className="visually-hidden">
                 Maximum age
               </label>
@@ -156,7 +156,7 @@ export default function MemberBrowse() {
                 aria-labelledby="browse-height-label"
                 aria-label="Minimum height in cm"
               />
-              <span aria-hidden="true">–</span>
+              <span aria-hidden="true">to</span>
               <input
                 type="number"
                 value={heightRange[1]}
@@ -167,7 +167,7 @@ export default function MemberBrowse() {
               />
             </div>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-              {cmToFeetInches(heightRange[0])} – {cmToFeetInches(heightRange[1])}
+              {cmToFeetInches(heightRange[0])} to {cmToFeetInches(heightRange[1])}
             </p>
           </div>
           {(
@@ -221,7 +221,7 @@ export default function MemberBrowse() {
               : `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`}
             {trayFull && (
               <span style={{ marginLeft: 16, color: 'var(--color-warning)', fontWeight: 500 }}>
-                Tray full (3/3) — submit or remove one before adding another
+                Tray full (3/3). Submit or remove one before adding another.
               </span>
             )}
           </div>
@@ -297,7 +297,7 @@ export default function MemberBrowse() {
             aria-controls="member-tray-panel"
             onClick={() => setTrayDrawerOpen((o) => !o)}
           >
-            {tray.length}/3 selected{trayDrawerOpen ? ' — hide' : ' — show'}
+            {tray.length}/3 selected{trayDrawerOpen ? ' - hide' : ' - show'}
           </button>
           <div
             id="member-tray-panel"

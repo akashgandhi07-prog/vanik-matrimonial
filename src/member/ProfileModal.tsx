@@ -168,7 +168,7 @@ export function ProfileModal({
                 blocked
                   ? 'Already requested within 6 months'
                   : !inTray && trayFull
-                  ? 'Tray is full — submit or remove a candidate first'
+                  ? 'Tray is full. Submit or remove a candidate first.'
                   : undefined
               }
               onClick={onToggleTray}
