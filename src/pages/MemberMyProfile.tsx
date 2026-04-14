@@ -4,6 +4,7 @@ import { ProfileThumb } from '../member/ProfileThumb';
 import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
+import { rejectReasonIfNotJpegOrPng } from '../lib/profilePhotoAccept';
 import { sanitizeText } from '../lib/sanitize';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -93,6 +94,11 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
     if (!uid) return;
+    const reject = rejectReasonIfNotJpegOrPng(file);
+    if (reject) {
+      setPhotoError(reject);
+      return;
+    }
     setPhotoSaving(true);
     setPhotoError('');
     try {
@@ -248,7 +254,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           </p>
         )}
         <label className="label" htmlFor="mp-photo-file">
-          Upload new photo (JPEG or PNG)
+          Upload new photo (JPG or PNG only)
         </label>
         <input
           id="mp-photo-file"

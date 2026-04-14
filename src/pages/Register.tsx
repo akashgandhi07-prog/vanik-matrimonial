@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
+import { rejectReasonIfNotJpegOrPng } from '../lib/profilePhotoAccept';
 import { PublicLayout } from '../components/Layout';
 import { ageFromDob, isAdminUser, publicAuthUrl, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
@@ -398,6 +399,12 @@ export default function Register() {
 
   async function uploadPhoto(file: File) {
     if (!session?.user || !form.gender) return;
+    const reject = rejectReasonIfNotJpegOrPng(file);
+    if (reject) {
+      setFieldErrors((prev) => ({ ...prev, photo_path: reject }));
+      return;
+    }
+    clearFieldError('photo_path');
     setPhotoUploading(true);
     try {
       const compressed = await imageCompression(file, {
@@ -1379,8 +1386,8 @@ export default function Register() {
                   Profile photo <span aria-hidden="true">*</span>
                 </label>
                 <p className="field-hint">
-                  A clear, recent face photo. Visible to other members after approval. Images are compressed
-                  before upload.
+                  A clear, recent face photo. <strong>JPG or PNG only.</strong> Visible to other members after
+                  approval. Images are compressed before upload.
                 </p>
                 <input
                   id="reg-photo"
