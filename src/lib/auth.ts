@@ -114,11 +114,17 @@ export function userFacingAuthError(
   return raw;
 }
 
+function metaIsAdmin(v: unknown): boolean {
+  if (v === true || v === 1) return true;
+  if (typeof v === 'string') return v.toLowerCase() === 'true' || v === '1';
+  return false;
+}
+
 export function isAdminUser(user: User | null | undefined): boolean {
   if (!user) return false;
-  const um = user.user_metadata as { is_admin?: boolean } | undefined;
-  const am = user.app_metadata as { is_admin?: boolean } | undefined;
-  return um?.is_admin === true || am?.is_admin === true;
+  const um = user.user_metadata as { is_admin?: unknown } | undefined;
+  const am = user.app_metadata as { is_admin?: unknown } | undefined;
+  return metaIsAdmin(um?.is_admin) || metaIsAdmin(am?.is_admin);
 }
 
 export function ageFromDob(dob: string): number {

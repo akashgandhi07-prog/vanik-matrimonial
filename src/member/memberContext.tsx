@@ -294,6 +294,8 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
+  // Admins do not have member profiles; never send them through /register.
+  if (isAdminUser(user)) return <Navigate to="/admin" replace />;
   if (!profile) return <Navigate to="/register" replace />;
   return <>{children}</>;
 }
