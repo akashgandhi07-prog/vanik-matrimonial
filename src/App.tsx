@@ -1,5 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { SessionProvider } from './components/SessionContext';
+import { SiteHeader } from './components/SiteHeader';
 import AdminAddMember from './pages/admin/AdminAddMember';
 import AdminCoupons from './pages/admin/AdminCoupons';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
@@ -55,42 +57,45 @@ function AuthHashRedirect({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthHashRedirect>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
-        <Route path="/registration-pending" element={<RegistrationPending />} />
-        <Route path="/registration-rejected" element={<RegistrationRejected />} />
-        <Route path="/membership-expired" element={<MembershipExpired />} />
-        <Route path="/renew-membership" element={<MembershipExpired />} />
-        <Route path="/dashboard" element={<MemberShell />}>
-          <Route index element={<Navigate to="browse" replace />} />
-          <Route path="browse" element={<MemberBrowse />} />
-          <Route path="saved" element={<MemberSaved />} />
-          <Route path="requests" element={<MemberRequests />} />
-          <Route path="my-profile" element={<MemberMyProfile />} />
-        </Route>
-        <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<AdminOverview />} />
-          <Route path="members" element={<AdminMembers />} />
-          <Route path="members/:id" element={<AdminMemberDetail />} />
-          <Route path="requests" element={<AdminRequests />} />
-          <Route path="feedback" element={<AdminFeedback />} />
-          <Route path="add-member" element={<AdminAddMember />} />
-          <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
-          <Route path="coupons" element={<AdminCoupons />} />
-          <Route path="email-log" element={<AdminEmailLog />} />
-          <Route path="settings" element={<AdminSettings />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-      </AuthHashRedirect>
+      <SessionProvider>
+        <AuthHashRedirect>
+          <SiteHeader />
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
+            <Route path="/registration-pending" element={<RegistrationPending />} />
+            <Route path="/registration-rejected" element={<RegistrationRejected />} />
+            <Route path="/membership-expired" element={<MembershipExpired />} />
+            <Route path="/renew-membership" element={<MembershipExpired />} />
+            <Route path="/dashboard" element={<MemberShell />}>
+              <Route index element={<Navigate to="browse" replace />} />
+              <Route path="browse" element={<MemberBrowse />} />
+              <Route path="saved" element={<MemberSaved />} />
+              <Route path="requests" element={<MemberRequests />} />
+              <Route path="my-profile" element={<MemberMyProfile />} />
+            </Route>
+            <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminOverview />} />
+              <Route path="members" element={<AdminMembers />} />
+              <Route path="members/:id" element={<AdminMemberDetail />} />
+              <Route path="requests" element={<AdminRequests />} />
+              <Route path="feedback" element={<AdminFeedback />} />
+              <Route path="add-member" element={<AdminAddMember />} />
+              <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
+              <Route path="coupons" element={<AdminCoupons />} />
+              <Route path="email-log" element={<AdminEmailLog />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthHashRedirect>
+      </SessionProvider>
     </BrowserRouter>
   );
 }

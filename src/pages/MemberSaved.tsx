@@ -18,7 +18,7 @@ export default function MemberSaved() {
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
 
   const recentlyRequestedIds = useMemo(() => {
-    const cutoff = Date.now() - 180 * 86400000;
+    const cutoff = Date.now() - 7 * 86400000;
     const ids = new Set<string>();
     for (const r of requests) {
       if (new Date(r.created_at).getTime() <= cutoff) continue;

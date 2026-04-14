@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { fetchMyProfileStatusLite, pathForMemberStatus } from '../lib/memberProfileClient';
 import { supabase } from '../lib/supabase';
+
+const POLL_MS = 60_000;
 
 export default function RegistrationPending() {
   const navigate = useNavigate();
@@ -9,22 +12,47 @@ export default function RegistrationPending() {
   const [ref, setRef] = useState(() => sessionStorage.getItem('vmr_pending_ref') ?? '');
 
   useEffect(() => {
-    void (async () => {
+    let cancelled = false;
+
+    async function sync() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       const u = session?.user;
-      if (u?.email) setEmail(u.email);
-      if (u?.id) {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('reference_number')
-          .eq('auth_user_id', u.id)
-          .maybeSingle();
-        if (p?.reference_number) setRef(p.reference_number);
+      if (!u) return;
+      if (u.email) setEmail(u.email);
+
+      const lite = await fetchMyProfileStatusLite(u.id);
+      if (cancelled) return;
+
+      if (lite?.reference_number) {
+        setRef(lite.reference_number);
+        try {
+          sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
+        } catch {
+          /* ignore */
+        }
       }
-    })();
-  }, []);
+
+      const next = pathForMemberStatus(lite?.status ?? null);
+      if (next && next !== '/registration-pending') {
+        navigate(next, { replace: true });
+      }
+    }
+
+    void sync();
+    const interval = window.setInterval(() => void sync(), POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [navigate]);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -52,14 +80,32 @@ export default function RegistrationPending() {
             </p>
           )}
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: '1.25rem' }}>
-            If you were approved by email but still see this page, sign out and sign in again so your account
-            picks up the new status.
+            If you were approved recently, this page updates when you return to the tab or within about a minute —
+            or use <strong>Check status</strong> below.
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
             Need help? Contact{' '}
             <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                void (async () => {
+                  const {
+                    data: { session },
+                  } = await supabase.auth.getSession();
+                  const uid = session?.user?.id;
+                  if (!uid) return;
+                  const lite = await fetchMyProfileStatusLite(uid);
+                  const next = pathForMemberStatus(lite?.status ?? null);
+                  if (next && next !== '/registration-pending') navigate(next, { replace: true });
+                })();
+              }}
+            >
+              Check status
+            </button>
             <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
               Sign out
             </button>

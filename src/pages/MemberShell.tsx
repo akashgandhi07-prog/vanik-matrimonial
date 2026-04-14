@@ -1,5 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { NavLink, Outlet } from 'react-router-dom';
 import { MemberAuthGate, MemberDataProvider, useMemberArea } from '../member/memberContext';
 
 function daysBetween(a: Date, b: Date) {
@@ -7,17 +6,7 @@ function daysBetween(a: Date, b: Date) {
 }
 
 function MemberLayoutBody() {
-  const navigate = useNavigate();
   const { profile } = useMemberArea();
-
-  async function signOut() {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      /* still leave the dashboard */
-    }
-    navigate('/', { replace: true });
-  }
 
   if (!profile) return null;
 
@@ -34,7 +23,7 @@ function MemberLayoutBody() {
       <header className="member-dashboard-header member-dashboard-header--bar">
         <div className="layout-max member-dashboard-header-inner">
           <div className="member-dashboard-header-meta">
-            <strong>Welcome back, {profile.first_name}</strong>
+            <strong className="member-dashboard-header-title">Member area</strong>
             {(profile.reference_number || exp) && (
               <div className="member-dashboard-header-sub">
                 {profile.reference_number && <span>Ref: {profile.reference_number}</span>}
@@ -47,9 +36,6 @@ function MemberLayoutBody() {
               </div>
             )}
           </div>
-          <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
-            Sign out
-          </button>
         </div>
         {showAmber && (
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">

@@ -21,8 +21,9 @@ export default function MemberRequests() {
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
-        You can request details for up to 3 candidates per rolling 7-day window. Please provide feedback for each candidate once you have
-        had a chance to make contact.
+        You can request details for up to 3 <strong>distinct</strong> candidates per rolling 7-day window (you cannot request the same
+        profile again until that window passes). If you still owe feedback on introductions older than 21 days, new requests are blocked
+        until that feedback is submitted. Please provide feedback for each candidate once you have had a chance to make contact.
       </p>
       <div className="table-scroll">
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
@@ -81,7 +82,15 @@ export default function MemberRequests() {
                   </div>
                 </td>
                 <td style={{ padding: 8 }}>
-                  <span className={r.email_status === 'sent' ? 'badge badge-success' : 'badge badge-danger'}>
+                  <span
+                    className={
+                      r.email_status === 'sent'
+                        ? 'badge badge-success'
+                        : r.email_status === 'skipped'
+                          ? 'badge badge-muted'
+                          : 'badge badge-danger'
+                    }
+                  >
                     {r.email_status}
                   </span>
                 </td>

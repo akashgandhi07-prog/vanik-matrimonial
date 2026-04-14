@@ -7,6 +7,8 @@ import { ageFromDob, isAdminUser, publicAuthUrl, userFacingAuthError } from '../
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
 import {
+  isValidInternationalPhone,
+  isValidLoosePostcode,
   isValidPersonName,
   isValidPlaceField,
   isValidUkMobile,
@@ -100,20 +102,31 @@ function loadState(): FormState {
 
 function validateStep1(form: FormState, age: number | null): Record<string, string> {
   const e: Record<string, string> = {};
+  const countryRaw = form.home_address_country.trim();
+  const isUk = /^uk$/i.test(countryRaw) || /^united kingdom$/i.test(countryRaw);
+
   if (!form.gender) e.gender = 'Please select your gender.';
   if (!form.date_of_birth) e.date_of_birth = 'Date of birth is required.';
   else if (age == null) e.date_of_birth = 'Enter a valid date of birth.';
   else if (age < 18) e.date_of_birth = 'You must be 18 or over to register.';
   if (!form.mobile_phone.trim()) e.mobile_phone = 'Mobile number is required.';
-  else if (!isValidUkMobile(form.mobile_phone))
-    e.mobile_phone = 'Enter a valid UK mobile (e.g. 07123 456789 or +44 7123 456789).';
+  else if (isUk && !isValidUkMobile(form.mobile_phone)) {
+    e.mobile_phone = 'For UK addresses, enter a UK mobile (e.g. 07123 456789 or +44 7123 456789).';
+  } else if (!isUk && !isValidInternationalPhone(form.mobile_phone)) {
+    e.mobile_phone =
+      'Enter a valid phone number (8–15 digits; include country code, e.g. +1 415 555 0100).';
+  }
   if (!form.home_address_line1.trim()) e.home_address_line1 = 'Address line 1 is required.';
   else if (form.home_address_line1.trim().length < 3)
     e.home_address_line1 = 'Please enter a fuller address line.';
   if (!form.home_address_city.trim()) e.home_address_city = 'City or town is required.';
-  if (!form.home_address_postcode.trim()) e.home_address_postcode = 'Postcode is required.';
-  else if (!isValidUkPostcode(form.home_address_postcode))
+  if (!form.home_address_postcode.trim()) {
+    e.home_address_postcode = 'Postcode or postal code is required.';
+  } else if (isUk && !isValidUkPostcode(form.home_address_postcode)) {
     e.home_address_postcode = 'Enter a valid UK postcode (e.g. SW1A 1AA).';
+  } else if (!isUk && !isValidLoosePostcode(form.home_address_postcode)) {
+    e.home_address_postcode = 'Enter your postal code (2–20 characters).';
+  }
   if (!form.home_address_country.trim()) e.home_address_country = 'Country is required.';
   if (!form.id_document_path) e.id_document_path = 'Please upload proof of identity.';
   return e;
@@ -295,16 +308,30 @@ export default function Register() {
   useEffect(() => {
     if (!session?.user?.id || !verified) return;
     void (async () => {
+      const uid = session.user.id;
+      let status: string | null = null;
       const { data: p } = await supabase
         .from('profiles')
         .select('status')
-        .eq('auth_user_id', session.user.id)
+        .eq('auth_user_id', uid)
         .maybeSingle();
-      if (!p) return;
-      if (p.status === 'pending_approval') navigate('/registration-pending', { replace: true });
-      else if (p.status === 'active') navigate('/dashboard/browse', { replace: true });
-      else if (p.status === 'matched') navigate('/dashboard/browse', { replace: true });
-      else if (p.status === 'rejected' && location.pathname !== '/register') {
+      if (p?.status) status = p.status as string;
+      else {
+        try {
+          const boot = (await invokeFunction('member-bootstrap', {})) as {
+            profile?: { status?: string } | null;
+          };
+          const st = boot.profile?.status;
+          if (st) status = st;
+        } catch {
+          /* edge unavailable or not deployed */
+        }
+      }
+      if (!status) return;
+      if (status === 'pending_approval') navigate('/registration-pending', { replace: true });
+      else if (status === 'active') navigate('/dashboard/browse', { replace: true });
+      else if (status === 'matched') navigate('/dashboard/browse', { replace: true });
+      else if (status === 'rejected' && location.pathname !== '/register') {
         navigate('/registration-rejected', { replace: true });
       }
     })();
@@ -914,15 +941,19 @@ export default function Register() {
               </div>
               <div>
                 <label className="label" htmlFor="reg-tel">
-                  Mobile phone (UK) <span aria-hidden="true">*</span>
+                  Mobile phone <span aria-hidden="true">*</span>
                 </label>
+                <p className="field-hint" style={{ marginTop: 0 }}>
+                  If your country is <strong>UK</strong> or <strong>United Kingdom</strong>, use a UK mobile.
+                  Otherwise include your country code (8–15 digits total).
+                </p>
                 <input
                   id="reg-tel"
                   type="tel"
                   name="tel-national"
                   inputMode="tel"
                   autoComplete="tel-national"
-                  placeholder="e.g. 07123 456789"
+                  placeholder="e.g. 07123 456789 or +1 415 555 0100"
                   value={form.mobile_phone}
                   onChange={(e) => {
                     update({ mobile_phone: e.target.value });
@@ -980,14 +1011,14 @@ export default function Register() {
                   </div>
                   <div>
                     <label className="label" htmlFor="reg-postcode">
-                      Postcode <span aria-hidden="true">*</span>
+                      Postcode / postal code <span aria-hidden="true">*</span>
                     </label>
                     <input
                       id="reg-postcode"
                       name="postal-code"
                       type="text"
                       autoComplete="postal-code"
-                      placeholder="e.g. SW1A 1AA"
+                      placeholder="e.g. SW1A 1AA or 10115"
                       value={form.home_address_postcode}
                       onChange={(e) => {
                         update({ home_address_postcode: e.target.value });
@@ -1008,6 +1039,7 @@ export default function Register() {
                       name="country-name"
                       type="text"
                       autoComplete="country-name"
+                      placeholder="e.g. UK, India, USA"
                       value={form.home_address_country}
                       onChange={(e) => {
                         update({ home_address_country: e.target.value });
@@ -1015,6 +1047,10 @@ export default function Register() {
                       }}
                       aria-invalid={fieldErrors.home_address_country ? true : undefined}
                     />
+                    <p className="field-hint" style={{ marginBottom: 0 }}>
+                      Enter <strong>UK</strong> or <strong>United Kingdom</strong> for UK addresses (stricter phone
+                      and postcode checks).
+                    </p>
                     {fieldErrors.home_address_country && (
                       <p className="field-error">{fieldErrors.home_address_country}</p>
                     )}

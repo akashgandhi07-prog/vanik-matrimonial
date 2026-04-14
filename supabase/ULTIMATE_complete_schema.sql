@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS public.requests (
   candidate_ids uuid[] NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now(),
   email_sent_at timestamptz,
-  email_status text NOT NULL DEFAULT 'pending' CHECK (email_status IN ('pending', 'sent', 'failed', 'bounced')),
+  email_status text NOT NULL DEFAULT 'pending' CHECK (email_status IN ('pending', 'sent', 'failed', 'bounced', 'skipped')),
   feedback_due_at timestamptz GENERATED ALWAYS AS (created_at + INTERVAL '21 days') STORED,
   week_start date GENERATED ALWAYS AS ((date_trunc('week', created_at))::date) STORED
 );
@@ -339,7 +339,7 @@ CREATE POLICY profiles_select_opposite_active ON public.profiles
       AND EXISTS (
         SELECT 1 FROM public.profiles viewer
         WHERE viewer.auth_user_id = auth.uid()
-          AND viewer.status = 'active'
+          AND viewer.status IN ('active', 'matched')
           AND viewer.membership_expires_at > now()
           AND viewer.gender IS DISTINCT FROM profiles.gender
       )

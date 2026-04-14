@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
+import { profileNeedsMembershipExpiredRoute } from '../lib/memberStatus';
 
 type ProfileLite = {
   reference_number: string | null;
@@ -25,12 +26,21 @@ export default function MembershipExpired() {
       setLoading(false);
       return;
     }
-    const { data: p } = await supabase
-      .from('profiles')
-      .select('reference_number, membership_expires_at, status')
-      .eq('auth_user_id', user.id)
-      .maybeSingle();
-    setProfile((p as ProfileLite | null) ?? null);
+    let p =
+      ((await supabase
+        .from('profiles')
+        .select('reference_number, membership_expires_at, status')
+        .eq('auth_user_id', user.id)
+        .maybeSingle()).data as ProfileLite | null) ?? null;
+    if (!p) {
+      try {
+        const boot = (await invokeFunction('member-bootstrap', {})) as { profile?: ProfileLite | null };
+        if (boot.profile) p = boot.profile;
+      } catch {
+        /* ignore */
+      }
+    }
+    setProfile(p);
     setLoading(false);
   }, []);
 
@@ -71,14 +81,13 @@ export default function MembershipExpired() {
     : '-';
 
   const isRenewable =
-    profile?.status === 'expired' ||
-    (profile?.status === 'active' &&
-      profile.membership_expires_at &&
-      new Date(profile.membership_expires_at) <= new Date());
+    profile != null &&
+    (profile.status === 'expired' || profileNeedsMembershipExpiredRoute(profile));
 
   const isEarlyRenewal =
-    profile?.status === 'active' &&
-    profile.membership_expires_at &&
+    profile != null &&
+    (profile.status === 'active' || profile.status === 'matched') &&
+    profile.membership_expires_at != null &&
     new Date(profile.membership_expires_at) > new Date();
 
   async function startCheckout() {

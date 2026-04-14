@@ -87,3 +87,6 @@ verify_jwt = false
 
 [functions.admin-update-member-status]
 verify_jwt = false
+
+[functions.member-bootstrap]
+verify_jwt = false

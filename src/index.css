@@ -278,6 +278,19 @@ textarea:focus {
   color: #fff;
 }
 
+button.public-nav-link--button {
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.public-nav-link--button:hover {
+  color: var(--color-text);
+  background: #f1f5f9;
+}
+
 @media (max-width: 380px) {
   .public-nav {
     width: 100%;

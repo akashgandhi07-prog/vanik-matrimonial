@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Navigate, useNavigate } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { isAdminUser } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { profileNeedsMembershipExpiredRoute } from '../lib/memberStatus';
+import { invokeFunction, supabase } from '../lib/supabase';
 
 export type ProfileRow = {
   id: string;
@@ -106,6 +107,9 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       // Retries: right after login the JWT may not be attached to PostgREST yet; parallel loadAll calls
       // used to overwrite a successful fetch with an empty one — see loadChainRef serialization above.
       let p: ProfileRow | null = null;
+      /** Set only when `member-bootstrap` supplied `member_private` (skip flaky client read). */
+      let privateFromBootstrap: MemberPrivateRow | null | undefined = undefined;
+
       const maxAttempts = 8;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
@@ -128,6 +132,28 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           break;
         }
       }
+
+      if (!p) {
+        try {
+          const boot = (await invokeFunction('member-bootstrap', {})) as {
+            profile?: ProfileRow | null;
+            member_private?: MemberPrivateRow | null;
+            is_admin?: boolean;
+          };
+          if (boot.is_admin) {
+            setLoading(false);
+            navigate('/admin', { replace: true });
+            return;
+          }
+          if (boot.profile) {
+            p = boot.profile as ProfileRow;
+            privateFromBootstrap = (boot.member_private ?? null) as MemberPrivateRow | null;
+          }
+        } catch (e) {
+          console.error('member-bootstrap:', e);
+        }
+      }
+
       if (!p) {
         setProfile(null);
         setPrivateRow(null);
@@ -135,65 +161,84 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         return;
       }
       setProfile(p);
-      const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', p.id).maybeSingle();
-      setPrivateRow(m as MemberPrivateRow | null);
+      if (privateFromBootstrap !== undefined) {
+        setPrivateRow(privateFromBootstrap);
+      } else {
+        let { data: m } = await supabase
+          .from('member_private')
+          .select('*')
+          .eq('profile_id', p.id)
+          .maybeSingle();
+        if (!m) {
+          try {
+            const boot = (await invokeFunction('member-bootstrap', {})) as {
+              profile?: { id?: string } | null;
+              member_private?: MemberPrivateRow | null;
+            };
+            if (boot.profile?.id === p.id && boot.member_private) {
+              m = boot.member_private as MemberPrivateRow;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        setPrivateRow(m as MemberPrivateRow | null);
+      }
 
-      if (p.status === 'pending_approval') {
-        setLoading(false);
-        navigate('/registration-pending', { replace: true });
-        return;
-      }
-      if (p.status === 'rejected') {
-        setLoading(false);
-        navigate('/registration-rejected', { replace: true });
-        return;
-      }
-      if (p.status === 'expired') {
-        setLoading(false);
-        navigate('/membership-expired', { replace: true });
-        return;
-      }
-      if (
-        p.status === 'active' &&
-        p.membership_expires_at &&
-        new Date(p.membership_expires_at) <= new Date()
-      ) {
-        setLoading(false);
-        navigate('/membership-expired', { replace: true });
-        return;
-      }
+      // Status routing for the dashboard is handled in MemberAuthGate (<Navigate />) so we never
+      // flash the browse UI or double-navigate. Stop here before loading candidates/bookmarks.
       if (p.status === 'archived') {
-        // Account was deleted/archived — sign out and return home
+        setProfile(null);
+        setPrivateRow(null);
         setLoading(false);
         await supabase.auth.signOut();
         navigate('/', { replace: true });
         return;
       }
+      if (p.status === 'pending_approval' || p.status === 'rejected' || profileNeedsMembershipExpiredRoute(p)) {
+        setLoading(false);
+        return;
+      }
 
       const now = new Date().toISOString();
-      const { data: list } = await supabase
-        .from('profiles')
-        .select('*')
-        .neq('gender', p.gender)
-        .eq('status', 'active')
-        .eq('show_on_register', true)
-        .gt('membership_expires_at', now);
+      const myGender = p.gender;
+      const myId = p.id;
+      const myStatus = p.status;
+      async function fetchCandidates() {
+        return supabase
+          .from('profiles')
+          .select('*')
+          .neq('gender', myGender)
+          .eq('status', 'active')
+          .eq('show_on_register', true)
+          .gt('membership_expires_at', now);
+      }
+      let { data: list } = await fetchCandidates();
+      // Post-login JWT can lag behind PostgREST; one delayed retry fixes empty browse for valid members.
+      if (
+        (!list || list.length === 0) &&
+        (myStatus === 'active' || myStatus === 'matched')
+      ) {
+        await new Promise((r) => setTimeout(r, 900));
+        const second = await fetchCandidates();
+        if (second.data && second.data.length > 0) list = second.data;
+      }
       setCandidates((list ?? []) as ProfileRow[]);
 
-      const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', p.id);
+      const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', myId);
       setBookmarks((bm ?? []).map((x) => x.bookmarked_id as string));
 
       const { data: rq } = await supabase
         .from('requests')
         .select('id, created_at, candidate_ids, email_status')
-        .eq('requester_id', p.id)
+        .eq('requester_id', myId)
         .order('created_at', { ascending: false });
       setRequests(rq ?? []);
 
       const { data: fbRows } = await supabase
         .from('feedback')
         .select('request_id, candidate_id')
-        .eq('requester_id', p.id);
+        .eq('requester_id', myId);
       setFeedbackKeys(
         new Set((fbRows ?? []).map((r) => `${r.request_id as string}:${r.candidate_id as string}`))
       );
@@ -208,6 +253,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadAll();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
+
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (t) clearTimeout(t);
+      t = setTimeout(() => {
+        void loadAll();
+      }, 400);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      if (t) clearTimeout(t);
+    };
+  }, [loadAll]);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -296,7 +357,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
 /** Guards: use inside MemberDataProvider after load. */
 export function MemberAuthGate({ children }: { children: ReactNode }) {
-  const { user, profile, loading } = useMemberArea();
+  const { user, profile, loading, loadAll } = useMemberArea();
   if (loading) {
     return (
       <div className="layout-max" style={{ padding: 40 }}>
@@ -307,6 +368,34 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
   if (!user) return <Navigate to="/login" replace />;
   // Admins do not have member profiles; never send them through /register.
   if (isAdminUser(user)) return <Navigate to="/admin" replace />;
-  if (!profile) return <Navigate to="/register" replace />;
+  if (profile?.status === 'pending_approval') {
+    return <Navigate to="/registration-pending" replace />;
+  }
+  if (profile?.status === 'rejected') {
+    return <Navigate to="/registration-rejected" replace />;
+  }
+  if (profile && profileNeedsMembershipExpiredRoute(profile)) {
+    return <Navigate to="/membership-expired" replace />;
+  }
+  if (!profile) {
+    return (
+      <div className="layout-max" style={{ padding: '48px 16px', maxWidth: 560 }}>
+        <h1 style={{ marginTop: 0 }}>Could not load your account</h1>
+        <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
+          You are signed in, but your membership record did not load. This is often temporary — try
+          again, or sign out and sign back in. If it keeps happening, contact{' '}
+          <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
+          <button type="button" className="btn btn-primary" onClick={() => void loadAll()}>
+            Try again
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => void supabase.auth.signOut()}>
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
   return <>{children}</>;
 }

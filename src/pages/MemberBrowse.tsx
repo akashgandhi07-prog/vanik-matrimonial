@@ -38,7 +38,11 @@ export default function MemberBrowse() {
     null
   );
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
-  const [submitError, setSubmitError] = useState<{ type: 'weekly_limit' | 'feedback_required' | 'generic'; message: string; requestIds?: string[] } | null>(null);
+  const [submitError, setSubmitError] = useState<{
+    type: 'weekly_limit' | 'feedback_required' | 'already_requested' | 'generic';
+    message: string;
+    requestIds?: string[];
+  } | null>(null);
 
   const filtered = useMemo(() => {
     if (!profile) return [];
@@ -65,8 +69,8 @@ export default function MemberBrowse() {
   }, [profile, candidates, ageRange, dietF, religionF, communityF, heightRange, sort]);
 
   const recentlyRequestedCandidateIds = useMemo(() => {
-    // eslint-disable-next-line react-hooks/purity -- time-based eligibility window for contact requests
-    const cutoff = Date.now() - 180 * 86400000;
+    // eslint-disable-next-line react-hooks/purity -- matches rolling 7-day request window on server
+    const cutoff = Date.now() - 7 * 86400000;
     const ids = new Set<string>();
     for (const r of requests) {
       if (new Date(r.created_at).getTime() <= cutoff) continue;
@@ -115,6 +119,8 @@ export default function MemberBrowse() {
         setSubmitError({ type: 'weekly_limit', message: msg });
       } else if (msg.includes('feedback_required') || msg.includes('Outstanding feedback')) {
         setSubmitError({ type: 'feedback_required', message: msg });
+      } else if (msg.includes('already_requested_this_week') || msg.includes('already requested this profile')) {
+        setSubmitError({ type: 'already_requested', message: msg });
       } else {
         setSubmitError({ type: 'generic', message: msg });
       }
@@ -355,6 +361,9 @@ export default function MemberBrowse() {
                 {submitError.type === 'feedback_required' && (
                   <><strong>Feedback required before new requests.</strong> Please visit{' '}
                     <a href="/dashboard/requests" style={{ color: 'inherit', fontWeight: 600 }}>My requests</a> to submit outstanding feedback.</>
+                )}
+                {submitError.type === 'already_requested' && (
+                  <><strong>Already requested.</strong> {submitError.message}</>
                 )}
                 {submitError.type === 'weekly_limit' && (
                   <><strong>Weekly limit reached.</strong> {submitError.message.replace('Weekly limit reached (3 candidates). ', '')}</>

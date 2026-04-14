@@ -11,6 +11,12 @@ export function isValidUkMobile(raw: string): boolean {
   return false;
 }
 
+/** Non-UK: 8–15 digits after stripping non-digits (international numbers). */
+export function isValidInternationalPhone(raw: string): boolean {
+  const digits = raw.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
 /**
  * UK postcode (incl. London, GIR 0AA). Accepts with or without space before inward code.
  */
@@ -18,6 +24,12 @@ export function isValidUkPostcode(raw: string): boolean {
   const compact = raw.trim().toUpperCase().replace(/\s+/g, '');
   if (!compact) return false;
   return /^([A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}|GIR0A{2})$/.test(compact);
+}
+
+/** Outside UK: postal code / ZIP — permissive for international applicants. */
+export function isValidLoosePostcode(raw: string): boolean {
+  const t = raw.trim();
+  return t.length >= 2 && t.length <= 20 && /^[\p{L}0-9\s,''()./-]+$/u.test(t);
 }
 
 /** Person or family name: letters (any script), space, hyphen, apostrophe, period. */

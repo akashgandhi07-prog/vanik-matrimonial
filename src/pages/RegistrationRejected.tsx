@@ -1,26 +1,58 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { fetchMyProfileStatusLite, pathForMemberStatus } from '../lib/memberProfileClient';
 import { supabase } from '../lib/supabase';
 
+const POLL_MS = 60_000;
+
 export default function RegistrationRejected() {
+  const navigate = useNavigate();
   const [reason, setReason] = useState<string | null>(null);
   const [noSession, setNoSession] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    let cancelled = false;
+
+    async function sync() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setNoSession(true);
         return;
       }
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('rejection_reason')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-      setReason(p?.rejection_reason ?? 'No reason provided.');
-    });
-  }, []);
+
+      const lite = await fetchMyProfileStatusLite(user.id);
+      if (cancelled) return;
+
+      if (!lite?.status) {
+        setReason((r) => r ?? 'Could not load your profile. Try signing out and back in.');
+        return;
+      }
+
+      const next = pathForMemberStatus(lite.status);
+      if (next && next !== '/registration-rejected') {
+        navigate(next, { replace: true });
+        return;
+      }
+
+      setReason(lite.rejection_reason?.trim() || 'No reason provided.');
+    }
+
+    void sync();
+    const interval = window.setInterval(() => void sync(), POLL_MS);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [navigate]);
 
   return (
     <PublicLayout>
@@ -47,6 +79,10 @@ export default function RegistrationRejected() {
               <Link to="/register" className="btn btn-primary" style={{ marginTop: 8 }}>
                 Update and resubmit application
               </Link>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: 16 }}>
+                If your status changes (for example after resubmission), this page updates when you return to the tab
+                or within about a minute.
+              </p>
             </>
           )}
           <p style={{ color: 'var(--color-text-secondary)', marginTop: 16 }}>
