@@ -5,8 +5,9 @@ project_id = "vanik-matrimonial"
 enabled = true
 
 [auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["https://*.vercel.app"]
+# Match Vite dev server (see vite.config.ts port). Hosted project: set the same in Dashboard → Auth → URL.
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app"]
 
 [auth.email]
 enable_confirmations = true

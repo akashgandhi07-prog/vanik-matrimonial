@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
-import { userFacingAuthError } from '../lib/auth';
+import { publicAuthUrl, userFacingAuthError } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
-const REDIRECT = `${typeof window !== 'undefined' ? window.location.origin : ''}/reset-password`;
+const REDIRECT = publicAuthUrl('/reset-password');
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');

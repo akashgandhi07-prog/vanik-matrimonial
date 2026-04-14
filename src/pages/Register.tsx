@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { PublicLayout } from '../components/Layout';
-import { ageFromDob, userFacingAuthError } from '../lib/auth';
+import { ageFromDob, isAdminUser, publicAuthUrl, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
 import {
@@ -256,6 +256,12 @@ export default function Register() {
 
   const verified = !!session?.user?.email_confirmed_at;
   const userId = session?.user?.id ?? null;
+  const isAdmin = isAdminUser(session?.user);
+
+  useEffect(() => {
+    if (!sessionReady || !session?.user || !isAdmin) return;
+    navigate('/admin', { replace: true });
+  }, [sessionReady, session?.user, isAdmin, navigate]);
 
   useEffect(() => {
     if (!verified || !userId) return;
@@ -318,11 +324,10 @@ export default function Register() {
     }
     setAuthSubmitting(true);
     try {
-      const redirect = `${window.location.origin}/verify-email-success`;
       const { error } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
-        options: { emailRedirectTo: redirect },
+        options: { emailRedirectTo: publicAuthUrl('/verify-email-success') },
       });
       if (error) setAuthMsg(userFacingAuthError(error));
       else setAuthMsg('Check your inbox to verify your email before continuing.');
@@ -559,6 +564,20 @@ export default function Register() {
             </form>
             <p className="register-auth-footer">
               <Link to="/login">Already registered? Sign in</Link>
+            </p>
+          </div>
+        </div>
+      </PublicLayout>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <PublicLayout>
+        <div className="layout-max register-page register-page--narrow">
+          <div className="register-card" aria-busy="true" aria-live="polite">
+            <p className="register-lead" style={{ margin: 0 }}>
+              Redirecting to admin…
             </p>
           </div>
         </div>

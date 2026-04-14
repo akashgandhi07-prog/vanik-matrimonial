@@ -1,5 +1,18 @@
 import type { User } from '@supabase/supabase-js';
 
+const DEFAULT_PUBLIC_SITE_URL = 'https://vanik-matrimonial.vercel.app';
+
+/**
+ * Build absolute URLs for auth emails. We intentionally prefer a stable public URL
+ * so links do not depend on the current browser origin (e.g. localhost during dev).
+ */
+export function publicAuthUrl(path: string): string {
+  const raw = (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim();
+  const base = (raw || DEFAULT_PUBLIC_SITE_URL).replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+}
+
 /** Shape returned by most `supabase.auth.*` calls; `code` is present on many Auth errors. */
 export type AuthLikeError = {
   message: string;
@@ -81,6 +94,17 @@ export function userFacingAuthError(
 
   if (code === 'signup_disabled' || lower.includes('signups not allowed')) {
     return 'New registrations are temporarily unavailable. Please try again later or contact support.';
+  }
+
+  if (
+    lower.includes('error sending confirmation email') ||
+    lower.includes('error sending email') ||
+    lower.includes('smtp')
+  ) {
+    return (
+      'Account creation could not send a verification email. Please try again shortly. ' +
+      'If it keeps failing, support needs to check Supabase Auth email/SMTP settings.'
+    );
   }
 
   if (lower.includes('password') && lower.includes('should contain')) {

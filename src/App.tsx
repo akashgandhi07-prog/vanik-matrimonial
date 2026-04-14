@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect, type ReactNode } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import AdminAddMember from './pages/admin/AdminAddMember';
 import AdminCoupons from './pages/admin/AdminCoupons';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
@@ -27,9 +28,34 @@ import RegistrationRejected from './pages/RegistrationRejected';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmailSuccess from './pages/VerifyEmailSuccess';
 
+/**
+ * Supabase email links often redirect to Site URL root (`/#access_token=...`) instead of
+ * `/verify-email-success`. Move the hash to the right route so the session is established
+ * and the UI matches the flow.
+ */
+function AuthHashRedirect({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const h = window.location.hash;
+    if (!h || !h.includes('access_token=')) return;
+    const path = location.pathname;
+    if (path === '/verify-email-success' || path === '/reset-password') return;
+
+    const qs = new URLSearchParams(h.startsWith('#') ? h.slice(1) : h);
+    const type = qs.get('type');
+    const target = type === 'recovery' ? '/reset-password' : '/verify-email-success';
+    navigate(`${target}${h}`, { replace: true });
+  }, [location.pathname, navigate]);
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <AuthHashRedirect>
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/privacy" element={<Privacy />} />
@@ -64,6 +90,7 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </AuthHashRedirect>
     </BrowserRouter>
   );
 }

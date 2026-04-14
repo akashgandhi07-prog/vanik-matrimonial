@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
-import { userFacingAuthError } from '../lib/auth';
+import { isAdminUser, userFacingAuthError } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
@@ -21,12 +21,16 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      const { error: err } = await supabase.auth.signInWithPassword({
+      const { data, error: err } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       if (err) {
         setError(userFacingAuthError(err));
+        return;
+      }
+      if (isAdminUser(data.user)) {
+        navigate('/admin', { replace: true });
         return;
       }
       navigate(nextPath, { replace: true });

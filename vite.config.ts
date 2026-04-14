@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      // Align with Supabase Auth "Site URL" when set to http://localhost:3000 (common default).
+      // If you use 5173 in the Supabase dashboard instead, you can remove this line.
+      port: 3000,
+      strictPort: false,
       proxy: {
         '/api/resend-webhook': {
           target: supabaseOrigin,
