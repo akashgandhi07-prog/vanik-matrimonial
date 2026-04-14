@@ -85,9 +85,14 @@ export async function dispatchEmail(
     case 'registration_received': {
       const first = stripHtml(String(extraData.first_name ?? ''), 80);
       const ref = stripHtml(String(extraData.reference_number ?? ''), 20);
-      subject = 'Your registration has been received';
+      const resubmitted = extraData.resubmitted === true;
+      subject = resubmitted ? 'We have received your updated application' : 'Your registration has been received';
       inner = `<p>Dear ${first},</p>
-        <p>We have received your application to the Vanik Matrimonial Register and will review it within five working days.</p>
+        <p>${
+          resubmitted
+            ? 'Thank you — we have received your <strong>updated</strong> application and will review it again within five working days.'
+            : 'We have received your application to the Vanik Matrimonial Register and will review it within five working days.'
+        }</p>
         <p>Your reference: <strong>${ref}</strong></p>
         <p>If you have any questions, simply reply to this email.</p>`;
       break;
@@ -116,14 +121,16 @@ export async function dispatchEmail(
         <p>With good wishes,<br/>The register team<br/><a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
       break;
     }
-    case 'registration_rejected': {
+       case 'registration_rejected': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
       const reason = stripHtml(String(extraData.reason ?? ''), 2000);
+      const registerUrl = `${siteUrl()}/register`;
       subject = 'Regarding your Vanik Matrimonial Register application';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Unfortunately we are unable to approve your application at this time.</p>
         <p><strong>Reason:</strong> ${reason}</p>
+        <p>You are welcome to sign in and <strong>update your application</strong> (for example a clearer profile photo or ID image) and submit again: <a href="${registerUrl}">${registerUrl}</a></p>
         <p>If you believe this is an error, please reply to this email.</p>`;
       break;
     }

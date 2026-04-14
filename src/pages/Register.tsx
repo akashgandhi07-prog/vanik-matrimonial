@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { rejectReasonIfNotJpegOrPng } from '../lib/profilePhotoAccept';
 import { PublicLayout } from '../components/Layout';
@@ -205,6 +205,7 @@ function focusFirstFieldError(errors: Record<string, string>) {
 
 export default function Register() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>(null);
@@ -227,6 +228,18 @@ export default function Register() {
   const [stripeCheckoutSessionId, setStripeCheckoutSessionId] = useState<string | null>(null);
   const [stripeRedirectBusy, setStripeRedirectBusy] = useState(false);
   const [couponChecking, setCouponChecking] = useState(false);
+  const [resubmitMode, setResubmitMode] = useState(false);
+  const rejectHydrateDoneRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    rejectHydrateDoneRef.current = null;
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (location.pathname !== '/register') {
+      rejectHydrateDoneRef.current = null;
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(form));
@@ -290,9 +303,68 @@ export default function Register() {
       if (!p) return;
       if (p.status === 'pending_approval') navigate('/registration-pending', { replace: true });
       else if (p.status === 'active') navigate('/dashboard/browse', { replace: true });
-      else if (p.status === 'rejected') navigate('/registration-rejected', { replace: true });
+      else if (p.status === 'rejected' && location.pathname !== '/register') {
+        navigate('/registration-rejected', { replace: true });
+      }
     })();
-  }, [session?.user?.id, verified, navigate]);
+  }, [session?.user?.id, verified, navigate, location.pathname]);
+
+  /** Pre-fill the form when resubmitting after rejection (ID/photo must be uploaded again). */
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid || !verified || location.pathname !== '/register') return;
+    void (async () => {
+      const { data: p } = await supabase.from('profiles').select('*').eq('auth_user_id', uid).maybeSingle();
+      if (!p || p.status !== 'rejected') {
+        setResubmitMode(false);
+        return;
+      }
+      if (rejectHydrateDoneRef.current === uid) return;
+      rejectHydrateDoneRef.current = uid;
+      setResubmitMode(true);
+      const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', p.id).maybeSingle();
+      if (!m) return;
+      setForm((prev) => ({
+        ...prev,
+        gender: p.gender === 'Female' ? 'Female' : 'Male',
+        date_of_birth: m.date_of_birth ?? '',
+        mobile_phone: m.mobile_phone ?? '',
+        home_address_line1: m.home_address_line1 ?? '',
+        home_address_city: m.home_address_city ?? '',
+        home_address_postcode: m.home_address_postcode ?? '',
+        home_address_country: m.home_address_country ?? 'UK',
+        first_name: p.first_name ?? '',
+        surname: m.surname ?? '',
+        nationality: p.nationality ?? '',
+        place_of_birth: p.place_of_birth ?? '',
+        town_country_of_origin: p.town_country_of_origin ?? '',
+        community: p.community ?? '',
+        religion: p.religion ?? '',
+        father_name: m.father_name ?? '',
+        mother_name: m.mother_name ?? '',
+        future_settlement_plans: p.future_settlement_plans ?? '',
+        education: p.education ?? '',
+        job_title: p.job_title ?? '',
+        height_cm: p.height_cm ?? '',
+        diet: p.diet ?? 'Veg',
+        hobbies: p.hobbies ?? '',
+        coupon_code: (m.coupon_used as string) ?? '',
+        coupon_hint: '',
+        id_document_path: '',
+        photo_path: '',
+        id_file_name: '',
+        photo_compress_note: '',
+        consent_contact: false,
+        consent_age: false,
+        consent_privacy: false,
+        step: 1,
+      }));
+      setPhotoPreview((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return null;
+      });
+    })();
+  }, [session?.user?.id, verified, location.pathname]);
 
   const update = useCallback((patch: Partial<FormState>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -376,6 +448,12 @@ export default function Register() {
 
   async function uploadId(file: File) {
     if (!session?.user) return;
+    const reject = rejectReasonIfNotJpegOrPng(file);
+    if (reject) {
+      setFieldErrors((prev) => ({ ...prev, id_document_path: reject }));
+      return;
+    }
+    clearFieldError('id_document_path');
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
     const path = `${session.user.id}/id-${Date.now()}.${ext}`;
     setIdUploading(true);
@@ -694,6 +772,23 @@ export default function Register() {
     <PublicLayout>
       <div className="layout-max register-page">
         <div className="register-card">
+          {resubmitMode && (
+            <div
+              className="badge badge-warning"
+              style={{
+                display: 'block',
+                marginBottom: 16,
+                padding: 12,
+                textAlign: 'left',
+                fontSize: 14,
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>Resubmitting your application.</strong> Your previous details are pre-filled below. You
+              must upload a <strong>new proof of identity</strong> and a <strong>new profile photo</strong>, then
+              complete all three steps and submit again for review.
+            </div>
+          )}
           <div style={{ marginBottom: 22 }}>
             <div className="register-steps">
               {([1, 2, 3] as const).map((s) => (
@@ -932,17 +1027,16 @@ export default function Register() {
                 </label>
                 <p className="field-hint">
                   Passport photo page or driving licence. Used only to verify your identity; deleted after
-                  approval. JPEG, PNG or PDF up to 10MB.
+                  approval. <strong>JPG or PNG only,</strong> up to 10MB.
                 </p>
                 <input
                   id="reg-id-file"
                   type="file"
-                  accept="image/jpeg,image/png,application/pdf"
+                  accept="image/jpeg,image/png"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f && f.size <= 10 * 1024 * 1024) {
                       void uploadId(f);
-                      clearFieldError('id_document_path');
                     } else if (f) alert('File too large (max 10MB)');
                   }}
                 />

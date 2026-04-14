@@ -59,19 +59,51 @@ Deno.serve(async (req) => {
     if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
     const rows = profiles ?? [];
     const emails: Record<string, string> = {};
+    let pendingPreviews:
+      | Record<string, { photo: string | null; id_document: string | null; id_is_image: boolean }>
+      | undefined;
     if (rows.length > 0) {
       const ids = rows.map((p: { id: string }) => p.id);
       const { data: priv, error: mErr } = await admin
         .from('member_private')
-        .select('profile_id, email')
+        .select('profile_id, email, id_document_url')
         .in('profile_id', ids);
       if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+      const idDocByProfile = new Map<string, string | null>();
       for (const r of priv ?? []) {
-        const row = r as { profile_id: string; email: string | null };
-        if (row.profile_id) emails[row.profile_id] = row.email ?? '';
+        const row = r as { profile_id: string; email: string | null; id_document_url: string | null };
+        if (row.profile_id) {
+          emails[row.profile_id] = row.email ?? '';
+          idDocByProfile.set(row.profile_id, row.id_document_url ?? null);
+        }
+      }
+      if (f === 'pending') {
+        pendingPreviews = {};
+        const ttl = 1800;
+        for (const p of rows as { id: string; photo_url: string | null }[]) {
+          let photoSigned: string | null = null;
+          let idSigned: string | null = null;
+          if (p.photo_url) {
+            const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(p.photo_url, ttl);
+            photoSigned = s?.signedUrl ?? null;
+          }
+          const idPath = idDocByProfile.get(p.id) ?? '';
+          const idLower = idPath.toLowerCase();
+          const idIsImage =
+            idLower.endsWith('.jpg') || idLower.endsWith('.jpeg') || idLower.endsWith('.png');
+          if (idPath) {
+            const { data: s } = await admin.storage.from('id-documents').createSignedUrl(idPath, ttl);
+            idSigned = s?.signedUrl ?? null;
+          }
+          pendingPreviews[p.id] = {
+            photo: photoSigned,
+            id_document: idSigned,
+            id_is_image: idIsImage,
+          };
+        }
       }
     }
-    return jsonResponse({ profiles: rows, emails }, req);
+    return jsonResponse({ profiles: rows, emails, pending_previews: pendingPreviews }, req);
   }
 
   if (action === 'list') {
@@ -290,7 +322,7 @@ Deno.serve(async (req) => {
       signedUrls.pending_photo = s?.signedUrl ?? null;
     }
     if (priv.id_document_url) {
-      const { data: s } = await admin.storage.from('id-documents').createSignedUrl(priv.id_document_url, 900);
+      const { data: s } = await admin.storage.from('id-documents').createSignedUrl(priv.id_document_url, 3600);
       signedUrls.id_document = s?.signedUrl ?? null;
     }
 

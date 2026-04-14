@@ -40,6 +40,13 @@ export default function RegistrationRejected() {
               <p>
                 <strong>Reason:</strong> {reason ?? 'Loading…'}
               </p>
+              <p style={{ marginTop: 16 }}>
+                You can <strong>update your application</strong> (for example a clearer photo or ID), then submit
+                again for review.
+              </p>
+              <Link to="/register" className="btn btn-primary" style={{ marginTop: 8 }}>
+                Update and resubmit application
+              </Link>
             </>
           )}
           <p style={{ color: 'var(--color-text-secondary)', marginTop: 16 }}>

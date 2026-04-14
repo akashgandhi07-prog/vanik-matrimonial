@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { invokeFunction } from '../../lib/supabase';
+
+type PendingPreviews = Record<
+  string,
+  { photo: string | null; id_document: string | null; id_is_image: boolean }
+>;
 
 type Profile = {
   id: string;
@@ -40,6 +45,8 @@ export default function AdminMembers() {
   const [emailByProfileId, setEmailByProfileId] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pendingPreviews, setPendingPreviews] = useState<PendingPreviews>({});
+  const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
     setLoadError(null);
@@ -48,20 +55,47 @@ export default function AdminMembers() {
       const res = (await invokeFunction('admin-manage-users', {
         action: 'list_profiles',
         filter,
-      })) as { profiles?: Profile[]; emails?: Record<string, string> };
+      })) as {
+        profiles?: Profile[];
+        emails?: Record<string, string>;
+        pending_previews?: PendingPreviews;
+      };
       setMembers((res.profiles ?? []) as Profile[]);
       setEmailByProfileId(res.emails ?? {});
+      setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});
     } catch (e) {
       setMembers([]);
       setEmailByProfileId({});
+      setPendingPreviews({});
       setLoadError(e instanceof Error ? e.message : 'Could not load members');
     } finally {
       setLoading(false);
     }
   }, [filter]);
 
+  const quickApprove = useCallback(
+    async (profileId: string) => {
+      if (
+        !window.confirm(
+          'Approve this applicant? Only confirm if you have reviewed their profile photo and ID document.'
+        )
+      ) {
+        return;
+      }
+      setApproveBusyId(profileId);
+      try {
+        await invokeFunction('admin-approve-member', { profile_id: profileId });
+        await loadMembers();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Approval failed');
+      } finally {
+        setApproveBusyId(null);
+      }
+    },
+    [loadMembers]
+  );
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadMembers updates list from Supabase
     void loadMembers();
   }, [loadMembers]);
 
@@ -117,6 +151,12 @@ export default function AdminMembers() {
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ padding: 8 }}>Ref</th>
+              {filter === 'pending' && (
+                <>
+                  <th style={{ padding: 8 }}>Photo</th>
+                  <th style={{ padding: 8 }}>ID</th>
+                </>
+              )}
               <th style={{ padding: 8 }}>Name</th>
               <th style={{ padding: 8 }}>Gender</th>
               <th style={{ padding: 8 }}>Age</th>
@@ -125,20 +165,26 @@ export default function AdminMembers() {
               <th style={{ padding: 8 }}>Expires</th>
               <th style={{ padding: 8 }}>Last request</th>
               <th style={{ padding: 8 }}>Notes</th>
-              <th style={{ padding: 8 }} />
+              <th style={{ padding: 8 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                <td
+                  colSpan={filter === 'pending' ? 12 : 10}
+                  style={{ padding: 16, color: 'var(--color-text-secondary)' }}
+                >
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && filteredMembers.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                <td
+                  colSpan={filter === 'pending' ? 12 : 10}
+                  style={{ padding: 16, color: 'var(--color-text-secondary)' }}
+                >
                   {loadError
                     ? 'Could not load members.'
                     : 'No rows for this filter. If you expect pending applications, confirm their status is pending_approval in Supabase and that your admin session can read all profiles (see note above).'}
@@ -146,28 +192,75 @@ export default function AdminMembers() {
               </tr>
             )}
             {!loading &&
-              filteredMembers.map((m) => (
-              <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <td style={{ padding: 8 }}>{m.reference_number}</td>
-                <td style={{ padding: 8 }}>{m.first_name}</td>
-                <td style={{ padding: 8 }}>{m.gender}</td>
-                <td style={{ padding: 8 }}>{m.age}</td>
-                <td style={{ padding: 8 }}>{m.community}</td>
-                <td style={{ padding: 8 }}>{m.status}</td>
-                <td style={{ padding: 8 }}>{fmtDate(m.membership_expires_at)}</td>
-                <td style={{ padding: 8 }}>{fmtDate(m.last_request_at)}</td>
-                <td style={{ padding: 8 }}>
-                  {m.pending_photo_url && (
-                    <span className="badge badge-warning" style={{ whiteSpace: 'nowrap' }}>
-                      Photo pending review
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: 8 }}>
-                  <Link to={`/admin/members/${m.id}`}>View</Link>
-                </td>
-              </tr>
-              ))}
+              filteredMembers.map((m) => {
+                const prev = pendingPreviews[m.id];
+                const thumbStyle: CSSProperties = {
+                  width: 56,
+                  height: 56,
+                  objectFit: 'cover',
+                  borderRadius: 6,
+                  display: 'block',
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                };
+                return (
+                  <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: 8 }}>{m.reference_number}</td>
+                    {filter === 'pending' && (
+                      <>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                          {prev?.photo ? (
+                            <img src={prev.photo} alt="" style={thumbStyle} />
+                          ) : (
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                          {prev?.id_document && prev.id_is_image ? (
+                            <img src={prev.id_document} alt="" style={thumbStyle} />
+                          ) : prev?.id_document && !prev.id_is_image ? (
+                            <a href={prev.id_document} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
+                              PDF
+                            </a>
+                          ) : (
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                    <td style={{ padding: 8 }}>{m.first_name}</td>
+                    <td style={{ padding: 8 }}>{m.gender}</td>
+                    <td style={{ padding: 8 }}>{m.age}</td>
+                    <td style={{ padding: 8 }}>{m.community}</td>
+                    <td style={{ padding: 8 }}>{m.status}</td>
+                    <td style={{ padding: 8 }}>{fmtDate(m.membership_expires_at)}</td>
+                    <td style={{ padding: 8 }}>{fmtDate(m.last_request_at)}</td>
+                    <td style={{ padding: 8 }}>
+                      {m.pending_photo_url && (
+                        <span className="badge badge-warning" style={{ whiteSpace: 'nowrap' }}>
+                          Photo pending review
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <Link to={`/admin/members/${m.id}`}>Details</Link>
+                        {m.status === 'pending_approval' && (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ padding: '4px 10px', fontSize: 13 }}
+                            disabled={approveBusyId === m.id}
+                            onClick={() => void quickApprove(m.id)}
+                          >
+                            {approveBusyId === m.id ? '…' : 'Approve'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

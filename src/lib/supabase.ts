@@ -1,4 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -79,9 +84,14 @@ export async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+function jwtHint401(msg: string): boolean {
+  const m = msg.trim();
+  return /jwt/i.test(m) || /invalid/i.test(m) || m === 'Unauthorized' || m === '';
+}
+
 /**
- * Call Edge Functions with the session access token. Hosted functions use `verify_jwt = true` in
- * config.toml where the gateway should reject invalid/expired JWTs before the handler runs.
+ * Call Edge Functions with the session JWT. Uses `supabase.functions.invoke` so headers match the
+ * SDK’s authenticated fetch (same as PostgREST). Retries once after `refreshSession()` on 401.
  */
 export async function invokeFunction(name: string, body?: object) {
   if (!url || !anon) {
@@ -91,38 +101,59 @@ export async function invokeFunction(name: string, body?: object) {
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
-
-  if (!token) {
+  if (!sessionData.session?.access_token) {
     throw new Error('Not authenticated — please log in again.');
   }
 
-  const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
-    method: 'POST',
-    body,
-    token,
-    networkErrorPrefix:
-      'Could not reach Edge Function. Deploy functions and check network / ad blockers',
-  });
+  const networkErrorPrefix =
+    'Could not reach Edge Function. Deploy functions and check network / ad blockers';
 
-  if (res.status === 402) {
-    const o = json as { code?: string; error?: string } | null;
-    if (o?.code === 'PAYMENT_REQUIRED') {
-      throw new Error('PAYMENT_REQUIRED');
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.functions.invoke(name, { body: body ?? {} });
+
+    if (!error) {
+      if (data != null && typeof data === 'object' && !Array.isArray(data)) {
+        return data as Record<string, unknown>;
+      }
+      return {} as Record<string, unknown>;
     }
+
+    if (error instanceof FunctionsFetchError) {
+      throw new Error(`${networkErrorPrefix}: ${error.message}`);
+    }
+    if (error instanceof FunctionsRelayError) {
+      throw new Error(`Edge Function relay error: ${error.message}`);
+    }
+
+    if (error instanceof FunctionsHttpError) {
+      const res = error.context as Response;
+      if (res.status === 401 && attempt === 0) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed.session?.access_token) {
+          continue;
+        }
+      }
+      const text = await res.text();
+      const json = parseMaybeJson(text);
+      if (res.status === 402) {
+        const o = json as { code?: string; error?: string } | null;
+        if (o?.code === 'PAYMENT_REQUIRED') {
+          throw new Error('PAYMENT_REQUIRED');
+        }
+      }
+      const msg = responseMessage(res, text, json);
+      if (res.status === 401 && jwtHint401(msg)) {
+        throw new Error(
+          `${msg || 'Unauthorized'} — Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed (redeploy after changing env vars).`
+        );
+      }
+      throw new Error(msg);
+    }
+
+    throw new Error(error instanceof Error ? error.message : 'Edge Function error');
   }
 
-  if (!res.ok) {
-    const msg = responseMessage(res, text, json);
-    if (res.status === 401 && msg.includes('JWT')) {
-      throw new Error(
-        `${msg} — Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed.`
-      );
-    }
-    throw new Error(msg);
-  }
-
-  return (json ?? {}) as Record<string, unknown>;
+  throw new Error('Unauthorized — please sign in again.');
 }
 
 /** Edge Function callable without a user session (uses anon key). */

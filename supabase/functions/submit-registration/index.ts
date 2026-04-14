@@ -49,12 +49,7 @@ function pathExtensionOk(path: string, kind: 'photo' | 'id'): boolean {
   if (kind === 'photo') {
     return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
   }
-  return (
-    lower.endsWith('.jpg') ||
-    lower.endsWith('.jpeg') ||
-    lower.endsWith('.png') ||
-    lower.endsWith('.pdf')
-  );
+  return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
 }
 
 async function verifyObjectExists(
@@ -113,10 +108,11 @@ Deno.serve(async (req) => {
 
   const { data: existing } = await admin
     .from('profiles')
-    .select('id')
+    .select('id, status, reference_number')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
-  if (existing) {
+  const isResubmit = !!(existing && existing.status === 'rejected');
+  if (existing && !isResubmit) {
     return jsonResponse({ error: 'Profile already exists' }, req, 400);
   }
 
@@ -128,7 +124,7 @@ Deno.serve(async (req) => {
   }
 
   if (!pathExtensionOk(photoPath, 'photo') || !pathExtensionOk(idPath, 'id')) {
-    return jsonResponse({ error: 'Invalid file type' }, req, 400);
+    return jsonResponse({ error: 'Profile photo and proof of identity must be JPG or PNG' }, req, 400);
   }
   const photoOk = await verifyObjectExists(admin, 'profile-photos', photoPath);
   const idOk = await verifyObjectExists(admin, 'id-documents', idPath);
@@ -155,15 +151,15 @@ Deno.serve(async (req) => {
   }
 
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
-  const paymentRequired = !!stripeSecret && !couponValid;
+  const paymentRequired = !!stripeSecret && !couponValid && !isResubmit;
   let stripeCheckoutSessionId: string | null = null;
   if (paymentRequired) {
     const sid = stripHtml(String(body.stripe_checkout_session_id ?? ''), 128);
     if (!sid.startsWith('cs_')) {
       return jsonResponse({
-          error: 'Membership fee payment is required before submitting your registration.',
-          code: 'PAYMENT_REQUIRED',
-        }, req, 402);
+        error: 'Membership fee payment is required before submitting your registration.',
+        code: 'PAYMENT_REQUIRED',
+      }, req, 402);
     }
     try {
       await verifyPaidCheckoutSession({
@@ -185,7 +181,7 @@ Deno.serve(async (req) => {
   const mobile = stripHtml(String(body.mobile_phone ?? ''), 40);
   const dob = String(body.date_of_birth ?? '');
 
-  const profileRow = {
+  const profilePayload = {
     gender,
     first_name: firstName,
     education: stripHtml(String(body.education ?? ''), 500),
@@ -201,24 +197,10 @@ Deno.serve(async (req) => {
     hobbies: stripHtml(String(body.hobbies ?? ''), 400),
     photo_url: photoPath,
     photo_status: 'pending',
-    status: 'pending_approval',
-    auth_user_id: userData.user.id,
+    status: 'pending_approval' as const,
   };
 
-  const { data: insProfile, error: pErr } = await admin
-    .from('profiles')
-    .insert(profileRow)
-    .select('id')
-    .single();
-
-  if (pErr || !insProfile) {
-    return jsonResponse({ error: pErr?.message ?? 'Insert failed' }, req, 500);
-  }
-
-  const profileId = insProfile.id as string;
-
-  const privateRow = {
-    profile_id: profileId,
+  const privatePayload = {
     surname,
     date_of_birth: dob,
     email,
@@ -233,41 +215,90 @@ Deno.serve(async (req) => {
     coupon_used: couponValid ? couponRaw : null,
   };
 
-  const { error: mErr } = await admin.from('member_private').insert(privateRow);
-  if (mErr) {
-    await admin.from('profiles').delete().eq('id', profileId);
-    return jsonResponse({ error: mErr.message }, req, 500);
-  }
+  let profileId: string;
+  let referenceNumber: string;
 
-  const { data: refResult, error: refErr } = await admin.rpc('assign_next_reference_number', {
-    p_profile_id: profileId,
-    p_gender: gender,
-  });
+  if (isResubmit) {
+    profileId = existing!.id as string;
+    referenceNumber = (existing!.reference_number as string) ?? '';
 
-  if (refErr) {
-    return jsonResponse({ error: refErr.message }, req, 500);
-  }
+    const { data: beforePriv } = await admin
+      .from('member_private')
+      .select('coupon_used')
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    const prevCouponCode = String(beforePriv?.coupon_used ?? '').toUpperCase();
 
-  const referenceNumber = refResult as string;
+    const { error: upProf } = await admin
+      .from('profiles')
+      .update({
+        ...profilePayload,
+        rejection_reason: null,
+        show_on_register: false,
+      })
+      .eq('id', profileId);
+    if (upProf) {
+      return jsonResponse({ error: upProf.message }, req, 500);
+    }
+    const { error: upPriv } = await admin.from('member_private').update(privatePayload).eq('profile_id', profileId);
+    if (upPriv) {
+      return jsonResponse({ error: upPriv.message }, req, 500);
+    }
 
-  if (couponValid) {
-    // Atomic increment — avoids race condition if two registrations use the same coupon concurrently.
-    await admin.rpc('increment_coupon_use', { p_code: couponRaw });
-  }
+    if (couponValid && couponRaw !== prevCouponCode) {
+      await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+    }
+  } else {
+    const { data: insProfile, error: pErr } = await admin
+      .from('profiles')
+      .insert({ ...profilePayload, auth_user_id: userData.user.id })
+      .select('id')
+      .single();
 
-  if (stripeCheckoutSessionId) {
-    await admin.from('stripe_checkout_sessions').upsert(
-      {
-        checkout_session_id: stripeCheckoutSessionId,
-        auth_user_id: userData.user.id,
-        profile_id: profileId,
-        purpose: 'registration',
-        payment_status: 'paid',
-        consumed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'checkout_session_id' }
-    );
+    if (pErr || !insProfile) {
+      return jsonResponse({ error: pErr?.message ?? 'Insert failed' }, req, 500);
+    }
+
+    profileId = insProfile.id as string;
+
+    const { error: mErr } = await admin.from('member_private').insert({
+      profile_id: profileId,
+      ...privatePayload,
+    });
+    if (mErr) {
+      await admin.from('profiles').delete().eq('id', profileId);
+      return jsonResponse({ error: mErr.message }, req, 500);
+    }
+
+    const { data: refResult, error: refErr } = await admin.rpc('assign_next_reference_number', {
+      p_profile_id: profileId,
+      p_gender: gender,
+    });
+
+    if (refErr) {
+      return jsonResponse({ error: refErr.message }, req, 500);
+    }
+
+    referenceNumber = refResult as string;
+
+    if (couponValid) {
+      await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+    }
+
+    if (stripeCheckoutSessionId) {
+      await admin.from('stripe_checkout_sessions').upsert(
+        {
+          checkout_session_id: stripeCheckoutSessionId,
+          auth_user_id: userData.user.id,
+          profile_id: profileId,
+          purpose: 'registration',
+          payment_status: 'paid',
+          consumed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'checkout_session_id' }
+      );
+    }
   }
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
@@ -278,13 +309,18 @@ Deno.serve(async (req) => {
       extra_data: {
         first_name: firstName,
         reference_number: referenceNumber,
+        resubmitted: isResubmit,
       },
     });
 
     const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'register@vanikmatrimonial.co.uk';
+    const adminSubject = isResubmit ? 'Registration resubmitted (after rejection)' : 'New Vanik Matrimonial registration';
+    const adminLead = isResubmit
+      ? '<p>A member <strong>resubmitted</strong> their application after an earlier rejection.</p>'
+      : '<p>A new matrimonial registration was submitted.</p>';
     const html = letterHtml(
-      'New registration',
-      `<p>A new matrimonial registration was submitted.</p>
+      isResubmit ? 'Resubmitted registration' : 'New registration',
+      `${adminLead}
        <p><strong>Reference:</strong> ${stripHtml(referenceNumber, 20)}<br/>
        <strong>Name:</strong> ${firstName} ${surname}<br/>
        <strong>Email:</strong> ${email}</p>
@@ -292,7 +328,7 @@ Deno.serve(async (req) => {
     );
     await sendResendEmail(resendKey, {
       to: notify,
-      subject: 'New Vanik Matrimonial registration',
+      subject: adminSubject,
       html,
     });
   }
@@ -301,5 +337,6 @@ Deno.serve(async (req) => {
     ok: true,
     profile_id: profileId,
     reference_number: referenceNumber,
+    resubmitted: isResubmit,
   }, req);
 });

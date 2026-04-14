@@ -53,13 +53,41 @@ function humanizeAction(type: string) {
   return ACTION_LABELS[type] ?? type.replace(/_/g, ' ');
 }
 
+const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
+  {
+    label: 'Profile photo',
+    text: 'Your profile photo does not meet our guidelines — please upload a clear, recent head-and-shoulders picture with your face visible and well lit (similar to a passport-style photo, without filters or heavy editing).',
+  },
+  {
+    label: 'Proof of identity',
+    text: 'Your proof of identity was unclear or incomplete — please upload a sharp, colour image of your passport photo page or driving licence (full page, all corners visible, no glare).',
+  },
+  {
+    label: 'Name / DOB mismatch',
+    text: 'The name or date of birth on your ID does not match the details you provided — please check your registration and upload matching ID, or contact us if you need to correct your details.',
+  },
+  {
+    label: 'Age requirement',
+    text: 'We could not confirm that you meet the minimum age requirement for this register — please check your date of birth and ID, and resubmit.',
+  },
+  {
+    label: 'Eligibility / community',
+    text: 'Based on the information provided, we are not able to proceed with this application under our current register rules. If you believe this is a mistake, please reply with any further context.',
+  },
+];
+
+function idPathLooksLikeImage(path: string | null | undefined): boolean {
+  if (!path) return false;
+  const lower = path.toLowerCase();
+  return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
+}
+
 export default function AdminMemberDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { ok, mfaOk, refresh } = useAdminGuard();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [priv, setPriv] = useState<PrivateRow | null>(null);
-  const [signedIdUrl, setSignedIdUrl] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [checklist, setChecklist] = useState([false, false, false, false]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -74,8 +102,8 @@ export default function AdminMemberDetail() {
 
   useEffect(() => {
     if (!id || ok !== true || mfaOk !== true) return;
-    setDetailError(null);
     void (async () => {
+      setDetailError(null);
       try {
         const res = (await invokeFunction('admin-manage-users', {
           action: 'get_member_detail',
@@ -106,15 +134,6 @@ export default function AdminMemberDetail() {
       }
     })();
   }, [id, ok, mfaOk]);
-
-  function viewIdDoc() {
-    if (!priv?.id_document_url) return;
-    if (!idDocSignedFromServer) {
-      alert('Could not open ID document. Refresh the page or check storage permissions.');
-      return;
-    }
-    setSignedIdUrl(idDocSignedFromServer);
-  }
 
   if (ok === false) return <Navigate to="/dashboard/browse" replace />;
   if (ok === null || mfaOk === null) {
@@ -173,18 +192,30 @@ export default function AdminMemberDetail() {
           <div className="card">
             <h3>ID document</h3>
             {pending && priv.id_document_url ? (
-              <>
-                <button type="button" className="btn btn-secondary" onClick={() => void viewIdDoc()}>
-                  View ID document (15 min link)
-                </button>
-                {signedIdUrl && (
-                  <p style={{ marginTop: 12 }}>
-                    <a href={signedIdUrl} target="_blank" rel="noreferrer">
-                      Open document
+              idDocSignedFromServer ? (
+                idPathLooksLikeImage(priv.id_document_url) ? (
+                  <img
+                    src={idDocSignedFromServer}
+                    alt={`${profile.first_name}'s proof of identity`}
+                    style={{ width: '100%', maxWidth: 320, borderRadius: 8, display: 'block' }}
+                  />
+                ) : (
+                  <p style={{ margin: 0 }}>
+                    <a
+                      href={idDocSignedFromServer}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-secondary"
+                    >
+                      Open ID document (legacy file)
                     </a>
                   </p>
-                )}
-              </>
+                )
+              ) : (
+                <p style={{ color: 'var(--color-danger)', margin: 0 }}>
+                  Could not load ID preview. Refresh the page.
+                </p>
+              )
             ) : (
               <p style={{ color: 'var(--color-text-secondary)' }}>No ID on file (cleared after approval).</p>
             )}
@@ -250,7 +281,30 @@ export default function AdminMemberDetail() {
             </div>
             <div style={{ marginTop: 24 }}>
               <label className="label">Reject reason</label>
-              <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
+              <p className="field-hint" style={{ marginTop: 0 }}>
+                Quick templates (click to add — you can edit the text below):
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {REJECTION_REASON_TEMPLATES.map((t) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: 13, padding: '6px 10px' }}
+                    onClick={() => {
+                      setRejectReason((prev) => {
+                        const p = prev.trim();
+                        if (!p) return t.text;
+                        if (p.includes(t.text.slice(0, 40))) return p;
+                        return `${p}\n\n${t.text}`;
+                      });
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={6} />
               <button
                 type="button"
                 className="btn btn-primary"
