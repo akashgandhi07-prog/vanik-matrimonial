@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeFunction } from '../../lib/supabase';
+import { isSupportAdmin } from '../../lib/auth';
+import { invokeFunction, supabase } from '../../lib/supabase';
 
 type UsageRow = {
   profile_id: string;
@@ -31,6 +32,7 @@ function randomCode(len = 8) {
 }
 
 export default function AdminCoupons() {
+  const [supportOnly, setSupportOnly] = useState(false);
   const [rows, setRows] = useState<Coupon[]>([]);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageFilter, setUsageFilter] = useState<string>('');
@@ -62,6 +64,12 @@ export default function AdminCoupons() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- coupon list from Edge Function
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setSupportOnly(isSupportAdmin(data.user));
+    });
+  }, []);
 
   async function createCoupon(e: React.FormEvent) {
     e.preventDefault();
@@ -115,7 +123,13 @@ export default function AdminCoupons() {
 
       <div className="card" style={{ maxWidth: 520, marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>Create coupon</h2>
+        {supportOnly && (
+          <p className="field-hint" style={{ marginBottom: 12 }}>
+            Support admins cannot create or revoke coupons.
+          </p>
+        )}
         <form onSubmit={(e) => void createCoupon(e)} style={{ display: 'grid', gap: 12 }}>
+          <fieldset disabled={supportOnly} style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
           <div>
             <span className="label">Code</span>
             <div className="flex-input-with-btn">
@@ -179,6 +193,7 @@ export default function AdminCoupons() {
           <button type="submit" className="btn btn-primary">
             Create
           </button>
+          </fieldset>
         </form>
       </div>
 
@@ -214,7 +229,12 @@ export default function AdminCoupons() {
                 <td style={{ padding: 8 }}>{c.is_active ? 'Yes' : 'No'}</td>
                 <td style={{ padding: 8 }}>
                   {c.is_active && (
-                    <button type="button" className="btn btn-secondary" onClick={() => void revoke(c.code)}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={supportOnly}
+                      onClick={() => void revoke(c.code)}
+                    >
                       Revoke
                     </button>
                   )}

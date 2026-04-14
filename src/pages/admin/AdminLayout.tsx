@@ -9,7 +9,7 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const { ok, mfaOk, denyReason, refresh } = useAdminGuard();
+  const { ok, mfaOk, denyReason, refresh, adminRole } = useAdminGuard();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wide, setWide] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 900px)').matches : true
@@ -81,9 +81,11 @@ export default function AdminLayout() {
         <NavLink to="/admin/feedback" className={navCls} onClick={() => setSidebarOpen(false)}>
           Feedback
         </NavLink>
-        <NavLink to="/admin/add-member" className={navCls} onClick={() => setSidebarOpen(false)}>
-          Add member
-        </NavLink>
+        {adminRole !== 'support' && (
+          <NavLink to="/admin/add-member" className={navCls} onClick={() => setSidebarOpen(false)}>
+            Add member
+          </NavLink>
+        )}
         <NavLink to="/admin/scheduled-jobs" className={navCls} onClick={() => setSidebarOpen(false)}>
           Scheduled jobs
         </NavLink>

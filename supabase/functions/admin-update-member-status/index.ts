@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
@@ -17,6 +17,9 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
     return jsonResponse({ error: 'Forbidden' }, req, 403);
+  }
+  if (isSupportAdmin(userData.user)) {
+    return jsonResponse({ error: 'Support admin role cannot change member status' }, req, 403);
   }
 
   const body = await req.json().catch(() => ({})) as { profile_id?: string; action?: string };

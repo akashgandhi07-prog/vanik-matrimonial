@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeFunction } from '../../lib/supabase';
+import { adminPowerRole } from '../../lib/auth';
+import { invokeFunction, supabase } from '../../lib/supabase';
 
-type AuthRow = { id: string; email: string | undefined; is_admin: boolean; created_at: string };
+type AuthRow = {
+  id: string;
+  email: string | undefined;
+  is_admin: boolean;
+  admin_role: 'super' | 'support' | null;
+  created_at: string;
+};
 
 export default function AdminSettings() {
   const [users, setUsers] = useState<AuthRow[]>([]);
@@ -14,6 +21,8 @@ export default function AdminSettings() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myPowerRole, setMyPowerRole] = useState<'super' | 'support' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +71,13 @@ export default function AdminSettings() {
     });
   }, [load]);
 
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id ?? null);
+      setMyPowerRole(data.user ? adminPowerRole(data.user) : null);
+    });
+  }, []);
+
   async function promote(id: string) {
     try {
       await invokeFunction('admin-manage-users', { action: 'promote', user_id: id });
@@ -81,6 +97,19 @@ export default function AdminSettings() {
     }
   }
 
+  async function setUserRole(id: string, role: 'super' | 'support') {
+    if (id === currentUserId) {
+      alert('Ask another super admin to change your own role.');
+      return;
+    }
+    try {
+      await invokeFunction('admin-manage-users', { action: 'set_admin_role', user_id: id, role });
+      void load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed');
+    }
+  }
+
   const rate =
     stats && stats.emailAttempted > 0
       ? Math.round((stats.emailOk / stats.emailAttempted) * 1000) / 10
@@ -90,9 +119,16 @@ export default function AdminSettings() {
     <div>
       <h1>Settings</h1>
       <p style={{ color: 'var(--color-text-secondary)', maxWidth: 720 }}>
-        Promote or demote administrators. Demotion is blocked if this would remove the last admin. See{' '}
+        Promote or demote administrators. New admins are <strong>super</strong> by default. You can switch an admin to{' '}
+        <strong>support</strong> for read-mostly access (no approvals, full record edits, coupons, or high‑risk account
+        tools). Demotion is blocked if this would remove the last admin. See{' '}
         <code style={{ fontSize: 13 }}>docs/SETUP.md</code> for creating the first and second admin accounts.
       </p>
+      {myPowerRole === 'support' && (
+        <p className="card" style={{ marginBottom: 16, padding: 12, background: '#f6f4e8' }}>
+          You are a <strong>support</strong> admin: promoting, demoting, and role changes require a super admin.
+        </p>
+      )}
 
       {loadError && (
         <p className="card" style={{ color: 'var(--color-danger)', marginBottom: 16, padding: 12 }}>
@@ -140,6 +176,7 @@ export default function AdminSettings() {
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ textAlign: 'left', padding: 8 }}>Email</th>
               <th style={{ textAlign: 'left', padding: 8 }}>Admin</th>
+              <th style={{ textAlign: 'left', padding: 8 }}>Role</th>
               <th style={{ textAlign: 'left', padding: 8 }} />
             </tr>
           </thead>
@@ -148,15 +185,38 @@ export default function AdminSettings() {
               <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 8 }}>{u.email ?? u.id}</td>
                 <td style={{ padding: 8 }}>{u.is_admin ? 'Yes' : 'No'}</td>
+                <td style={{ padding: 8 }}>{u.is_admin ? (u.admin_role ?? 'super') : '—'}</td>
                 <td style={{ padding: 8 }}>
-                  {!u.is_admin ? (
+                  {myPowerRole !== 'support' && !u.is_admin ? (
                     <button type="button" className="btn btn-secondary" onClick={() => void promote(u.id)}>
                       Promote
                     </button>
+                  ) : myPowerRole !== 'support' && u.is_admin ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <button type="button" className="btn btn-secondary" onClick={() => void demote(u.id)}>
+                        Demote
+                      </button>
+                      {u.id !== currentUserId && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => void setUserRole(u.id, 'support')}
+                          >
+                            Set support
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => void setUserRole(u.id, 'super')}
+                          >
+                            Set super
+                          </button>
+                        </>
+                      )}
+                    </div>
                   ) : (
-                    <button type="button" className="btn btn-secondary" onClick={() => void demote(u.id)}>
-                      Demote
-                    </button>
+                    <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
                   )}
                 </td>
               </tr>

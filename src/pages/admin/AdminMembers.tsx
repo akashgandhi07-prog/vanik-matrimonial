@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { invokeFunction } from '../../lib/supabase';
+import { isSupportAdmin } from '../../lib/auth';
+import { invokeFunction, supabase } from '../../lib/supabase';
 
 type PendingPreviews = Record<
   string,
@@ -20,9 +21,22 @@ type Profile = {
   photo_url: string | null;
   pending_photo_url: string | null;
   photo_status: string;
+  created_at: string;
 };
 
-const FILTERS = ['all', 'pending', 'active', 'expired', 'rejected', 'archived', 'matched', 'lapsed90'] as const;
+const FILTERS = [
+  'all',
+  'pending',
+  'active',
+  'expired',
+  'rejected',
+  'rejected30',
+  'archived',
+  'matched',
+  'lapsed90',
+  'photo_pending',
+  'expires60',
+] as const;
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '-';
@@ -33,7 +47,23 @@ function fmtDate(iso: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function daysWaiting(createdAt: string | undefined): number | null {
+  if (!createdAt) return null;
+  const t = new Date(createdAt).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((Date.now() - t) / 864e5));
+}
+
+function filterLabel(f: (typeof FILTERS)[number]): string {
+  if (f === 'rejected30') return 'Rejected (30d)';
+  if (f === 'photo_pending') return 'Photo pending';
+  if (f === 'expires60') return 'Expires ≤60d';
+  if (f === 'lapsed90') return 'lapsed 90+';
+  return f;
+}
+
 export default function AdminMembers() {
+  const [supportOnly, setSupportOnly] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const filterParam = searchParams.get('filter');
   const filter: (typeof FILTERS)[number] =
@@ -47,6 +77,8 @@ export default function AdminMembers() {
   const [loading, setLoading] = useState(false);
   const [pendingPreviews, setPendingPreviews] = useState<PendingPreviews>({});
   const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const loadMembers = useCallback(async () => {
     setLoadError(null);
@@ -63,6 +95,7 @@ export default function AdminMembers() {
       setMembers((res.profiles ?? []) as Profile[]);
       setEmailByProfileId(res.emails ?? {});
       setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});
+      setSelectedIds({});
     } catch (e) {
       setMembers([]);
       setEmailByProfileId({});
@@ -98,6 +131,12 @@ export default function AdminMembers() {
   useEffect(() => {
     void loadMembers();
   }, [loadMembers]);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setSupportOnly(isSupportAdmin(data.user));
+    });
+  }, []);
 
   function changeFilter(f: (typeof FILTERS)[number]) {
     setSearchParams(f === 'all' ? {} : { filter: f });
@@ -142,9 +181,85 @@ export default function AdminMembers() {
             className={filter === f ? 'btn btn-primary' : 'btn btn-secondary'}
             onClick={() => changeFilter(f)}
           >
-            {f === 'lapsed90' ? 'lapsed 90+' : f}
+            {filterLabel(f)}
           </button>
         ))}
+      </div>
+      {filter === 'pending' && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              const rows = filteredMembers.filter((m) => m.status === 'pending_approval');
+              const next: Record<string, boolean> = {};
+              for (const m of rows) next[m.id] = true;
+              setSelectedIds(next);
+            }}
+          >
+            Select all (pending in view)
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => setSelectedIds({})}>
+            Clear selection
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={bulkBusy || Object.keys(selectedIds).filter((id) => selectedIds[id]).length === 0}
+            onClick={async () => {
+              const ids = Object.keys(selectedIds).filter((id) => selectedIds[id]);
+              if (!ids.length) return;
+              if (!window.confirm(`Send pending reminder email to ${ids.length} applicant(s)?`)) return;
+              setBulkBusy(true);
+              try {
+                const res = (await invokeFunction('admin-manage-users', {
+                  action: 'send_pending_reminders',
+                  profile_ids: ids,
+                })) as { sent?: number; skipped?: number };
+                alert(`Sent: ${res.sent ?? 0}. Skipped (not pending): ${res.skipped ?? 0}.`);
+                setSelectedIds({});
+                await loadMembers();
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Failed');
+              } finally {
+                setBulkBusy(false);
+              }
+            }}
+          >
+            {bulkBusy ? 'Sending…' : 'Send reminder to selected'}
+          </button>
+        </div>
+      )}
+      <div style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            const rows = filteredMembers;
+            const headers = ['reference', 'first_name', 'email', 'status', 'created_at', 'profile_id'];
+            const lines = [
+              headers.join(','),
+              ...rows.map((m) =>
+                [
+                  m.reference_number ?? '',
+                  `"${(m.first_name ?? '').replace(/"/g, '""')}"`,
+                  `"${(emailByProfileId[m.id] ?? '').replace(/"/g, '""')}"`,
+                  m.status,
+                  m.created_at ?? '',
+                  m.id,
+                ].join(',')
+              ),
+            ];
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `members-${filter}-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }}
+        >
+          Download CSV (current table view)
+        </button>
       </div>
       <div className="table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
@@ -155,6 +270,8 @@ export default function AdminMembers() {
                 <>
                   <th style={{ padding: 8 }}>Photo</th>
                   <th style={{ padding: 8 }}>ID</th>
+                  <th style={{ padding: 8 }}>Waiting</th>
+                  <th style={{ padding: 8 }}>Sel</th>
                 </>
               )}
               <th style={{ padding: 8 }}>Name</th>
@@ -172,7 +289,7 @@ export default function AdminMembers() {
             {loading && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 12 : 10}
+                  colSpan={filter === 'pending' ? 14 : 10}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   Loading…
@@ -182,7 +299,7 @@ export default function AdminMembers() {
             {!loading && filteredMembers.length === 0 && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 12 : 10}
+                  colSpan={filter === 'pending' ? 14 : 10}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   {loadError
@@ -194,6 +311,7 @@ export default function AdminMembers() {
             {!loading &&
               filteredMembers.map((m) => {
                 const prev = pendingPreviews[m.id];
+                const wait = daysWaiting(m.created_at);
                 const thumbStyle: CSSProperties = {
                   width: 56,
                   height: 56,
@@ -226,6 +344,34 @@ export default function AdminMembers() {
                             <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
                           )}
                         </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle', fontSize: 13 }}>
+                          {wait != null ? (
+                            <>
+                              <span>{wait}d</span>
+                              {wait >= 7 && (
+                                <span className="badge badge-warning" style={{ marginLeft: 6, whiteSpace: 'nowrap' }}>
+                                  7d+
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                          {m.status === 'pending_approval' ? (
+                            <input
+                              type="checkbox"
+                              checked={!!selectedIds[m.id]}
+                              onChange={(e) =>
+                                setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))
+                              }
+                              aria-label={`Select ${m.first_name}`}
+                            />
+                          ) : (
+                            <span style={{ color: 'var(--color-text-secondary)' }}>—</span>
+                          )}
+                        </td>
                       </>
                     )}
                     <td style={{ padding: 8 }}>{m.first_name}</td>
@@ -245,7 +391,7 @@ export default function AdminMembers() {
                     <td style={{ padding: 8 }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                         <Link to={`/admin/members/${m.id}`}>Details</Link>
-                        {m.status === 'pending_approval' && (
+                        {m.status === 'pending_approval' && !supportOnly && (
                           <button
                             type="button"
                             className="btn btn-primary"

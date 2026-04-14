@@ -15,7 +15,8 @@ export type EmailType =
   | 'membership_expired'
   | 'admin_daily_digest'
   | 'matched_congratulations'
-  | 'photo_update_rejected';
+  | 'photo_update_rejected'
+  | 'admin_pending_reminder';
 
 export type DispatchParams = {
   type: EmailType;
@@ -230,6 +231,19 @@ export async function dispatchEmail(
         <p>We were unable to accept the new profile photo you submitted. Your previous approved photo will continue to be shown.</p>
         <p>If you would like to try again with a different image, please sign in and upload a new photo from your profile.</p>
         <p><a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
+        <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'admin_pending_reminder': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const ref = stripHtml(String(profile.reference_number ?? ''), 20);
+      subject = 'Reminder: your application is awaiting review';
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
+        <p>Your reference: <strong>${ref}</strong></p>
+        <p>We aim to review applications within five working days. If you need to add information or upload clearer documents, please sign in: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
+        <p>If you have questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;
       break;
     }

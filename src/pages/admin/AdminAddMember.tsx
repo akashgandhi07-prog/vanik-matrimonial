@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { HEIGHT_OPTIONS } from '../../lib/heights';
-import { invokeFunction } from '../../lib/supabase';
+import { isSupportAdmin } from '../../lib/auth';
+import { invokeFunction, supabase } from '../../lib/supabase';
 
 const defaultExpiry = (() => {
   const d = new Date();
@@ -80,7 +81,21 @@ export default function AdminAddMember() {
   const [form, setForm] = useState<FormState>(INIT);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supportGate, setSupportGate] = useState<'unknown' | 'yes' | 'no'>('unknown');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setSupportGate(isSupportAdmin(data.user) ? 'yes' : 'no');
+    });
+  }, []);
+
+  if (supportGate === 'unknown') {
+    return <div className="layout-max">Loading…</div>;
+  }
+  if (supportGate === 'yes') {
+    return <Navigate to="/admin" replace />;
+  }
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));

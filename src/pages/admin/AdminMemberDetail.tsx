@@ -1,35 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { invokeFunction } from '../../lib/supabase';
+import { isSupportAdmin } from '../../lib/auth';
+import { invokeFunction, supabase } from '../../lib/supabase';
+import { AdminMemberEditForm, type MemberPrivateFull, type MemberProfileFull } from './AdminMemberEditForm';
 import { MfaEnroll } from './MfaEnroll';
 import { useAdminGuard } from './useAdminGuard';
-
-type Profile = {
-  id: string;
-  reference_number: string | null;
-  first_name: string;
-  gender: string;
-  status: string;
-  community: string | null;
-  age: number | null;
-  membership_expires_at: string | null;
-  photo_url: string | null;
-  pending_photo_url: string | null;
-  photo_status: string;
-  rejection_reason: string | null;
-  show_on_register: boolean;
-  auth_user_id: string;
-};
-
-type PrivateRow = {
-  surname: string;
-  email: string;
-  mobile_phone: string;
-  date_of_birth: string;
-  id_document_url: string | null;
-  father_name: string | null;
-  mother_name: string | null;
-};
 
 type TimelineRow = {
   id: string;
@@ -47,6 +22,15 @@ const ACTION_LABELS: Record<string, string> = {
   photo_rejected: 'Profile photo rejected',
   archived: 'Member archived',
   reinstated: 'Member reinstated',
+  profile_admin_edit: 'Profile updated (admin edit)',
+  internal_note_updated: 'Internal staff note updated',
+  id_document_purged: 'ID document purged from storage',
+  email_resent: 'Transactional email re-sent',
+  bulk_pending_reminder: 'Bulk pending reminder sent',
+  impersonation_magic_link: 'Member magic link generated (support access)',
+  sessions_revoked: 'All sessions invalidated',
+  password_recovery_sent: 'Password recovery email sent',
+  admin_role_changed: 'Admin role changed',
 };
 
 function humanizeAction(type: string) {
@@ -86,8 +70,10 @@ export default function AdminMemberDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { ok, mfaOk, refresh } = useAdminGuard();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [priv, setPriv] = useState<PrivateRow | null>(null);
+  const [profile, setProfile] = useState<MemberProfileFull | null>(null);
+  const [priv, setPriv] = useState<MemberPrivateFull | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [editingRecord, setEditingRecord] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [checklist, setChecklist] = useState([false, false, false, false]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -99,6 +85,20 @@ export default function AdminMemberDetail() {
   const [detailError, setDetailError] = useState<string | null>(null);
   /** Pre-signed ID document URL from server (short-lived); refreshed on each detail load. */
   const [idDocSignedFromServer, setIdDocSignedFromServer] = useState<string | null>(null);
+  const [supportOnly, setSupportOnly] = useState(false);
+  const [internalNoteDraft, setInternalNoteDraft] = useState('');
+  const [internalNoteSaving, setInternalNoteSaving] = useState(false);
+  const [recentEmails, setRecentEmails] = useState<
+    { id: string; email_type: string; subject: string | null; sent_at: string; status: string }[]
+  >([]);
+  const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null);
+  const [toolsBusy, setToolsBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data }) => {
+      setSupportOnly(isSupportAdmin(data.user));
+    });
+  }, []);
 
   useEffect(() => {
     if (!id || ok !== true || mfaOk !== true) return;
@@ -109,10 +109,12 @@ export default function AdminMemberDetail() {
           action: 'get_member_detail',
           profile_id: id,
         })) as {
-          profile?: Profile;
-          member_private?: PrivateRow;
+          profile?: MemberProfileFull;
+          member_private?: MemberPrivateFull;
           timeline?: TimelineRow[];
           signed_urls?: { photo: string | null; pending_photo: string | null; id_document: string | null };
+          admin_note?: { body: string; updated_at: string | null; updated_by: string | null };
+          recent_emails?: typeof recentEmails;
         };
         if (!res.profile || !res.member_private) {
           setDetailError('Member not found or incomplete data.');
@@ -127,13 +129,15 @@ export default function AdminMemberDetail() {
         setPhotoUrl(su?.photo ?? null);
         setPendingPreview(su?.pending_photo ?? null);
         setIdDocSignedFromServer(su?.id_document ?? null);
+        setInternalNoteDraft(res.admin_note?.body ?? '');
+        setRecentEmails(res.recent_emails ?? []);
       } catch (e) {
         setDetailError(e instanceof Error ? e.message : 'Failed to load member');
         setProfile(null);
         setPriv(null);
       }
     })();
-  }, [id, ok, mfaOk]);
+  }, [id, ok, mfaOk, reloadKey]);
 
   if (ok === false) return <Navigate to="/dashboard/browse" replace />;
   if (ok === null || mfaOk === null) {
@@ -168,8 +172,287 @@ export default function AdminMemberDetail() {
           {profile.reference_number} · {profile.status}
           {profile.show_on_register ? ' · on register' : ''}
         </p>
+        <p style={{ marginTop: 12 }}>
+          {!supportOnly && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setEditingRecord((v) => !v)}
+            >
+              {editingRecord ? 'Close editor' : 'Edit full record'}
+            </button>
+          )}
+          {supportOnly && (
+            <span className="field-hint" style={{ display: 'block', marginTop: 4 }}>
+              Support role: full record editing is disabled. You can still use notes, resend emails, and export below.
+            </span>
+          )}
+        </p>
 
-        {canMarkMatched && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Staff internal note</h3>
+          <p className="field-hint" style={{ marginTop: 0 }}>
+            Visible only in admin; not shown to the member.
+          </p>
+          <textarea
+            value={internalNoteDraft}
+            onChange={(e) => setInternalNoteDraft(e.target.value)}
+            rows={5}
+            style={{ width: '100%', maxWidth: 560 }}
+          />
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 8 }}
+            disabled={internalNoteSaving}
+            onClick={async () => {
+              setInternalNoteSaving(true);
+              try {
+                await invokeFunction('admin-manage-users', {
+                  action: 'set_internal_note',
+                  profile_id: profile.id,
+                  note: internalNoteDraft,
+                });
+                setReloadKey((k) => k + 1);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Failed to save note');
+              } finally {
+                setInternalNoteSaving(false);
+              }
+            }}
+          >
+            {internalNoteSaving ? 'Saving…' : 'Save internal note'}
+          </button>
+        </div>
+
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Member tools</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+            <span className="label" style={{ marginRight: 4 }}>
+              Resend email
+            </span>
+            <select
+              id="resend-template"
+              defaultValue=""
+              style={{ maxWidth: 280 }}
+              disabled={!!toolsBusy}
+            >
+              <option value="">Choose template…</option>
+              <option value="admin_pending_reminder">Pending reminder</option>
+              <option value="registration_received">Registration received</option>
+              <option value="registration_approved">Registration approved</option>
+              <option value="registration_rejected">Registration rejected (uses saved reason)</option>
+              <option value="renewal_reminder">Renewal reminder (30d)</option>
+              <option value="membership_expired">Membership expired</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!!toolsBusy}
+              onClick={async () => {
+                const sel = document.getElementById('resend-template') as HTMLSelectElement;
+                const template = sel?.value;
+                if (!template) {
+                  alert('Pick a template first');
+                  return;
+                }
+                setToolsBusy('resend');
+                try {
+                  await invokeFunction('admin-manage-users', {
+                    action: 'resend_member_email',
+                    profile_id: profile.id,
+                    template,
+                  });
+                  alert('Email sent.');
+                  setReloadKey((k) => k + 1);
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : 'Failed');
+                } finally {
+                  setToolsBusy(null);
+                }
+              }}
+            >
+              Send
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!!toolsBusy}
+              onClick={() => {
+                const blob = new Blob(
+                  [JSON.stringify({ profile, member_private: priv, exported_at: new Date().toISOString() }, null, 2)],
+                  { type: 'application/json' }
+                );
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `member-${profile.reference_number ?? profile.id}.json`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              }}
+            >
+              Export JSON
+            </button>
+          </div>
+          {!supportOnly && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!!toolsBusy || !priv.id_document_url}
+                onClick={async () => {
+                  if (!window.confirm('Delete the ID file from storage and clear the path? This cannot be undone.')) {
+                    return;
+                  }
+                  setToolsBusy('purge');
+                  try {
+                    await invokeFunction('admin-manage-users', {
+                      action: 'purge_id_document',
+                      profile_id: profile.id,
+                    });
+                    setReloadKey((k) => k + 1);
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  } finally {
+                    setToolsBusy(null);
+                  }
+                }}
+              >
+                Purge ID document
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!!toolsBusy}
+                onClick={async () => {
+                  setToolsBusy('magic');
+                  try {
+                    const res = (await invokeFunction('admin-manage-users', {
+                      action: 'generate_member_magic_link',
+                      profile_id: profile.id,
+                    })) as { action_link?: string };
+                    if (res.action_link) setMagicLinkUrl(res.action_link);
+                    else alert('No link returned');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  } finally {
+                    setToolsBusy(null);
+                  }
+                }}
+              >
+                Generate sign-in link
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!!toolsBusy}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      'Invalidate all sessions for this member? They will need to sign in again (brief account lock is used server-side).'
+                    )
+                  ) {
+                    return;
+                  }
+                  setToolsBusy('sessions');
+                  try {
+                    await invokeFunction('admin-manage-users', {
+                      action: 'revoke_member_sessions',
+                      profile_id: profile.id,
+                    });
+                    alert('Sessions revoked.');
+                    setReloadKey((k) => k + 1);
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  } finally {
+                    setToolsBusy(null);
+                  }
+                }}
+              >
+                Revoke all sessions
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!!toolsBusy}
+                onClick={async () => {
+                  if (!window.confirm('Send a password recovery email to this member?')) return;
+                  setToolsBusy('recovery');
+                  try {
+                    await invokeFunction('admin-manage-users', {
+                      action: 'send_password_recovery_for_member',
+                      profile_id: profile.id,
+                    });
+                    alert('Recovery email triggered.');
+                    setReloadKey((k) => k + 1);
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  } finally {
+                    setToolsBusy(null);
+                  }
+                }}
+              >
+                Send password recovery
+              </button>
+            </div>
+          )}
+          {magicLinkUrl && (
+            <div className="card" style={{ marginTop: 12, background: '#f8f4ff' }}>
+              <p style={{ marginTop: 0, fontSize: 14 }}>
+                <strong>One-time link</strong> (do not share outside staff). Opens in a new tab.
+              </p>
+              <input readOnly value={magicLinkUrl} style={{ width: '100%', fontSize: 12 }} />
+              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => window.open(magicLinkUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  Open
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setMagicLinkUrl(null)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {recentEmails.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Recent emails (this profile)</h3>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 14 }}>
+              {recentEmails.map((r) => (
+                <li key={r.id} style={{ marginBottom: 6 }}>
+                  <strong>{r.email_type}</strong> · {r.status} · {new Date(r.sent_at).toLocaleString('en-GB')}
+                  {r.subject && <span style={{ color: 'var(--color-text-secondary)' }}> — {r.subject}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {editingRecord && (
+          <div className="card" style={{ marginTop: 20 }}>
+            <AdminMemberEditForm
+              profile={profile}
+              priv={priv}
+              onSaved={() => {
+                setEditingRecord(false);
+                setReloadKey((k) => k + 1);
+              }}
+              onCancel={() => setEditingRecord(false)}
+            />
+          </div>
+        )}
+
+        {pending && supportOnly && (
+          <p className="card" style={{ marginBottom: 16, background: '#f6f4e8' }}>
+            Support role: you cannot approve or reject from this page. Use <strong>Members</strong> bulk reminder or
+            resend email tools if appropriate, or ask a super admin.
+          </p>
+        )}
+
+        {canMarkMatched && !supportOnly && (
           <div className="card" style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>Membership status</h3>
             <button type="button" className="btn btn-primary" onClick={() => setMatchOpen(true)}>
@@ -191,7 +474,7 @@ export default function AdminMemberDetail() {
           </div>
           <div className="card">
             <h3>ID document</h3>
-            {pending && priv.id_document_url ? (
+            {priv.id_document_url ? (
               idDocSignedFromServer ? (
                 idPathLooksLikeImage(priv.id_document_url) ? (
                   <img
@@ -217,12 +500,12 @@ export default function AdminMemberDetail() {
                 </p>
               )
             ) : (
-              <p style={{ color: 'var(--color-text-secondary)' }}>No ID on file (cleared after approval).</p>
+              <p style={{ color: 'var(--color-text-secondary)' }}>No ID on file.</p>
             )}
           </div>
         </div>
 
-        {pending && (
+        {pending && !supportOnly && (
           <div className="card" style={{ marginTop: 24 }}>
             <h3>Approval checklist</h3>
             {[
@@ -328,7 +611,7 @@ export default function AdminMemberDetail() {
           </div>
         )}
 
-        {!pending && profile.pending_photo_url && (
+        {!pending && profile.pending_photo_url && !supportOnly && (
           <div className="card" style={{ marginTop: 24 }}>
             <h3>Pending photo review</h3>
             {pendingPreview && (
@@ -378,16 +661,20 @@ export default function AdminMemberDetail() {
           </div>
         )}
 
-        <div className="card prose-safe" style={{ marginTop: 24 }}>
-          <h3>Private details</h3>
-          <p>
-            Email: {priv.email}
-            <br />
-            Mobile: {priv.mobile_phone}
-            <br />
-            DOB: {priv.date_of_birth}
-          </p>
-        </div>
+        {!editingRecord && (
+          <div className="card prose-safe" style={{ marginTop: 24 }}>
+            <h3>Private details</h3>
+            <p>
+              Email: {priv.email}
+              <br />
+              Mobile: {priv.mobile_phone}
+              <br />
+              DOB: {priv.date_of_birth}
+              <br />
+              Coupon used: {priv.coupon_used ?? '—'}
+            </p>
+          </div>
+        )}
 
         <div className="card table-scroll" style={{ marginTop: 24 }}>
           <h3 style={{ marginTop: 0 }}>Admin activity timeline</h3>
@@ -415,7 +702,16 @@ export default function AdminMemberDetail() {
                     {row.admin_email ?? '-'}
                   </p>
                   {row.notes && (
-                    <p style={{ margin: '8px 0 0', fontSize: 14 }}>{row.notes}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {row.notes.length > 2000 && row.action_type === 'profile_admin_edit' ? (
+                        <>
+                          {row.notes.slice(0, 2000)}
+                          <span style={{ color: 'var(--color-text-secondary)' }}> … (truncated in UI)</span>
+                        </>
+                      ) : (
+                        row.notes
+                      )}
+                    </p>
                   )}
                 </li>
               ))}
@@ -425,7 +721,7 @@ export default function AdminMemberDetail() {
 
         <div className="card" style={{ marginTop: 24 }}>
           <h3>Account status</h3>
-          {profile.status !== 'archived' && (
+          {profile.status !== 'archived' && !supportOnly && (
             <div>
               {!confirmArchive ? (
                 <button type="button" className="btn btn-secondary" onClick={() => setConfirmArchive(true)}>
@@ -461,7 +757,7 @@ export default function AdminMemberDetail() {
               )}
             </div>
           )}
-          {profile.status === 'archived' && (
+          {profile.status === 'archived' && !supportOnly && (
             <div>
               <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
                 This member is archived. Reinstating will set status to active and extend membership by 1 year.
@@ -485,9 +781,19 @@ export default function AdminMemberDetail() {
               </button>
             </div>
           )}
+          {profile.status === 'archived' && supportOnly && (
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: 0 }}>
+              This member is archived (reinstate requires a super admin).
+            </p>
+          )}
+          {supportOnly && profile.status !== 'archived' && (
+            <p className="field-hint" style={{ marginBottom: 0 }}>
+              Support role cannot archive or mark matched from this screen.
+            </p>
+          )}
         </div>
 
-        {matchOpen && (
+        {matchOpen && !supportOnly && (
           <div
             role="dialog"
             aria-modal

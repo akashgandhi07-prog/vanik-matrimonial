@@ -127,6 +127,20 @@ export function isAdminUser(user: User | null | undefined): boolean {
   return metaIsAdmin(am?.is_admin);
 }
 
+/** `support` = read-mostly admin; full power when `is_admin` and role is absent or `super`. */
+export type AdminPowerRole = 'super' | 'support';
+
+export function adminPowerRole(user: User | null | undefined): AdminPowerRole {
+  if (!user) return 'super';
+  const am = user.app_metadata as { admin_role?: unknown } | undefined;
+  if (am?.admin_role === 'support') return 'support';
+  return 'super';
+}
+
+export function isSupportAdmin(user: User | null | undefined): boolean {
+  return adminPowerRole(user) === 'support';
+}
+
 export function ageFromDob(dob: string): number {
   const d = new Date(dob);
   const t = new Date();

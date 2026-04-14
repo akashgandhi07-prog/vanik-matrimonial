@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 
 function randomPassword(len = 16): string {
@@ -37,6 +37,9 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
     return jsonResponse({ error: 'Forbidden' }, req, 403);
+  }
+  if (isSupportAdmin(userData.user)) {
+    return jsonResponse({ error: 'Support admin role cannot add members' }, req, 403);
   }
 
   let body: Record<string, unknown>;
