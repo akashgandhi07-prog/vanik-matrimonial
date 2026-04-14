@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Secrets — never commit (use .env.example as a template)
+.env
+.env.*
+!.env.example
+
 # Local Python env for migration script
 .venv-migrate
 
