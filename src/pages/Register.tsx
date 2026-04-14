@@ -261,9 +261,10 @@ export default function Register() {
   }, []);
 
   const verified = !!session?.user?.email_confirmed_at;
+  const userId = session?.user?.id ?? null;
 
   useEffect(() => {
-    if (!verified || !session?.user) return;
+    if (!verified || !userId) return;
     void (async () => {
       try {
         const r = (await invokePublicFunction('billing-status', {})) as {
@@ -274,7 +275,7 @@ export default function Register() {
         setBillingEnabled(false);
       }
     })();
-  }, [verified, session?.user?.id]);
+  }, [verified, userId]);
 
   useEffect(() => {
     if (!session?.user?.id || !verified) return;

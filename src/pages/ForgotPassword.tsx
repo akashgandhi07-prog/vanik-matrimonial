@@ -19,6 +19,9 @@ export default function ForgotPassword() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: REDIRECT,
     });
+    // #region agent log
+    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H7',location:'src/pages/ForgotPassword.tsx:onSubmit',message:'forgot password submission completed',data:{emailDomain:email.includes('@')?email.split('@')[1]:'invalid',success:!error,errorMessage:error?.message??null,redirectTarget:REDIRECT},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setLoading(false);
     if (error) setErr(error.message);
     else setMsg('If an account exists for this email, we have sent reset instructions.');

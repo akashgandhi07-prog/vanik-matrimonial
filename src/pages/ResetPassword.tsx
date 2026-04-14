@@ -32,6 +32,9 @@ export default function ResetPassword() {
       return;
     }
     const { error: err } = await supabase.auth.updateUser({ password });
+    // #region agent log
+    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H8',location:'src/pages/ResetPassword.tsx:onSubmit',message:'reset password update completed',data:{ready,passwordLength:password.length,confirmMatches:password===confirm,success:!err,errorMessage:err?.message??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (err) {
       setError(err.message);
       return;
