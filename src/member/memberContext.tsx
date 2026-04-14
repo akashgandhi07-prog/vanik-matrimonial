@@ -110,6 +110,29 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       /** Set only when `member-bootstrap` supplied `member_private` (skip flaky client read). */
       let privateFromBootstrap: MemberPrivateRow | null | undefined = undefined;
 
+      const tryBootstrap = async (): Promise<'admin' | 'profile' | 'none'> => {
+        try {
+          const boot = (await invokeFunction('member-bootstrap', {})) as {
+            profile?: ProfileRow | null;
+            member_private?: MemberPrivateRow | null;
+            is_admin?: boolean;
+          };
+          if (boot.is_admin) {
+            setLoading(false);
+            navigate('/admin', { replace: true });
+            return 'admin';
+          }
+          if (boot.profile) {
+            p = boot.profile as ProfileRow;
+            privateFromBootstrap = (boot.member_private ?? null) as MemberPrivateRow | null;
+            return 'profile';
+          }
+        } catch (e) {
+          console.error('member-bootstrap:', e);
+        }
+        return 'none';
+      };
+
       const maxAttempts = 8;
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
@@ -124,34 +147,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           .eq('auth_user_id', u.id)
           .maybeSingle();
         if (error && error.code !== 'PGRST116') {
-          console.error('profiles load:', error.message);
-          break;
+          console.error('profiles load:', error.message, error.code);
         }
         if (data) {
           p = data as ProfileRow;
           break;
         }
+        if (!p && (attempt === 0 || attempt === 2 || attempt === 5)) {
+          const bt = await tryBootstrap();
+          if (bt === 'admin') return;
+          if (bt === 'profile') break;
+        }
       }
 
       if (!p) {
-        try {
-          const boot = (await invokeFunction('member-bootstrap', {})) as {
-            profile?: ProfileRow | null;
-            member_private?: MemberPrivateRow | null;
-            is_admin?: boolean;
-          };
-          if (boot.is_admin) {
-            setLoading(false);
-            navigate('/admin', { replace: true });
-            return;
-          }
-          if (boot.profile) {
-            p = boot.profile as ProfileRow;
-            privateFromBootstrap = (boot.member_private ?? null) as MemberPrivateRow | null;
-          }
-        } catch (e) {
-          console.error('member-bootstrap:', e);
-        }
+        const bt = await tryBootstrap();
+        if (bt === 'admin') return;
       }
 
       if (!p) {
@@ -386,6 +397,17 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
           again, or sign out and sign back in. If it keeps happening, contact{' '}
           <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
         </p>
+        <details style={{ marginTop: 16, fontSize: 14, color: 'var(--color-text-secondary)' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Troubleshooting (site owners)</summary>
+          <p style={{ lineHeight: 1.55, marginTop: 8 }}>
+            Check that <code style={{ fontSize: 13 }}>VITE_SUPABASE_URL</code> points at the project where the
+            profile was created, that the <strong>member-bootstrap</strong> Edge Function is deployed with{' '}
+            <code style={{ fontSize: 13 }}>SUPABASE_SERVICE_ROLE_KEY</code>, and in SQL that{' '}
+            <code style={{ fontSize: 13 }}>profiles.auth_user_id</code> matches{' '}
+            <code style={{ fontSize: 13 }}>auth.users.id</code> for this login. Re-applying a full schema file
+            without restoring <code style={{ fontSize: 13 }}>profiles</code> data often causes this symptom.
+          </p>
+        </details>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
           <button type="button" className="btn btn-primary" onClick={() => void loadAll()}>
             Try again

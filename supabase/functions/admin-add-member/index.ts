@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
     .from('profiles')
     .insert({
       id: userId,
+      auth_user_id: userId,
       first_name: firstName,
       gender: String(body.gender ?? 'Male'),
       status,
