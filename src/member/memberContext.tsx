@@ -200,9 +200,20 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') void loadAll();
+      if (event === 'SIGNED_OUT') {
+        // Clear stale member state immediately so the auth gate redirects correctly
+        setUser(null);
+        setProfile(null);
+        setPrivateRow(null);
+        setCandidates([]);
+        setBookmarks([]);
+        setRequests([]);
+        setFeedbackKeys(new Set());
+        navigate('/', { replace: true });
+      }
     });
     return () => sub.subscription.unsubscribe();
-  }, [loadAll]);
+  }, [loadAll, navigate]);
 
   const toggleBookmark = useCallback(
     async (id: string) => {

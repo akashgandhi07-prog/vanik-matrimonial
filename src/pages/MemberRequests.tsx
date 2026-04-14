@@ -20,7 +20,7 @@ export default function MemberRequests() {
     <div className="card table-scroll">
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
-        You can make up to 3 requests per week. Please provide feedback for each candidate once you have
+        You can request details for up to 3 candidates per rolling 7-day window. Please provide feedback for each candidate once you have
         had a chance to make contact.
       </p>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>

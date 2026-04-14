@@ -11,11 +11,11 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) setReady(true);
+    // Only unlock the form when the session was established via a PASSWORD_RECOVERY link.
+    // Checking an existing session would let any logged-in user change their password
+    // by navigating directly to this URL without having clicked a reset email.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);

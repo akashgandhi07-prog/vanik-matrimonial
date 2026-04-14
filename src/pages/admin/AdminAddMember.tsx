@@ -20,7 +20,7 @@ type FormState = {
   religion: string;
   nationality: string;
   place_of_birth: string;
-  town_of_origin: string;
+  town_country_of_origin: string;
   education: string;
   job_title: string;
   height_cm: string;
@@ -49,7 +49,7 @@ const INIT: FormState = {
   religion: '',
   nationality: '',
   place_of_birth: '',
-  town_of_origin: '',
+  town_country_of_origin: '',
   education: '',
   job_title: '',
   height_cm: '',
@@ -183,7 +183,7 @@ export default function AdminAddMember() {
               <input value={form.place_of_birth} onChange={(e) => set('place_of_birth', e.target.value)} />
             </Field>
             <Field label="Town / country of origin">
-              <input value={form.town_of_origin} onChange={(e) => set('town_of_origin', e.target.value)} />
+              <input value={form.town_country_of_origin} onChange={(e) => set('town_country_of_origin', e.target.value)} />
             </Field>
           </div>
 

@@ -9,7 +9,7 @@ import { invokeFunction } from '../lib/supabase';
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
     useMemberArea();
-  const [ageRange, setAgeRange] = useState<[number, number]>([18, 55]);
+  const [ageRange, setAgeRange] = useState<[number, number]>([18, 70]);
   const [dietF, setDietF] = useState<string[]>([]);
   const [religionF, setReligionF] = useState<string[]>([]);
   const [communityF, setCommunityF] = useState<string[]>([]);
@@ -22,6 +22,7 @@ export default function MemberBrowse() {
     | { contacts: Array<Record<string, string>>; email: string }
   >(null);
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
+  const [submitError, setSubmitError] = useState<{ type: 'weekly_limit' | 'feedback_required' | 'generic'; message: string; requestIds?: string[] } | null>(null);
 
   const filtered = useMemo(() => {
     if (!profile) return [];
@@ -73,12 +74,16 @@ export default function MemberBrowse() {
 
   async function submitTray() {
     if (!profile || tray.length === 0) return;
+    setSubmitError(null);
     try {
       const res = (await invokeFunction('submit-contact-request', {
         candidate_ids: tray,
       })) as {
         contacts?: Array<Record<string, string>>;
         requester_email?: string;
+        error?: string;
+        message?: string;
+        request_ids?: string[];
       };
       setTray([]);
       setTrayDrawerOpen(false);
@@ -88,7 +93,15 @@ export default function MemberBrowse() {
       });
       void loadAll();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Request failed');
+      const msg = e instanceof Error ? e.message : 'Request failed';
+      // Parse structured errors from the edge function
+      if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
+        setSubmitError({ type: 'weekly_limit', message: msg });
+      } else if (msg.includes('feedback_required') || msg.includes('Outstanding feedback')) {
+        setSubmitError({ type: 'feedback_required', message: msg });
+      } else {
+        setSubmitError({ type: 'generic', message: msg });
+      }
     }
   }
 
@@ -108,7 +121,7 @@ export default function MemberBrowse() {
                 id="browse-age-min"
                 type="number"
                 min={18}
-                max={55}
+                max={80}
                 value={ageRange[0]}
                 onChange={(e) => setAgeRange([Number(e.target.value), ageRange[1]])}
                 style={{ width: 72 }}
@@ -122,7 +135,7 @@ export default function MemberBrowse() {
                 id="browse-age-max"
                 type="number"
                 min={18}
-                max={55}
+                max={80}
                 value={ageRange[1]}
                 onChange={(e) => setAgeRange([ageRange[0], Number(e.target.value)])}
                 style={{ width: 72 }}
@@ -310,6 +323,21 @@ export default function MemberBrowse() {
             <button type="button" className="btn btn-primary" onClick={() => void submitTray()}>
               Request contact details ({tray.length})
             </button>
+            {submitError && (
+              <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13,
+                background: submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.08)',
+                color: submitError.type === 'feedback_required' ? 'var(--color-warning)' : 'var(--color-danger)',
+                border: `1px solid ${submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.3)' : 'rgba(220,38,38,0.2)'}` }}>
+                {submitError.type === 'feedback_required' && (
+                  <><strong>Feedback required before new requests.</strong> Please visit{' '}
+                    <a href="/dashboard/requests" style={{ color: 'inherit', fontWeight: 600 }}>My requests</a> to submit outstanding feedback.</>
+                )}
+                {submitError.type === 'weekly_limit' && (
+                  <><strong>Weekly limit reached.</strong> {submitError.message.replace('Weekly limit reached (3 candidates). ', '')}</>
+                )}
+                {submitError.type === 'generic' && submitError.message}
+              </div>
+            )}
           </div>
         </div>
       )}

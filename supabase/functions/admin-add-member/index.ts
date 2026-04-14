@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       religion: body.religion ? String(body.religion) : null,
       nationality: body.nationality ? String(body.nationality) : null,
       place_of_birth: body.place_of_birth ? String(body.place_of_birth) : null,
-      town_of_origin: body.town_of_origin ? String(body.town_of_origin) : null,
+      town_country_of_origin: body.town_country_of_origin ? String(body.town_country_of_origin) : null,
       education: body.education ? String(body.education) : null,
       job_title: body.job_title ? String(body.job_title) : null,
       height_cm: body.height_cm != null ? Number(body.height_cm) : null,
@@ -127,17 +127,25 @@ Deno.serve(async (req) => {
   });
 
   if (privateErr) {
-    // Non-fatal — profile is created, just log it
-    console.error('member_private insert error:', privateErr.message);
+    // Fatal — roll back profile and auth user
+    await admin.from('profiles').delete().eq('id', profileId);
+    await admin.auth.admin.deleteUser(userId);
+    return jsonResponse({ error: `Failed to save private details: ${privateErr.message}` }, 500);
   }
 
   // 4. Assign reference number if status is active
   let referenceNumber: string | null = null;
   if (status === 'active') {
-    const { data: refData } = await admin.rpc('assign_next_reference_number', {
+    const gender = String(body.gender ?? 'Male');
+    const { data: refData, error: refErr } = await admin.rpc('assign_next_reference_number', {
       p_profile_id: profileId,
+      p_gender: gender,
     });
-    referenceNumber = refData as string | null;
+    if (refErr) {
+      console.error('assign_next_reference_number failed:', refErr.message);
+    } else {
+      referenceNumber = refData as string | null;
+    }
   }
 
   return jsonResponse({ ok: true, profile_id: profileId, reference_number: referenceNumber });

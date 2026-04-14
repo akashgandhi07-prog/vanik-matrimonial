@@ -25,9 +25,9 @@ type Coupon = {
 
 function randomCode(len = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = '';
-  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
 export default function AdminCoupons() {
