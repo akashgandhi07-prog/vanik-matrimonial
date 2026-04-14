@@ -225,6 +225,7 @@ export default function Register() {
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [stripeCheckoutSessionId, setStripeCheckoutSessionId] = useState<string | null>(null);
   const [stripeRedirectBusy, setStripeRedirectBusy] = useState(false);
+  const [couponChecking, setCouponChecking] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(form));
@@ -355,17 +356,20 @@ export default function Register() {
     }
   }
 
-  async function onCouponBlur() {
+  async function applyCoupon() {
     const code = form.coupon_code.trim();
     if (!code) {
       update({ coupon_hint: '' });
       return;
     }
+    setCouponChecking(true);
     try {
       const res = (await invokeFunction('validate-coupon', { code })) as { valid?: boolean };
       update({ coupon_hint: res.valid ? 'valid' : 'invalid' });
     } catch {
       update({ coupon_hint: 'invalid' });
+    } finally {
+      setCouponChecking(false);
     }
   }
 
@@ -958,20 +962,41 @@ export default function Register() {
                 <label className="label" htmlFor="reg-coupon">
                   Coupon code <span className="badge badge-muted">optional</span>
                 </label>
-                <input
-                  id="reg-coupon"
-                  name="coupon"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Leave blank if you do not have one"
-                  value={form.coupon_code}
-                  onChange={(e) => {
-                    const v = e.target.value.toUpperCase();
-                    update({ coupon_code: v, coupon_hint: '' });
-                  }}
-                  onBlur={() => void onCouponBlur()}
-                />
+                <p className="field-hint" style={{ marginTop: 0, marginBottom: 8 }}>
+                  If you have a code, enter it and click Apply. Leaving the field also checks the code.
+                </p>
+                <div className="flex-input-with-btn">
+                  <input
+                    id="reg-coupon"
+                    name="coupon"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="e.g. VIP2026"
+                    value={form.coupon_code}
+                    onChange={(e) => {
+                      const v = e.target.value.toUpperCase();
+                      update({ coupon_code: v, coupon_hint: '' });
+                    }}
+                    onBlur={() => void applyCoupon()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void applyCoupon();
+                      }
+                    }}
+                    disabled={couponChecking}
+                    aria-busy={couponChecking}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={!form.coupon_code.trim() || couponChecking}
+                    onClick={() => void applyCoupon()}
+                  >
+                    {couponChecking ? 'Checking…' : 'Apply'}
+                  </button>
+                </div>
                 {form.coupon_hint === 'valid' && (
                   <p style={{ color: 'var(--color-success)', fontSize: 14, margin: '6px 0 0' }}>
                     Valid: membership free

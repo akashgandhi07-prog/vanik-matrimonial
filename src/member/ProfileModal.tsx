@@ -76,42 +76,10 @@ export function ProfileModal({
             firstName={c.first_name}
             className="profile-modal-photo"
           />
-          <button
-            type="button"
-            aria-label="Close profile"
-            onClick={onClose}
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'rgba(0,0,0,0.5)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '50%',
-              width: 32,
-              height: 32,
-              fontSize: 18,
-              lineHeight: 1,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            ✕
+          <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
+            {'\u2715'}
           </button>
-          <span
-            className="badge badge-muted"
-            style={{
-              position: 'absolute',
-              bottom: 12,
-              left: 12,
-              background: 'rgba(255,255,255,0.9)',
-              fontSize: 12,
-            }}
-          >
-            {c.reference_number}
-          </span>
+          <span className="badge badge-muted profile-modal-ref-badge">{c.reference_number}</span>
         </div>
 
         {/* Content */}

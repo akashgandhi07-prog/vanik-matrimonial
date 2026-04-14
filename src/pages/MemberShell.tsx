@@ -31,13 +31,7 @@ function MemberLayoutBody() {
 
   return (
     <div className="member-dashboard-root" style={{ paddingBottom: 24 }}>
-      <header
-        className="member-dashboard-header"
-        style={{
-          background: 'white',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
+      <header className="member-dashboard-header member-dashboard-header--bar">
         <div className="layout-max member-dashboard-header-inner">
           <div className="member-dashboard-header-meta">
             <strong>Welcome back, {profile.first_name}</strong>
@@ -58,17 +52,7 @@ function MemberLayoutBody() {
           </button>
         </div>
         {showAmber && (
-          <div
-            className="layout-max member-dashboard-renew-banner"
-            style={{
-              marginTop: 12,
-              padding: '10px 16px',
-              background: 'rgba(217, 119, 6, 0.12)',
-              borderRadius: 8,
-              color: 'var(--color-warning)',
-              fontSize: 14,
-            }}
-          >
+          <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">
             <span>Your membership expires in {daysToExp} days. Renew to keep access.</span>
             <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew online
@@ -76,17 +60,7 @@ function MemberLayoutBody() {
           </div>
         )}
         {showRed && (
-          <div
-            className="layout-max member-dashboard-renew-banner"
-            style={{
-              marginTop: 12,
-              padding: '10px 16px',
-              background: 'rgba(220, 38, 38, 0.1)',
-              borderRadius: 8,
-              color: 'var(--color-danger)',
-              fontSize: 14,
-            }}
-          >
+          <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--urgent">
             <span>Your membership expires in {daysToExp} days. After this date your profile will be hidden.</span>
             <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew online
