@@ -15,8 +15,12 @@ html {
   --color-text: #0f172a;
   --color-text-secondary: #475569;
   --color-border: #e2e8f0;
+  --color-input-border: #cfd8e4;
+  --color-input-border-hover: #b8c5d4;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --shadow-input: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  --radius-input: 10px;
   font-family: 'Source Sans 3', system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.55;
@@ -64,56 +68,149 @@ label.label {
   margin-bottom: 6px;
 }
 
-input[type='text'],
-input[type='email'],
-input[type='password'],
-input[type='tel'],
-input[type='number'],
-input[type='date'],
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  ),
 select,
 textarea {
   width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  min-height: 40px;
-  padding: 8px 12px;
+  margin: 0;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-input);
+  min-height: 44px;
+  padding: 10px 14px;
   font: inherit;
+  line-height: 1.45;
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-input);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  )::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
 }
 
 textarea {
   min-height: 100px;
   resize: vertical;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  ):hover:not(:disabled):not([aria-invalid='true']),
+select:hover:not(:disabled):not([aria-invalid='true']),
+textarea:hover:not(:disabled):not([aria-invalid='true']) {
+  border-color: var(--color-input-border-hover);
 }
 
 /* Avoid iOS Safari zooming inputs focused below 16px */
 @media (max-width: 599px) {
-  input[type='text'],
-  input[type='email'],
-  input[type='password'],
-  input[type='tel'],
-  input[type='number'],
-  input[type='date'],
-  input[type='search'],
+  :is(
+      input:not([type]),
+      input[type='text'],
+      input[type='email'],
+      input[type='password'],
+      input[type='tel'],
+      input[type='number'],
+      input[type='date'],
+      input[type='search'],
+      input[type='url'],
+      input[type='datetime-local']
+    ),
   select,
   textarea {
     font-size: 16px;
   }
 }
 
-input:disabled,
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  ):disabled,
 select:disabled,
 textarea:disabled {
-  background: #f3f4f6;
+  background: #f1f5f9;
+  border-color: var(--color-border);
+  box-shadow: none;
   color: var(--color-text-secondary);
   cursor: not-allowed;
 }
 
-input:focus,
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  ):focus,
 select:focus,
 textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.18);
   border-color: var(--color-primary);
+  box-shadow:
+    var(--shadow-input),
+    0 0 0 3px rgba(30, 58, 95, 0.2);
 }
 
 .btn {
@@ -602,11 +699,24 @@ button.public-nav-link--button:hover {
   margin: 6px 0 0;
 }
 
-input[aria-invalid='true'],
+:is(
+    input:not([type])[aria-invalid='true'],
+    input[type='text'][aria-invalid='true'],
+    input[type='email'][aria-invalid='true'],
+    input[type='password'][aria-invalid='true'],
+    input[type='tel'][aria-invalid='true'],
+    input[type='number'][aria-invalid='true'],
+    input[type='date'][aria-invalid='true'],
+    input[type='search'][aria-invalid='true'],
+    input[type='url'][aria-invalid='true'],
+    input[type='datetime-local'][aria-invalid='true']
+  ),
 select[aria-invalid='true'],
 textarea[aria-invalid='true'] {
   border-color: var(--color-danger);
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+  box-shadow:
+    var(--shadow-input),
+    0 0 0 3px rgba(220, 38, 38, 0.18);
 }
 
 .register-radio-row {
@@ -701,18 +811,26 @@ textarea[aria-invalid='true'] {
 }
 
 .btn:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+a:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.2);
+:is(
+    input:not([type]),
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='tel'],
+    input[type='number'],
+    input[type='date'],
+    input[type='search'],
+    input[type='url'],
+    input[type='datetime-local']
+  ):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
 }
 
 @media (max-width: 768px) {
@@ -732,6 +850,152 @@ textarea:focus {
   grid-template-columns: minmax(240px, 280px) 1fr;
   gap: 20px;
   align-items: start;
+}
+
+/* Browse sidebar — filters */
+.member-filter-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.member-filter-toolbar h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.member-filter-section {
+  margin-bottom: 16px;
+}
+
+.member-filter-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.member-filter-section-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.member-filter-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.member-filter-range-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.member-filter-range-to {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  user-select: none;
+}
+
+.member-filter-num-input {
+  width: 4.5rem;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.member-filter-num-input--wide {
+  width: 5rem;
+}
+
+.member-filter-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.member-filter-chip-group--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.member-filter-chip {
+  margin: 0;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.member-filter-chip:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.member-filter-chip--selected {
+  background: rgba(30, 58, 95, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.member-filter-chip:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--color-surface),
+    0 0 0 4px rgba(30, 58, 95, 0.28);
+}
+
+.member-filter-sort {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.member-filter-clear {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.member-filter-clear:hover {
+  color: var(--color-primary-hover);
+}
+
+.member-filter-clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 .member-browse-cards {

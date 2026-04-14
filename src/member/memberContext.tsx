@@ -224,14 +224,21 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           .eq('show_on_register', true)
           .gt('membership_expires_at', now);
       }
-      let { data: list } = await fetchCandidates();
+      let { data: list, error: listErr } = await fetchCandidates();
+      if (listErr) {
+        console.error('browse candidates query:', listErr.message, listErr.code, listErr.details);
+      }
       // Post-login JWT can lag behind PostgREST; one delayed retry fixes empty browse for valid members.
       if (
         (!list || list.length === 0) &&
+        !listErr &&
         (myStatus === 'active' || myStatus === 'matched')
       ) {
         await new Promise((r) => setTimeout(r, 900));
         const second = await fetchCandidates();
+        if (second.error) {
+          console.error('browse candidates retry:', second.error.message, second.error.code);
+        }
         if (second.data && second.data.length > 0) list = second.data;
       }
       setCandidates((list ?? []) as ProfileRow[]);

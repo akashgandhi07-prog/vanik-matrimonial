@@ -89,9 +89,31 @@ function jwtHint401(msg: string): boolean {
   return /jwt/i.test(m) || /invalid/i.test(m) || m === 'Unauthorized' || m === '';
 }
 
+/** Same-origin-friendly call when `functions.invoke` drops the body or hits relay issues (common on hosted builds). */
+async function invokeFunctionDirectFetch(
+  name: string,
+  body: object | undefined,
+  token: string
+): Promise<Record<string, unknown>> {
+  const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    body: body ?? {},
+    token,
+    networkErrorPrefix: 'Could not reach Edge Function. Deploy functions and check network / ad blockers',
+  });
+  if (!res.ok) {
+    throw new Error(responseMessage(res, text, json));
+  }
+  if (json != null && typeof json === 'object' && !Array.isArray(json)) {
+    return json as Record<string, unknown>;
+  }
+  return {};
+}
+
 /**
- * Call Edge Functions with the session JWT. Uses `supabase.functions.invoke` so headers match the
- * SDK’s authenticated fetch (same as PostgREST). Retries once after `refreshSession()` on 401.
+ * Call Edge Functions with the session JWT. Uses `supabase.functions.invoke` first; falls back to
+ * direct `fetch` when the relay fails or returns no JSON body (fixes production/Vercel + some browsers).
+ * Retries once after `refreshSession()` on 401.
  */
 export async function invokeFunction(name: string, body?: object) {
   if (!url || !anon) {
@@ -109,20 +131,27 @@ export async function invokeFunction(name: string, body?: object) {
     'Could not reach Edge Function. Deploy functions and check network / ad blockers';
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
+    if (!tokenNow) {
+      throw new Error('Not authenticated — please log in again.');
+    }
+
     const { data, error } = await supabase.functions.invoke(name, { body: body ?? {} });
 
     if (!error) {
       if (data != null && typeof data === 'object' && !Array.isArray(data)) {
         return data as Record<string, unknown>;
       }
-      return {} as Record<string, unknown>;
+      return await invokeFunctionDirectFetch(name, body, tokenNow);
     }
 
-    if (error instanceof FunctionsFetchError) {
-      throw new Error(`${networkErrorPrefix}: ${error.message}`);
-    }
-    if (error instanceof FunctionsRelayError) {
-      throw new Error(`Edge Function relay error: ${error.message}`);
+    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      try {
+        return await invokeFunctionDirectFetch(name, body, tokenNow);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`${networkErrorPrefix} (${error.message}). Direct fetch: ${msg}`);
+      }
     }
 
     if (error instanceof FunctionsHttpError) {

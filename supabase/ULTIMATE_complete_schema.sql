@@ -340,7 +340,10 @@ CREATE POLICY profiles_select_opposite_active ON public.profiles
         SELECT 1 FROM public.profiles viewer
         WHERE viewer.auth_user_id = auth.uid()
           AND viewer.status IN ('active', 'matched')
-          AND viewer.membership_expires_at > now()
+          AND (
+            viewer.membership_expires_at IS NULL
+            OR viewer.membership_expires_at > now()
+          )
           AND viewer.gender IS DISTINCT FROM profiles.gender
       )
     )
