@@ -155,8 +155,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       navigate('/membership-expired', { replace: true });
       return;
     }
+    if (p.status === 'archived') {
+      // Account was deleted/archived — sign out and return home
+      setLoading(false);
+      await supabase.auth.signOut();
+      navigate('/', { replace: true });
+      return;
+    }
 
-    const { data: list } = await supabase.from('profiles').select('*').neq('gender', p.gender);
+    const now = new Date().toISOString();
+    const { data: list } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('gender', p.gender)
+      .eq('status', 'active')
+      .eq('show_on_register', true)
+      .gt('membership_expires_at', now);
     setCandidates((list ?? []) as ProfileRow[]);
 
     const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', p.id);

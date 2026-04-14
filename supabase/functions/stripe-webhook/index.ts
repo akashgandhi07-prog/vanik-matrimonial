@@ -142,8 +142,11 @@ Deno.serve(async (req) => {
       .eq('id', profileId);
 
     if (upErr) {
-      console.error('profile renewal update', upErr);
-      await admin.from('stripe_checkout_sessions').delete().eq('checkout_session_id', checkoutSessionId);
+      // Do NOT delete the session record — deleting causes Stripe to retry, which re-inserts,
+      // fails again, deletes again, creating an infinite retry loop.
+      // Leaving the record in place means Stripe's next retry hits the 23505 idempotency check
+      // and receives a 200, stopping retries. The payment record is preserved for manual recovery.
+      console.error('profile renewal update failed — payment recorded, membership NOT extended', upErr);
       return jsonResponse({ error: upErr.message }, 500);
     }
 

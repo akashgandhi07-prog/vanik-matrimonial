@@ -29,11 +29,14 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
   const [delOpen, setDelOpen] = useState(false);
   const [delConfirm, setDelConfirm] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   const heightCm = height === '' ? null : Number(height);
 
   async function saveField() {
-    await supabase
+    setSaveStatus('saving');
+    const { error } = await supabase
       .from('profiles')
       .update({
         education: sanitizeText(education, 500),
@@ -47,7 +50,13 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
         diet,
       })
       .eq('id', p.id);
-    void loadAll();
+    if (error) {
+      setSaveStatus('error');
+    } else {
+      setSaveStatus('saved');
+      void loadAll();
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
   }
 
   async function changePassword(e: React.FormEvent) {
@@ -76,25 +85,30 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
     if (!uid) return;
-    const compressed = await imageCompression(file, {
-      maxSizeMB: 0.2,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-    });
-    setPreview(URL.createObjectURL(compressed));
-    const path = `${p.gender}/${uid}/photo-pending.jpg`;
-    const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
-      upsert: true,
-    });
-    if (upErr) {
-      alert(upErr.message);
-      return;
+    setPhotoSaving(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.2,
+        maxWidthOrHeight: 800,
+        useWebWorker: true,
+      });
+      setPreview(URL.createObjectURL(compressed));
+      const path = `${p.gender}/${uid}/photo-pending.jpg`;
+      const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
+        upsert: true,
+      });
+      if (upErr) {
+        alert(upErr.message);
+        return;
+      }
+      await supabase
+        .from('profiles')
+        .update({ pending_photo_url: path, photo_status: 'pending' })
+        .eq('id', p.id);
+      void loadAll();
+    } finally {
+      setPhotoSaving(false);
     }
-    await supabase
-      .from('profiles')
-      .update({ pending_photo_url: path, photo_status: 'pending' })
-      .eq('id', p.id);
-    void loadAll();
   }
 
   return (
@@ -204,9 +218,22 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
               ))}
             </select>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => void saveField()}>
-            Save changes
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saveStatus === 'saving'}
+              onClick={() => void saveField()}
+            >
+              {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
+            </button>
+            {saveStatus === 'saved' && (
+              <span style={{ color: 'var(--color-success)', fontSize: 14 }}>✓ Saved</span>
+            )}
+            {saveStatus === 'error' && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 14 }}>Failed to save</span>
+            )}
+          </div>
         </div>
 
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
@@ -227,11 +254,17 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
           id="mp-photo-file"
           type="file"
           accept="image/jpeg,image/png"
+          disabled={photoSaving}
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void newPhoto(f);
           }}
         />
+        {photoSaving && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            Uploading and compressing photo…
+          </p>
+        )}
         {preview && (
           <img
             src={preview}

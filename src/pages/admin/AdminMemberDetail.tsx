@@ -369,7 +369,6 @@ export default function AdminMemberDetail() {
               <h2 id="match-dialog-title" style={{ marginTop: 0 }}>
                 Mark as matched
               </h2>
-              <h2 style={{ marginTop: 0 }}>Mark as matched</h2>
               <p>
                 This sets status to <strong>matched</strong>, hides the profile from the register (
                 <code>show_on_register = false</code>), sends the congratulations email, and logs an admin action.

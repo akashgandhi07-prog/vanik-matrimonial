@@ -844,6 +844,15 @@ textarea:focus {
   }
 }
 
+/* Profile modal photo */
+.profile-modal-photo {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 0;
+  display: block;
+}
+
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;

@@ -38,12 +38,14 @@ function MemberLayoutBody() {
         <div className="layout-max member-dashboard-header-inner">
           <div style={{ flex: 1, minWidth: 200 }}>
             <strong>Welcome back, {profile.first_name}</strong>
-            <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12 }}>
-              Reference: {profile.reference_number}
-            </span>
+            {profile.reference_number && (
+              <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12, fontSize: 13 }}>
+                Ref: {profile.reference_number}
+              </span>
+            )}
             {exp && (
-              <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12 }}>
-                Membership expires:{' '}
+              <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12, fontSize: 13 }}>
+                Membership expires{' '}
                 {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             )}

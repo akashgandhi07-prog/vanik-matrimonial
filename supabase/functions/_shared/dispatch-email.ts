@@ -180,8 +180,9 @@ export async function dispatchEmail(
         : '';
       subject = `Your membership expires in ${n} days — Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your membership expires on <strong>${exp}</strong>. To renew (£10 per year), please email <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>
-        <p>Sign in: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>`;
+        <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
+        <p>You can renew online here: <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>Alternatively, email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
       break;
     }
     case 'membership_expired': {
@@ -190,7 +191,8 @@ export async function dispatchEmail(
       subject = 'Your membership has expired — Vanik Matrimonial Register';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership has now expired and your profile is hidden from the register.</p>
-        <p>To renew, please contact <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
+        <p>To renew online (£10/year): <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>Or email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
       break;
     }
     case 'admin_daily_digest': {

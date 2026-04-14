@@ -255,13 +255,8 @@ Deno.serve(async (req) => {
   const referenceNumber = refResult as string;
 
   if (couponValid) {
-    const { data: cur } = await admin.from('coupons').select('use_count').eq('code', couponRaw).single();
-    if (cur) {
-      await admin
-        .from('coupons')
-        .update({ use_count: (cur.use_count ?? 0) + 1 })
-        .eq('code', couponRaw);
-    }
+    // Atomic increment — avoids race condition if two registrations use the same coupon concurrently.
+    await admin.rpc('increment_coupon_use', { p_code: couponRaw });
   }
 
   if (stripeCheckoutSessionId) {
