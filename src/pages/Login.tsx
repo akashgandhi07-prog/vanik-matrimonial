@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { userFacingAuthError } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 export default function Login() {
@@ -19,16 +20,21 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    // #region agent log
-    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H6',location:'src/pages/Login.tsx:onSubmit',message:'login submission completed',data:{emailDomain:email.includes('@')?email.split('@')[1]:'invalid',success:!err,errorMessage:err?.message??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    setLoading(false);
-    if (err) {
-      setError(err.message);
-      return;
+    try {
+      const { error: err } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (err) {
+        setError(userFacingAuthError(err));
+        return;
+      }
+      navigate(nextPath, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign in failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    navigate(nextPath, { replace: true });
   }
 
   return (

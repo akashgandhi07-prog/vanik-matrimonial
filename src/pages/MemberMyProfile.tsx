@@ -5,6 +5,7 @@ import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
+import { userFacingAuthError } from '../lib/auth';
 import { invokeFunction, supabase } from '../lib/supabase';
 
 type FormProps = {
@@ -61,11 +62,11 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
       password: pwCur,
     });
     if (signErr) {
-      alert('Current password incorrect');
+      alert(userFacingAuthError(signErr, 'reauth_current_password'));
       return;
     }
     const { error } = await supabase.auth.updateUser({ password: pwNew });
-    if (error) alert(error.message);
+    if (error) alert(userFacingAuthError(error));
     else alert('Password updated');
     setPwCur('');
     setPwNew('');

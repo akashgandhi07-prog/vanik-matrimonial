@@ -2,15 +2,76 @@ import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+type JsonObject = Record<string, unknown>;
 
 if (!url || !anon) {
   console.warn('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
 }
 
-export const supabase = createClient(url ?? '', anon ?? '');
+export const supabase = createClient(url ?? '', anon ?? '', {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
 function functionsBase(): string {
   return (url ?? '').replace(/\/$/, '');
+}
+
+function requireEnv() {
+  if (!url || !anon) {
+    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+  }
+  return { url, anon };
+}
+
+function parseMaybeJson(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as JsonObject;
+  } catch {
+    return null;
+  }
+}
+
+function responseMessage(res: Response, text: string, json: unknown): string {
+  const payload = json as { error?: string; message?: string } | null;
+  return (
+    (payload && typeof payload.message === 'string' && payload.message) ||
+    (payload && typeof payload.error === 'string' && payload.error) ||
+    text.slice(0, 400) ||
+    res.statusText
+  );
+}
+
+async function fetchFunctionEndpoint(
+  path: string,
+  options: {
+    method?: 'GET' | 'POST';
+    body?: object;
+    token: string;
+    networkErrorPrefix?: string;
+  }
+) {
+  const { anon } = requireEnv();
+  const res = await fetch(`${functionsBase()}/functions/v1${path}`, {
+    method: options.method ?? 'POST',
+    headers: {
+      Authorization: `Bearer ${options.token}`,
+      apikey: anon,
+      ...(options.method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(options.method !== 'GET' ? { body: JSON.stringify(options.body ?? {}) } : {}),
+  }).catch((error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`${options.networkErrorPrefix ?? 'Could not reach Edge Function'}: ${msg}`);
+  });
+
+  const text = await res.text();
+  const json = parseMaybeJson(text);
+  return { res, text, json };
 }
 
 export async function getAccessToken(): Promise<string | null> {
@@ -24,63 +85,26 @@ export async function getAccessToken(): Promise<string | null> {
  * the function would accept the token.
  */
 export async function invokeFunction(name: string, body?: object) {
-  // #region agent log
-  fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H1',location:'src/lib/supabase.ts:invokeFunction:entry',message:'invokeFunction called',data:{name,hasBody:typeof body==='object'&&body!==null,bodyKeyCount:body&&typeof body==='object'?Object.keys(body).length:0,hasUrl:Boolean(url),hasAnon:Boolean(anon)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!url || !anon) {
     throw new Error(
       'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env — add them with the VITE_ prefix and restart npm run dev.'
     );
   }
 
-  await supabase.auth.refreshSession().catch(() => {
-    /* ignore; fall back to existing session */
-  });
-
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
-  // #region agent log
-  fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H2',location:'src/lib/supabase.ts:invokeFunction:session',message:'session checked before invoke',data:{name,hasSession:Boolean(sessionData.session),hasToken:Boolean(token),tokenLength:typeof token==='string'?token.length:0},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   if (!token) {
     throw new Error('Not authenticated — please log in again.');
   }
 
-  const requestUrl = `${functionsBase()}/functions/v1/${encodeURIComponent(name)}`;
-  // #region agent log
-  fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H3',location:'src/lib/supabase.ts:invokeFunction:beforeFetch',message:'about to call edge function',data:{name,requestUrl,urlHost:requestUrl.split('/').slice(0,3).join('/'),hasAuthorizationHeader:Boolean(token),payloadBytes:JSON.stringify(body??{}).length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  const res = await fetch(requestUrl, {
+  const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anon,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body ?? {}),
-  }).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    // #region agent log
-    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H4',location:'src/lib/supabase.ts:invokeFunction:fetchCatch',message:'network error while calling edge function',data:{name,errorMessage:msg},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    throw new Error(
-      `Could not reach Edge Function: ${msg}. Deploy functions and check network / ad blockers.`
-    );
+    body,
+    token,
+    networkErrorPrefix:
+      'Could not reach Edge Function. Deploy functions and check network / ad blockers',
   });
-  // #region agent log
-  fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H5',location:'src/lib/supabase.ts:invokeFunction:response',message:'edge function response received',data:{name,status:res.status,ok:res.ok,statusText:res.statusText},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      /* plain text body */
-    }
-  }
 
   if (res.status === 402) {
     const o = json as { code?: string; error?: string } | null;
@@ -90,12 +114,7 @@ export async function invokeFunction(name: string, body?: object) {
   }
 
   if (!res.ok) {
-    const o = json as { error?: string; message?: string; code?: number } | null;
-    const msg =
-      (o && typeof o.message === 'string' && o.message) ||
-      (o && typeof o.error === 'string' && o.error) ||
-      text.slice(0, 400) ||
-      res.statusText;
+    const msg = responseMessage(res, text, json);
     if (res.status === 401 && msg.includes('JWT')) {
       throw new Error(
         `${msg} — Redeploy functions so config.toml has verify_jwt = false for this function, or sign out and sign in again with keys from the same Supabase project as VITE_SUPABASE_URL.`
@@ -109,67 +128,31 @@ export async function invokeFunction(name: string, body?: object) {
 
 /** Edge Function callable without a user session (uses anon key). */
 export async function invokePublicFunction(name: string, body?: object) {
-  if (!url || !anon) {
-    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
-  }
-  const res = await fetch(`${functionsBase()}/functions/v1/${encodeURIComponent(name)}`, {
+  const { anon } = requireEnv();
+  const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${anon}`,
-      apikey: anon,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body ?? {}),
-  }).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Could not reach Edge Function: ${msg}`);
+    body,
+    token: anon,
   });
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      /* plain */
-    }
-  }
+
   if (!res.ok) {
-    const o = json as { error?: string; message?: string } | null;
-    const msg =
-      (o && typeof o.message === 'string' && o.message) ||
-      (o && typeof o.error === 'string' && o.error) ||
-      text.slice(0, 400) ||
-      res.statusText;
-    throw new Error(msg);
+    throw new Error(responseMessage(res, text, json));
   }
-  return (json ?? {}) as Record<string, unknown>;
+  return (json ?? {}) as JsonObject;
 }
 
 export async function fetchPublicFunction(pathAndQuery: string) {
-  if (!url || !anon) {
-    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
-  }
+  const { anon } = requireEnv();
   const path = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
-  const res = await fetch(`${functionsBase()}/functions/v1${path}`, {
-    headers: { Authorization: `Bearer ${anon}`, apikey: anon },
-  }).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Could not reach Edge Function: ${msg}`);
+  const { res, text, json } = await fetchFunctionEndpoint(path, {
+    method: 'GET',
+    token: anon,
   });
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      /* plain */
-    }
-  }
+
   if (!res.ok) {
-    const o = json as { error?: string } | null;
-    throw new Error((o && typeof o.error === 'string' && o.error) || text.slice(0, 400) || res.statusText);
+    throw new Error(responseMessage(res, text, json));
   }
-  return (json ?? {}) as Record<string, unknown>;
+  return (json ?? {}) as JsonObject;
 }
 
 /** POST with optional Bearer (session); falls back to anon when token is null. */
@@ -178,41 +161,18 @@ export async function postFunctionOptionalAuth(
   body: object,
   accessToken: string | null
 ) {
-  if (!url || !anon) {
-    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
-  }
+  const { anon } = requireEnv();
   const token = accessToken ?? anon;
-  const res = await fetch(`${functionsBase()}/functions/v1/${encodeURIComponent(name)}`, {
+  const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anon,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  }).catch((e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Could not reach Edge Function: ${msg}`);
+    body,
+    token,
   });
-  const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      /* plain */
-    }
-  }
+
   if (!res.ok) {
-    const o = json as { error?: string; message?: string } | null;
-    const msg =
-      (o && typeof o.message === 'string' && o.message) ||
-      (o && typeof o.error === 'string' && o.error) ||
-      text.slice(0, 400) ||
-      res.statusText;
-    throw new Error(msg);
+    throw new Error(responseMessage(res, text, json));
   }
-  return (json ?? {}) as Record<string, unknown>;
+  return (json ?? {}) as JsonObject;
 }
 
 export async function fetchPhotoSignedUrl(profileId: string): Promise<string | null> {

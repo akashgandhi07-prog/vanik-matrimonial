@@ -11,7 +11,11 @@ function MemberLayoutBody() {
   const { profile } = useMemberArea();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* still leave the dashboard */
+    }
     navigate('/', { replace: true });
   }
 

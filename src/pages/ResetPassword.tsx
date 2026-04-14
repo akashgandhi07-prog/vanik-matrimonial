@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { userFacingAuthError } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 export default function ResetPassword() {
@@ -8,6 +9,7 @@ export default function ResetPassword() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,16 +33,20 @@ export default function ResetPassword() {
       setError('Passwords do not match.');
       return;
     }
-    const { error: err } = await supabase.auth.updateUser({ password });
-    // #region agent log
-    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H8',location:'src/pages/ResetPassword.tsx:onSubmit',message:'reset password update completed',data:{ready,passwordLength:password.length,confirmMatches:password===confirm,success:!err,errorMessage:err?.message??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    if (err) {
-      setError(err.message);
-      return;
+    setLoading(true);
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password });
+      if (err) {
+        setError(userFacingAuthError(err));
+        return;
+      }
+      await supabase.auth.signOut();
+      navigate('/login?reset=1', { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update password. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    await supabase.auth.signOut();
-    navigate('/login?reset=1', { replace: true });
   }
 
   return (
@@ -79,8 +85,8 @@ export default function ResetPassword() {
                 />
               </div>
               {error && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{error}</p>}
-              <button type="submit" className="btn btn-primary">
-                Update password
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Updating…' : 'Update password'}
               </button>
             </form>
           )}

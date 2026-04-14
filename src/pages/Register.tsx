@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import imageCompression from 'browser-image-compression';
 import { PublicLayout } from '../components/Layout';
-import { ageFromDob } from '../lib/auth';
+import { ageFromDob, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
 import {
@@ -313,6 +313,11 @@ export default function Register() {
   async function signUpAccount(e: React.FormEvent) {
     e.preventDefault();
     setAuthMsg(null);
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) {
+      setAuthMsg('Email is required.');
+      return;
+    }
     if (password.length < 8) {
       setAuthMsg('Password must be at least 8 characters.');
       return;
@@ -321,12 +326,15 @@ export default function Register() {
     try {
       const redirect = `${window.location.origin}/verify-email-success`;
       const { error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: { emailRedirectTo: redirect },
       });
-      if (error) setAuthMsg(error.message);
+      if (error) setAuthMsg(userFacingAuthError(error));
       else setAuthMsg('Check your inbox to verify your email before continuing.');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '';
+      setAuthMsg(msg || 'Could not create account. Please try again.');
     } finally {
       setAuthSubmitting(false);
     }
@@ -597,7 +605,7 @@ export default function Register() {
                       type: 'signup',
                       email: session.user.email!,
                     });
-                    if (error) setVerifyNotice({ type: 'err', text: error.message });
+                    if (error) setVerifyNotice({ type: 'err', text: userFacingAuthError(error) });
                     else
                       setVerifyNotice({
                         type: 'ok',
@@ -633,7 +641,7 @@ export default function Register() {
                   setUpdateEmailBusy(true);
                   try {
                     const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-                    if (error) setVerifyNotice({ type: 'err', text: error.message });
+                    if (error) setVerifyNotice({ type: 'err', text: userFacingAuthError(error) });
                     else {
                       setVerifyNotice({
                         type: 'ok',

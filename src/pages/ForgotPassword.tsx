@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { userFacingAuthError } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 const REDIRECT = `${typeof window !== 'undefined' ? window.location.origin : ''}/reset-password`;
@@ -16,15 +17,20 @@ export default function ForgotPassword() {
     setErr(null);
     setMsg(null);
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: REDIRECT,
-    });
-    // #region agent log
-    fetch('http://127.0.0.1:7813/ingest/32d55c98-7c74-4dbe-b522-f4df48baf028',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cbfc57'},body:JSON.stringify({sessionId:'cbfc57',runId:'pre-fix',hypothesisId:'H7',location:'src/pages/ForgotPassword.tsx:onSubmit',message:'forgot password submission completed',data:{emailDomain:email.includes('@')?email.split('@')[1]:'invalid',success:!error,errorMessage:error?.message??null,redirectTarget:REDIRECT},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    setLoading(false);
-    if (error) setErr(error.message);
-    else setMsg('If an account exists for this email, we have sent reset instructions.');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: REDIRECT,
+      });
+      if (error) {
+        setErr(userFacingAuthError(error));
+        return;
+      }
+      setMsg('If an account exists for this email, we have sent reset instructions.');
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Could not send reset link. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -48,7 +54,7 @@ export default function ForgotPassword() {
             {err && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{err}</p>}
             {msg && <p style={{ color: 'var(--color-success)', margin: 0 }}>{msg}</p>}
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              Send reset link
+              {loading ? 'Sending…' : 'Send reset link'}
             </button>
           </form>
           <p style={{ marginTop: 16 }}>
