@@ -303,6 +303,7 @@ export default function Register() {
       if (!p) return;
       if (p.status === 'pending_approval') navigate('/registration-pending', { replace: true });
       else if (p.status === 'active') navigate('/dashboard/browse', { replace: true });
+      else if (p.status === 'matched') navigate('/dashboard/browse', { replace: true });
       else if (p.status === 'rejected' && location.pathname !== '/register') {
         navigate('/registration-rejected', { replace: true });
       }

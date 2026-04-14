@@ -77,121 +77,132 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
   const mountedRef = useRef(false);
+  /** Serialize loadAll — concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
+  const loadChainRef = useRef(Promise.resolve());
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
-    // Prefer getSession() right after sign-in — it reads the session the client just stored; getUser()
-    // can lag behind navigation and yield no user, which incorrectly sent people to /register.
-    const { data: sessionWrap } = await supabase.auth.getSession();
-    let u = sessionWrap.session?.user ?? null;
-    if (!u) {
-      const { data: userWrap } = await supabase.auth.getUser();
-      u = userWrap.user ?? null;
-    }
-    setUser(u ?? null);
-    if (!u) {
-      setProfile(null);
-      setPrivateRow(null);
-      setLoading(false);
-      return;
-    }
-    if (isAdminUser(u)) {
-      setLoading(false);
-      navigate('/admin', { replace: true });
-      return;
-    }
-    // Brief retries: profile row is expected right after submit-registration; avoids a race where
-    // the first PostgREST call runs before the auth JWT is attached to the client.
-    let p: ProfileRow | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, 200 * attempt));
+    const run = async () => {
+      setLoading(true);
+      // Prefer getSession() right after sign-in — it reads the session the client just stored; getUser()
+      // can lag behind navigation and yield no user, which incorrectly sent people to /register.
+      const { data: sessionWrap } = await supabase.auth.getSession();
+      let u = sessionWrap.session?.user ?? null;
+      if (!u) {
+        const { data: userWrap } = await supabase.auth.getUser();
+        u = userWrap.user ?? null;
       }
-      const { data, error } = await supabase
+      setUser(u ?? null);
+      if (!u) {
+        setProfile(null);
+        setPrivateRow(null);
+        setLoading(false);
+        return;
+      }
+      if (isAdminUser(u)) {
+        setLoading(false);
+        navigate('/admin', { replace: true });
+        return;
+      }
+      // Retries: right after login the JWT may not be attached to PostgREST yet; parallel loadAll calls
+      // used to overwrite a successful fetch with an empty one — see loadChainRef serialization above.
+      let p: ProfileRow | null = null;
+      const maxAttempts = 8;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, 120 * attempt));
+        }
+        if (attempt === 2 && !p) {
+          await supabase.auth.refreshSession().catch(() => {});
+        }
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('auth_user_id', u.id)
+          .maybeSingle();
+        if (error && error.code !== 'PGRST116') {
+          console.error('profiles load:', error.message);
+          break;
+        }
+        if (data) {
+          p = data as ProfileRow;
+          break;
+        }
+      }
+      if (!p) {
+        setProfile(null);
+        setPrivateRow(null);
+        setLoading(false);
+        return;
+      }
+      setProfile(p);
+      const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', p.id).maybeSingle();
+      setPrivateRow(m as MemberPrivateRow | null);
+
+      if (p.status === 'pending_approval') {
+        setLoading(false);
+        navigate('/registration-pending', { replace: true });
+        return;
+      }
+      if (p.status === 'rejected') {
+        setLoading(false);
+        navigate('/registration-rejected', { replace: true });
+        return;
+      }
+      if (p.status === 'expired') {
+        setLoading(false);
+        navigate('/membership-expired', { replace: true });
+        return;
+      }
+      if (
+        p.status === 'active' &&
+        p.membership_expires_at &&
+        new Date(p.membership_expires_at) <= new Date()
+      ) {
+        setLoading(false);
+        navigate('/membership-expired', { replace: true });
+        return;
+      }
+      if (p.status === 'archived') {
+        // Account was deleted/archived — sign out and return home
+        setLoading(false);
+        await supabase.auth.signOut();
+        navigate('/', { replace: true });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const { data: list } = await supabase
         .from('profiles')
         .select('*')
-        .eq('auth_user_id', u.id)
-        .maybeSingle();
-      if (error && error.code !== 'PGRST116') {
-        console.error('profiles load:', error.message);
-        break;
-      }
-      if (data) {
-        p = data as ProfileRow;
-        break;
-      }
-    }
-    if (!p) {
-      setProfile(null);
-      setPrivateRow(null);
-      setLoading(false);
-      return;
-    }
-    setProfile(p);
-    const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', p.id).maybeSingle();
-    setPrivateRow(m as MemberPrivateRow | null);
+        .neq('gender', p.gender)
+        .eq('status', 'active')
+        .eq('show_on_register', true)
+        .gt('membership_expires_at', now);
+      setCandidates((list ?? []) as ProfileRow[]);
 
-    if (p.status === 'pending_approval') {
-      setLoading(false);
-      navigate('/registration-pending', { replace: true });
-      return;
-    }
-    if (p.status === 'rejected') {
-      setLoading(false);
-      navigate('/registration-rejected', { replace: true });
-      return;
-    }
-    if (p.status === 'expired') {
-      setLoading(false);
-      navigate('/membership-expired', { replace: true });
-      return;
-    }
-    if (
-      p.status === 'active' &&
-      p.membership_expires_at &&
-      new Date(p.membership_expires_at) <= new Date()
-    ) {
-      setLoading(false);
-      navigate('/membership-expired', { replace: true });
-      return;
-    }
-    if (p.status === 'archived') {
-      // Account was deleted/archived — sign out and return home
-      setLoading(false);
-      await supabase.auth.signOut();
-      navigate('/', { replace: true });
-      return;
-    }
+      const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', p.id);
+      setBookmarks((bm ?? []).map((x) => x.bookmarked_id as string));
 
-    const now = new Date().toISOString();
-    const { data: list } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('gender', p.gender)
-      .eq('status', 'active')
-      .eq('show_on_register', true)
-      .gt('membership_expires_at', now);
-    setCandidates((list ?? []) as ProfileRow[]);
+      const { data: rq } = await supabase
+        .from('requests')
+        .select('id, created_at, candidate_ids, email_status')
+        .eq('requester_id', p.id)
+        .order('created_at', { ascending: false });
+      setRequests(rq ?? []);
 
-    const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', p.id);
-    setBookmarks((bm ?? []).map((x) => x.bookmarked_id as string));
+      const { data: fbRows } = await supabase
+        .from('feedback')
+        .select('request_id, candidate_id')
+        .eq('requester_id', p.id);
+      setFeedbackKeys(
+        new Set((fbRows ?? []).map((r) => `${r.request_id as string}:${r.candidate_id as string}`))
+      );
 
-    const { data: rq } = await supabase
-      .from('requests')
-      .select('id, created_at, candidate_ids, email_status')
-      .eq('requester_id', p.id)
-      .order('created_at', { ascending: false });
-    setRequests(rq ?? []);
+      setLoading(false);
+    };
 
-    const { data: fbRows } = await supabase
-      .from('feedback')
-      .select('request_id, candidate_id')
-      .eq('requester_id', p.id);
-    setFeedbackKeys(
-      new Set((fbRows ?? []).map((r) => `${r.request_id as string}:${r.candidate_id as string}`))
-    );
-
-    setLoading(false);
+    loadChainRef.current = loadChainRef.current.catch(() => {}).then(run);
+    await loadChainRef.current;
   }, [navigate]);
 
   useEffect(() => {

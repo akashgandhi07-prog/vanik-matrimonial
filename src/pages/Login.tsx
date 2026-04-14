@@ -33,6 +33,9 @@ export default function Login() {
         navigate('/admin', { replace: true });
         return;
       }
+      // Ensure the session is fully persisted before dashboard runs member RLS queries (avoids a race
+      // where profile loads empty and MemberAuthGate sends people to /register).
+      await supabase.auth.getSession();
       navigate(nextPath, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed. Please try again.');

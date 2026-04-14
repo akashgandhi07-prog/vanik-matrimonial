@@ -209,6 +209,30 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     }
   }
 
+  /** One-click unreject: persists immediately (the old control only changed the dropdown until you hit Save). */
+  async function unrejectAndSave() {
+    setSaving(true);
+    setErr(null);
+    try {
+      await invokeFunction('admin-manage-users', {
+        action: 'update_member_record',
+        profile_id: profile.id,
+        edit_note: editNote.trim() || 'Returned to pending approval (unreject)',
+        profile: {
+          status: 'pending_approval',
+          rejection_reason: null,
+        },
+      });
+      setStatus('pending_approval');
+      setRejectionReason('');
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not unreject');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="card" style={{ marginTop: 24 }}>
       <h3 style={{ marginTop: 0 }}>Edit member record</h3>
@@ -219,8 +243,8 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
       </p>
       {profile.status === 'rejected' && (
         <p className="badge badge-warning" style={{ display: 'block', marginBottom: 12 }}>
-          Rejected — fix fields below, then set <strong>Status</strong> to &quot;pending_approval&quot; to send
-          them back into the review queue (rejection reason is cleared automatically for pending).
+          Rejected — use <strong>Return to review queue</strong> below for a one-step unreject, or change fields and
+          use <strong>Save changes</strong>.
         </p>
       )}
       {err && (
@@ -472,26 +496,24 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16, alignItems: 'center' }}>
+        {profile.status === 'rejected' && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: 'var(--color-success, #15803d)' }}
+            disabled={saving}
+            onClick={() => void unrejectAndSave()}
+          >
+            {saving ? 'Saving…' : 'Return to review queue'}
+          </button>
+        )}
         <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}>
           {saving ? 'Saving…' : 'Save changes'}
         </button>
         <button type="button" className="btn btn-secondary" disabled={saving} onClick={onCancel}>
           Cancel edit
         </button>
-        {profile.status === 'rejected' && (
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={saving}
-            onClick={() => {
-              setStatus('pending_approval');
-              setRejectionReason('');
-            }}
-          >
-            Set status → pending approval (unreject)
-          </button>
-        )}
       </div>
     </div>
   );

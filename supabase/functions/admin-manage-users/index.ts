@@ -1068,6 +1068,108 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true }, req);
   }
 
+  if (action === 'admin_upload_member_photo') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot upload member photos' }, req, 403);
+    }
+    const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
+    const rawB64 = typeof body.image_base64 === 'string' ? body.image_base64.trim() : '';
+    const mode = body.mode === 'pending_review' ? 'pending_review' : 'direct';
+    if (!profileId || !rawB64) {
+      return jsonResponse({ error: 'profile_id and image_base64 required' }, req, 400);
+    }
+
+    let b64 = rawB64.replace(/\s/g, '');
+    const dataUrl = /^data:image\/(?:jpeg|jpg|png);base64,(.+)$/i.exec(b64);
+    if (dataUrl) b64 = dataUrl[1];
+
+    let bytes: Uint8Array;
+    try {
+      const bin = atob(b64);
+      if (bin.length < 200 || bin.length > 2_500_000) {
+        return jsonResponse({ error: 'Image size must be between 200 bytes and 2.5MB' }, req, 400);
+      }
+      bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    } catch {
+      return jsonResponse({ error: 'Invalid base64 image' }, req, 400);
+    }
+
+    const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    if (!isJpeg && !isPng) {
+      return jsonResponse({ error: 'Image must be JPEG or PNG (by file content)' }, req, 400);
+    }
+    const contentType = isJpeg ? 'image/jpeg' : 'image/png';
+    const ext = isJpeg ? 'jpg' : 'png';
+
+    const { data: prof, error: pe } = await admin
+      .from('profiles')
+      .select('id, gender, auth_user_id, photo_url, pending_photo_url')
+      .eq('id', profileId)
+      .single();
+    if (pe || !prof) return jsonResponse({ error: 'Profile not found' }, req, 404);
+    const gender = String(prof.gender);
+    if (gender !== 'Male' && gender !== 'Female') {
+      return jsonResponse({ error: 'Invalid profile gender' }, req, 400);
+    }
+    const authUid = prof.auth_user_id as string;
+    const baseFolder = `${gender}/${authUid}`;
+    const objectPath =
+      mode === 'pending_review' ? `${baseFolder}/photo-pending.${ext}` : `${baseFolder}/photo.${ext}`;
+
+    const { error: upErr } = await admin.storage.from('profile-photos').upload(objectPath, bytes, {
+      upsert: true,
+      contentType,
+    });
+    if (upErr) return jsonResponse({ error: upErr.message }, req, 500);
+
+    const oldMain = prof.photo_url as string | null;
+    const oldPending = prof.pending_photo_url as string | null;
+
+    if (mode === 'direct') {
+      if (oldMain && oldMain !== objectPath) {
+        const { error: rmErr } = await admin.storage.from('profile-photos').remove([oldMain]);
+        if (rmErr) console.warn('admin_upload_member_photo remove old main:', rmErr.message);
+      }
+      if (oldPending && oldPending !== objectPath) {
+        const { error: rm2 } = await admin.storage.from('profile-photos').remove([oldPending]);
+        if (rm2) console.warn('admin_upload_member_photo remove old pending:', rm2.message);
+      }
+      const { error: dbErr } = await admin
+        .from('profiles')
+        .update({
+          photo_url: objectPath,
+          pending_photo_url: null,
+          photo_status: 'approved',
+        })
+        .eq('id', profileId);
+      if (dbErr) return jsonResponse({ error: dbErr.message }, req, 500);
+    } else {
+      if (oldPending && oldPending !== objectPath) {
+        const { error: rmErr } = await admin.storage.from('profile-photos').remove([oldPending]);
+        if (rmErr) console.warn('admin_upload_member_photo remove old pending:', rmErr.message);
+      }
+      const { error: dbErr } = await admin
+        .from('profiles')
+        .update({
+          pending_photo_url: objectPath,
+          photo_status: 'pending',
+        })
+        .eq('id', profileId);
+      if (dbErr) return jsonResponse({ error: dbErr.message }, req, 500);
+    }
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: profileId,
+      action_type: 'photo_admin_upload',
+      notes: mode === 'direct' ? `direct path=${objectPath}` : `pending_review path=${objectPath}`,
+    });
+
+    return jsonResponse({ ok: true, path: objectPath, mode }, req);
+  }
+
   if (action === 'promote' || action === 'demote') {
     if (isSupportAdmin(userData.user)) {
       return jsonResponse({ error: 'Support admin role cannot change admin accounts' }, req, 403);

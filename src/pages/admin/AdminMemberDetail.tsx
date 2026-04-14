@@ -1,6 +1,8 @@
+import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { isSupportAdmin } from '../../lib/auth';
+import { rejectReasonIfNotJpegOrPng } from '../../lib/profilePhotoAccept';
 import { invokeFunction, supabase } from '../../lib/supabase';
 import { AdminMemberEditForm, type MemberPrivateFull, type MemberProfileFull } from './AdminMemberEditForm';
 import { MfaEnroll } from './MfaEnroll';
@@ -23,6 +25,7 @@ const ACTION_LABELS: Record<string, string> = {
   archived: 'Member archived',
   reinstated: 'Member reinstated',
   profile_admin_edit: 'Profile updated (admin edit)',
+  photo_admin_upload: 'Profile photo uploaded (admin)',
   internal_note_updated: 'Internal staff note updated',
   id_document_purged: 'ID document purged from storage',
   email_resent: 'Transactional email re-sent',
@@ -93,6 +96,9 @@ export default function AdminMemberDetail() {
   >([]);
   const [magicLinkUrl, setMagicLinkUrl] = useState<string | null>(null);
   const [toolsBusy, setToolsBusy] = useState<string | null>(null);
+  const [unrejectBusy, setUnrejectBusy] = useState(false);
+  const [adminPhotoMode, setAdminPhotoMode] = useState<'direct' | 'pending_review'>('direct');
+  const [adminPhotoBusy, setAdminPhotoBusy] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -188,6 +194,55 @@ export default function AdminMemberDetail() {
             </span>
           )}
         </p>
+
+        {profile.status === 'rejected' && !supportOnly && (
+          <div
+            className="card"
+            style={{
+              marginTop: 20,
+              borderLeft: '4px solid var(--color-success, #15803d)',
+              background: 'linear-gradient(90deg, rgba(21, 128, 61, 0.06), transparent)',
+            }}
+          >
+            <h2 style={{ marginTop: 0, fontSize: '1.2rem' }}>Rejected application</h2>
+            <p style={{ marginBottom: 14, color: 'var(--color-text-secondary)' }}>
+              Put them back in the approval queue in one step (clears the rejection reason). Use the full editor only if
+              you still need to change fields.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: 'var(--color-success, #15803d)' }}
+              disabled={unrejectBusy}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    'Return this applicant to pending approval? They will appear in the pending list again for review.'
+                  )
+                ) {
+                  return;
+                }
+                setUnrejectBusy(true);
+                try {
+                  await invokeFunction('admin-manage-users', {
+                    action: 'update_member_record',
+                    profile_id: profile.id,
+                    edit_note: 'Returned to pending approval (quick unreject)',
+                    profile: { status: 'pending_approval', rejection_reason: null },
+                  });
+                  setEditingRecord(false);
+                  setReloadKey((k) => k + 1);
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : 'Failed to unreject');
+                } finally {
+                  setUnrejectBusy(false);
+                }
+              }}
+            >
+              {unrejectBusy ? 'Saving…' : 'Return to review queue'}
+            </button>
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 20 }}>
           <h3 style={{ marginTop: 0 }}>Staff internal note</h3>
@@ -504,6 +559,92 @@ export default function AdminMemberDetail() {
             )}
           </div>
         </div>
+
+        {!supportOnly && (
+          <div className="card" style={{ marginTop: 24 }}>
+            <h3 style={{ marginTop: 0 }}>Replace profile photo</h3>
+            <p className="field-hint" style={{ marginTop: -6 }}>
+              JPG or PNG. The image is compressed in the browser, then uploaded to their storage folder (same layout as
+              self‑service uploads).
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12, maxWidth: 420 }}>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="adminPhotoMode"
+                  checked={adminPhotoMode === 'direct'}
+                  onChange={() => setAdminPhotoMode('direct')}
+                />
+                <span>
+                  <strong>Publish now</strong> — replace main photo and mark approved (use when you trust this image).
+                </span>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="adminPhotoMode"
+                  checked={adminPhotoMode === 'pending_review'}
+                  onChange={() => setAdminPhotoMode('pending_review')}
+                />
+                <span>
+                  <strong>Pending review</strong> — same as a member upload; use &quot;Pending photo review&quot; below
+                  to approve or reject.
+                </span>
+              </label>
+            </div>
+            <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                disabled={adminPhotoBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  void (async () => {
+                    const bad = rejectReasonIfNotJpegOrPng(file);
+                    if (bad) {
+                      alert(bad);
+                      e.target.value = '';
+                      return;
+                    }
+                    setAdminPhotoBusy(true);
+                    try {
+                      const compressed = await imageCompression(file, {
+                        maxSizeMB: 0.25,
+                        maxWidthOrHeight: 1200,
+                        useWebWorker: true,
+                      });
+                      const dataUrl = await new Promise<string>((resolve, reject) => {
+                        const r = new FileReader();
+                        r.onload = () => resolve(r.result as string);
+                        r.onerror = () => reject(new Error('Could not read file'));
+                        r.readAsDataURL(compressed);
+                      });
+                      await invokeFunction('admin-manage-users', {
+                        action: 'admin_upload_member_photo',
+                        profile_id: profile.id,
+                        mode: adminPhotoMode === 'pending_review' ? 'pending_review' : 'direct',
+                        image_base64: dataUrl,
+                      });
+                      setReloadKey((k) => k + 1);
+                      e.target.value = '';
+                      alert(
+                        adminPhotoMode === 'direct'
+                          ? 'Photo published as their main profile image.'
+                          : 'Photo saved as pending — approve or reject in the section below when ready.'
+                      );
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : 'Upload failed');
+                    } finally {
+                      setAdminPhotoBusy(false);
+                    }
+                  })();
+                }}
+              />
+              {adminPhotoBusy && <span style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>Uploading…</span>}
+            </div>
+          </div>
+        )}
 
         {pending && !supportOnly && (
           <div className="card" style={{ marginTop: 24 }}>
