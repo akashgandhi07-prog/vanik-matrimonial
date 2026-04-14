@@ -51,7 +51,7 @@ export default function MembershipExpired() {
 
   useEffect(() => {
     if (searchParams.get('checkout') === 'success') {
-      setNotice('Payment received. Your membership will update in a few moments — refresh if needed.');
+      setNotice('Payment received. Your membership will update in a few moments. Refresh if needed.');
       setSearchParams({}, { replace: true });
       const t = window.setTimeout(() => void load(), 2000);
       return () => window.clearTimeout(t);
@@ -68,7 +68,7 @@ export default function MembershipExpired() {
         month: 'long',
         year: 'numeric',
       })
-    : '—';
+    : '-';
 
   const isRenewable =
     profile?.status === 'expired' ||

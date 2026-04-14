@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { PublicLayout } from '../components/Layout';
 import { fetchPublicFunction, postFunctionOptionalAuth, supabase } from '../lib/supabase';
 
 const CONTACT_OPTS = [
@@ -103,33 +104,37 @@ export default function Feedback() {
 
   if (needLogin && !token) {
     return (
-      <div className="layout-max" style={{ maxWidth: 480, marginTop: 48 }}>
-        <div className="card">
-          <h1>Sign in required</h1>
-          <p style={{ color: 'var(--color-text-secondary)' }}>
-            To submit feedback without a magic link, please sign in as the member who made the request.
-          </p>
-          <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
-            Sign in
-          </Link>
+      <PublicLayout>
+        <div className="layout-max" style={{ maxWidth: 480, marginTop: 48 }}>
+          <div className="card">
+            <h1>Sign in required</h1>
+            <p style={{ color: 'var(--color-text-secondary)' }}>
+              To submit feedback without a magic link, please sign in as the member who made the request.
+            </p>
+            <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
+              Sign in
+            </Link>
+          </div>
         </div>
-      </div>
+      </PublicLayout>
     );
   }
 
   if (token && !validMagic) {
     return (
-      <div className="layout-max" style={{ maxWidth: 480, marginTop: 48 }}>
-        <div className="card">
-          <h1>Link invalid or expired</h1>
-          <p style={{ color: 'var(--color-text-secondary)' }}>
-            This feedback link is no longer valid. Sign in to submit feedback from your account.
-          </p>
-          <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
-            Sign in
-          </Link>
+      <PublicLayout>
+        <div className="layout-max" style={{ maxWidth: 480, marginTop: 48 }}>
+          <div className="card">
+            <h1>Link invalid or expired</h1>
+            <p style={{ color: 'var(--color-text-secondary)' }}>
+              This feedback link is no longer valid. Sign in to submit feedback from your account.
+            </p>
+            <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
+              Sign in
+            </Link>
+          </div>
         </div>
-      </div>
+      </PublicLayout>
     );
   }
 

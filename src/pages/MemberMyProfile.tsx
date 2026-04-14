@@ -5,8 +5,8 @@ import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
-import { userFacingAuthError } from '../lib/auth';
 import { invokeFunction, supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 type FormProps = {
   profile: ProfileRow;
@@ -14,7 +14,8 @@ type FormProps = {
   loadAll: () => Promise<void>;
 };
 
-function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps) {
+function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
+  const navigate = useNavigate();
   const [education, setEducation] = useState(p.education ?? '');
   const [jobTitle, setJobTitle] = useState(p.job_title ?? '');
   const [hobbies, setHobbies] = useState(p.hobbies ?? '');
@@ -22,19 +23,23 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
   const [nationality, setNationality] = useState(p.nationality ?? '');
   const [town, setTown] = useState(p.town_country_of_origin ?? '');
   const [height, setHeight] = useState<number | ''>(p.height_cm ?? '');
-  const [weight, setWeight] = useState(p.weight_kg != null ? String(p.weight_kg) : '');
   const [diet, setDiet] = useState(p.diet ?? 'Veg');
-  const [pwCur, setPwCur] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConf, setPwConf] = useState('');
+  const [pwStatus, setPwStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [pwError, setPwError] = useState('');
   const [delOpen, setDelOpen] = useState(false);
   const [delConfirm, setDelConfirm] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const heightCm = height === '' ? null : Number(height);
 
   async function saveField() {
-    await supabase
+    setSaveStatus('saving');
+    const { error } = await supabase
       .from('profiles')
       .update({
         education: sanitizeText(education, 500),
@@ -44,58 +49,79 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
         nationality: sanitizeText(nationality, 100),
         town_country_of_origin: sanitizeText(town, 200),
         height_cm: height === '' ? null : Number(height),
-        weight_kg: weight ? Number(weight) : null,
         diet,
       })
       .eq('id', p.id);
-    void loadAll();
+    if (error) {
+      setSaveStatus('error');
+    } else {
+      setSaveStatus('saved');
+      void loadAll();
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
   }
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
-    if (pwNew.length < 8 || pwNew !== pwConf) {
-      alert('Check new password');
+    setPwError('');
+    if (pwNew.length < 8) {
+      setPwError('New password must be at least 8 characters.');
       return;
     }
-    const { error: signErr } = await supabase.auth.signInWithPassword({
-      email: pr.email,
-      password: pwCur,
-    });
-    if (signErr) {
-      alert(userFacingAuthError(signErr, 'reauth_current_password'));
+    if (pwNew !== pwConf) {
+      setPwError('New passwords do not match.');
       return;
     }
+    setPwStatus('saving');
     const { error } = await supabase.auth.updateUser({ password: pwNew });
-    if (error) alert(userFacingAuthError(error));
-    else alert('Password updated');
-    setPwCur('');
+    if (error) {
+      setPwStatus('error');
+      setPwError(error.message);
+      return;
+    }
+    setPwStatus('saved');
     setPwNew('');
     setPwConf('');
+    // Sign out after password change for security
+    setTimeout(async () => {
+      await supabase.auth.signOut();
+      navigate('/login?reset=1');
+    }, 1500);
   }
 
   async function newPhoto(file: File) {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
     if (!uid) return;
-    const compressed = await imageCompression(file, {
-      maxSizeMB: 0.2,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-    });
-    setPreview(URL.createObjectURL(compressed));
-    const path = `${p.gender}/${uid}/photo-pending.jpg`;
-    const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
-      upsert: true,
-    });
-    if (upErr) {
-      alert(upErr.message);
-      return;
+    setPhotoSaving(true);
+    setPhotoError('');
+    try {
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.2,
+        maxWidthOrHeight: 800,
+        useWebWorker: true,
+      });
+      setPreview(URL.createObjectURL(compressed));
+      const path = `${p.gender}/${uid}/photo-pending.jpg`;
+      const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
+        upsert: true,
+      });
+      if (upErr) {
+        setPhotoError(upErr.message);
+        return;
+      }
+      const { error: dbErr } = await supabase
+        .from('profiles')
+        .update({ pending_photo_url: path, photo_status: 'pending' })
+        .eq('id', p.id);
+      if (dbErr) {
+        setPhotoError(dbErr.message);
+        return;
+      }
+      void loadAll();
+    } finally {
+      setPhotoSaving(false);
     }
-    await supabase
-      .from('profiles')
-      .update({ pending_photo_url: path, photo_status: 'pending' })
-      .eq('id', p.id);
-    void loadAll();
   }
 
   return (
@@ -181,19 +207,6 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="mp-weight">
-              Weight (kg)
-            </label>
-            <input
-              id="mp-weight"
-              type="number"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              min={30}
-              max={200}
-            />
-          </div>
-          <div>
             <label className="label" htmlFor="mp-diet">
               Diet
             </label>
@@ -205,9 +218,22 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
               ))}
             </select>
           </div>
-          <button type="button" className="btn btn-primary" onClick={() => void saveField()}>
-            Save changes
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saveStatus === 'saving'}
+              onClick={() => void saveField()}
+            >
+              {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
+            </button>
+            {saveStatus === 'saved' && (
+              <span style={{ color: 'var(--color-success)', fontSize: 14 }}>✓ Saved</span>
+            )}
+            {saveStatus === 'error' && (
+              <span style={{ color: 'var(--color-danger)', fontSize: 14 }}>Failed to save</span>
+            )}
+          </div>
         </div>
 
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
@@ -228,11 +254,20 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
           id="mp-photo-file"
           type="file"
           accept="image/jpeg,image/png"
+          disabled={photoSaving}
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void newPhoto(f);
           }}
         />
+        {photoSaving && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            Uploading and compressing photo…
+          </p>
+        )}
+        {photoError && (
+          <p style={{ fontSize: 13, color: 'var(--color-danger)', margin: '4px 0 0' }}>{photoError}</p>
+        )}
         {preview && (
           <img
             src={preview}
@@ -244,17 +279,10 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
 
         <h3>Password</h3>
-        <form onSubmit={changePassword} style={{ display: 'grid', gap: 8 }}>
-          <label className="label" htmlFor="mp-pw-cur">
-            Current password
-          </label>
-          <input
-            id="mp-pw-cur"
-            type="password"
-            autoComplete="current-password"
-            value={pwCur}
-            onChange={(e) => setPwCur(e.target.value)}
-          />
+        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 8px' }}>
+          For security, you&apos;ll be signed out after changing your password.
+        </p>
+        <form onSubmit={(e) => void changePassword(e)} style={{ display: 'grid', gap: 8 }}>
           <label className="label" htmlFor="mp-pw-new">
             New password
           </label>
@@ -265,6 +293,7 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
             value={pwNew}
             onChange={(e) => setPwNew(e.target.value)}
             minLength={8}
+            disabled={pwStatus === 'saving' || pwStatus === 'saved'}
           />
           <label className="label" htmlFor="mp-pw-conf">
             Confirm new password
@@ -276,10 +305,25 @@ function MemberMyProfileForm({ profile: p, privateRow: pr, loadAll }: FormProps)
             value={pwConf}
             onChange={(e) => setPwConf(e.target.value)}
             minLength={8}
+            disabled={pwStatus === 'saving' || pwStatus === 'saved'}
           />
-          <button type="submit" className="btn btn-secondary">
-            Update password
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              type="submit"
+              className="btn btn-secondary"
+              disabled={pwStatus === 'saving' || pwStatus === 'saved'}
+            >
+              {pwStatus === 'saving' ? 'Updating…' : 'Update password'}
+            </button>
+            {pwStatus === 'saved' && (
+              <span style={{ color: 'var(--color-success)', fontSize: 14 }}>
+                ✓ Password updated. Signing you out…
+              </span>
+            )}
+          </div>
+          {pwError && (
+            <p style={{ color: 'var(--color-danger)', fontSize: 13, margin: 0 }}>{pwError}</p>
+          )}
         </form>
 
         <p style={{ marginTop: 24 }}>

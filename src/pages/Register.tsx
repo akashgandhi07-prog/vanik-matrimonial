@@ -6,7 +6,6 @@ import { ageFromDob, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
 import {
-  isValidOptionalWeight,
   isValidPersonName,
   isValidPlaceField,
   isValidUkMobile,
@@ -43,7 +42,6 @@ type FormState = {
   education: string;
   job_title: string;
   height_cm: number | '';
-  weight_kg: string;
   diet: string;
   hobbies: string;
   photo_path: string;
@@ -79,7 +77,6 @@ const defaultState: FormState = {
   education: '',
   job_title: '',
   height_cm: '',
-  weight_kg: '',
   diet: '',
   hobbies: '',
   photo_path: '',
@@ -151,8 +148,6 @@ function validateStep3(form: FormState): Record<string, string> {
   if (!form.consent_contact) e.consent_contact = 'You must consent to share contact details for this service.';
   if (!form.consent_age) e.consent_age = 'You must confirm you are 18 or over.';
   if (!form.consent_privacy) e.consent_privacy = 'You must accept the privacy policy.';
-  if (!isValidOptionalWeight(form.weight_kg))
-    e.weight_kg = 'If provided, weight must be between 30 and 200 kg.';
   return e;
 }
 
@@ -179,7 +174,6 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   education: 'reg-education',
   job_title: 'reg-job',
   height_cm: 'reg-height',
-  weight_kg: 'reg-weight',
   diet: 'reg-diet-veg',
   hobbies: 'reg-hobbies',
   photo_path: 'reg-photo',
@@ -462,7 +456,6 @@ export default function Register() {
         education: sanitizeText(form.education, 500),
         job_title: sanitizeText(form.job_title, 200),
         height_cm: form.height_cm === '' ? null : form.height_cm,
-        weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
         diet: form.diet,
         hobbies: sanitizeText(form.hobbies, 400),
         stripe_checkout_session_id: stripeCheckoutSessionId ?? '',
@@ -619,7 +612,7 @@ export default function Register() {
                 {resendBusy ? 'Sending…' : 'Resend verification email'}
               </button>
             </div>
-            <p className="field-hint">Wrong address? Enter a new email — we will send a fresh link.</p>
+            <p className="field-hint">Wrong address? Enter a new email and we will send a fresh link.</p>
             <div className="register-actions" style={{ alignItems: 'flex-start' }}>
               <input
                 id="register-new-email"
@@ -690,7 +683,7 @@ export default function Register() {
               <div className="register-progress-fill" style={{ width: `${progress}%` }} />
             </div>
             <p className="register-step-meta">
-              Step {step} of 3 — {stepLabels[step - 1]}
+              Step {step} of 3: {stepLabels[step - 1]}
             </p>
           </div>
 
@@ -962,7 +955,7 @@ export default function Register() {
                 />
                 {form.coupon_hint === 'valid' && (
                   <p style={{ color: 'var(--color-success)', fontSize: 14, margin: '6px 0 0' }}>
-                    Valid — membership free
+                    Valid: membership free
                   </p>
                 )}
                 {form.coupon_hint === 'invalid' && form.coupon_code.trim() && (
@@ -973,8 +966,8 @@ export default function Register() {
                 {form.coupon_hint !== 'valid' && (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     {billingEnabled
-                      ? 'Membership fee: £10/year — you will pay securely online before submitting your application (final step).'
-                      : 'Membership fee: £10/year — our team will contact you to arrange payment after approval.'}
+                      ? 'Membership fee: £10/year. You will pay securely online before submitting your application (final step).'
+                      : 'Membership fee: £10/year. Our team will contact you to arrange payment after approval.'}
                   </p>
                 )}
               </div>
@@ -1288,28 +1281,6 @@ export default function Register() {
                 {fieldErrors.height_cm && <p className="field-error">{fieldErrors.height_cm}</p>}
               </div>
               <div>
-                <label className="label" htmlFor="reg-weight">
-                  Weight (kg) <span className="badge badge-muted">optional</span>
-                </label>
-                <input
-                  id="reg-weight"
-                  name="weight"
-                  type="number"
-                  inputMode="decimal"
-                  min={30}
-                  max={200}
-                  autoComplete="off"
-                  placeholder="e.g. 70"
-                  value={form.weight_kg}
-                  onChange={(e) => {
-                    update({ weight_kg: e.target.value });
-                    clearFieldError('weight_kg');
-                  }}
-                  aria-invalid={fieldErrors.weight_kg ? true : undefined}
-                />
-                {fieldErrors.weight_kg && <p className="field-error">{fieldErrors.weight_kg}</p>}
-              </div>
-              <div>
                 <span className="label" id="reg-diet-label">
                   Diet <span aria-hidden="true">*</span>
                 </span>
@@ -1339,7 +1310,7 @@ export default function Register() {
                   Hobbies and interests <span aria-hidden="true">*</span>
                 </label>
                 <p className="field-hint">
-                  Tell us what you enjoy — e.g. travelling, cooking, cricket, reading (max 400 characters)
+                  Tell us what you enjoy, for example: travelling, cooking, cricket, reading (max 400 characters)
                 </p>
                 <textarea
                   id="reg-hobbies"
@@ -1445,7 +1416,7 @@ export default function Register() {
                 className="register-fieldset register-consent"
                 style={{ background: 'var(--color-surface)' }}
               >
-                <legend>Consent — all required</legend>
+                <legend>Consent (all required)</legend>
                 <label htmlFor="reg-consent-contact">
                   <input
                     id="reg-consent-contact"

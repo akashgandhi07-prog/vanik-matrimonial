@@ -78,3 +78,9 @@ verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+[functions.admin-add-member]
+verify_jwt = false
+
+[functions.admin-update-member-status]
+verify_jwt = false

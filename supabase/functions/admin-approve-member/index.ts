@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
       status: 'active',
       membership_expires_at: expires.toISOString(),
       photo_status: 'approved',
+      show_on_register: true,
     })
     .eq('id', profileId);
   if (upProf) {

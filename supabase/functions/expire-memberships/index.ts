@@ -11,45 +11,78 @@ Deno.serve(async (req) => {
   if (deny) return deny;
 
   const admin = getAdminClient();
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  const now = new Date().toISOString();
 
-  const { data: rows, error } = await admin
-    .from('profiles')
+  // Insert run log row
+  const { data: runRow } = await admin
+    .from('cron_job_runs')
+    .insert({ job_name: 'expire-memberships', status: 'running', triggered_by: 'schedule' })
     .select('id')
-    .eq('status', 'active')
-    .lt('membership_expires_at', now);
+    .single();
+  const runId = runRow?.id as string | undefined;
 
-  if (error) {
-    return jsonResponse({ error: error.message }, 500);
-  }
+  try {
+    const resendKey = Deno.env.get('RESEND_API_KEY');
+    const now = new Date().toISOString();
 
-  let expired = 0;
-  for (const r of rows ?? []) {
-    const pid = r.id as string;
-    const { error: up } = await admin
+    const { data: rows, error } = await admin
       .from('profiles')
-      .update({ status: 'expired', show_on_register: false })
-      .eq('id', pid);
-    if (up) continue;
-    expired++;
+      .select('id')
+      .eq('status', 'active')
+      .lt('membership_expires_at', now);
 
-    if (resendKey) {
-      const since = new Date(Date.now() - 3 * 864e5).toISOString();
-      const { count } = await admin
-        .from('email_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('recipient_profile_id', pid)
-        .eq('email_type', 'membership_expired')
-        .gte('sent_at', since);
-      if ((count ?? 0) === 0) {
-        await dispatchEmail(admin, resendKey, {
-          type: 'membership_expired',
-          recipientProfileId: pid,
-        });
+    if (error) {
+      if (runId) {
+        await admin
+          .from('cron_job_runs')
+          .update({ status: 'error', finished_at: new Date().toISOString(), result: { error: error.message } })
+          .eq('id', runId);
+      }
+      return jsonResponse({ error: error.message }, 500);
+    }
+
+    let expired = 0;
+    for (const r of rows ?? []) {
+      const pid = r.id as string;
+      const { error: up } = await admin
+        .from('profiles')
+        .update({ status: 'expired', show_on_register: false })
+        .eq('id', pid);
+      if (up) continue;
+      expired++;
+
+      if (resendKey) {
+        const since = new Date(Date.now() - 3 * 864e5).toISOString();
+        const { count } = await admin
+          .from('email_log')
+          .select('id', { count: 'exact', head: true })
+          .eq('recipient_profile_id', pid)
+          .eq('email_type', 'membership_expired')
+          .gte('sent_at', since);
+        if ((count ?? 0) === 0) {
+          await dispatchEmail(admin, resendKey, {
+            type: 'membership_expired',
+            recipientProfileId: pid,
+          });
+        }
       }
     }
-  }
 
-  return jsonResponse({ ok: true, expired_count: expired });
+    if (runId) {
+      await admin
+        .from('cron_job_runs')
+        .update({ status: 'success', finished_at: new Date().toISOString(), result: { expired_count: expired } })
+        .eq('id', runId);
+    }
+
+    return jsonResponse({ ok: true, expired_count: expired });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (runId) {
+      await admin
+        .from('cron_job_runs')
+        .update({ status: 'error', finished_at: new Date().toISOString(), result: { error: message } })
+        .eq('id', runId);
+    }
+    return jsonResponse({ error: message }, 500);
+  }
 });

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProfileThumb } from '../member/ProfileThumb';
+import { ProfileModal } from '../member/ProfileModal';
 import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { supabase } from '../lib/supabase';
@@ -12,8 +13,19 @@ function isProfileVisibleToMember(p: ProfileRow): boolean {
 }
 
 export default function MemberSaved() {
-  const { profile, bookmarks, toggleBookmark } = useMemberArea();
+  const { profile, bookmarks, toggleBookmark, requests } = useMemberArea();
   const [rows, setRows] = useState<ProfileRow[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
+
+  const recentlyRequestedIds = useMemo(() => {
+    const cutoff = Date.now() - 180 * 86400000;
+    const ids = new Set<string>();
+    for (const r of requests) {
+      if (new Date(r.created_at).getTime() <= cutoff) continue;
+      for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
+    }
+    return ids;
+  }, [requests]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +65,7 @@ export default function MemberSaved() {
             >
               <div
                 role="img"
-                aria-label={`${c.first_name}'s profile photo — no longer available`}
+                aria-label={`${c.first_name}'s profile photo, no longer available`}
                 style={{
                   aspectRatio: '1',
                   background: '#e5e7eb',
@@ -125,23 +137,44 @@ export default function MemberSaved() {
           );
         }
         return (
-          <div key={id} className="card member-saved-card" style={{ padding: 16 }}>
+          <div
+            key={id}
+            className="card member-saved-card"
+            style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}
+            onClick={() => setSelectedProfile(c)}
+          >
             <ProfileThumb profileId={c.id} firstName={c.first_name} />
-            <h3 style={{ margin: '12px 0 4px' }}>
-              {c.first_name}, {c.age}
-            </h3>
-            <p style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>{c.reference_number}</p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ marginTop: 12 }}
-              onClick={() => void toggleBookmark(id)}
-            >
-              Remove from saved
-            </button>
+            <div style={{ padding: '12px 14px 14px' }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
+                {c.first_name}{c.age ? `, ${c.age}` : ''}
+              </h3>
+              <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
+                {c.reference_number}
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ marginTop: 10, width: '100%' }}
+                onClick={(e) => { e.stopPropagation(); void toggleBookmark(id); }}
+              >
+                Remove from saved
+              </button>
+            </div>
           </div>
         );
       })}
+      {selectedProfile && (
+        <ProfileModal
+          candidate={selectedProfile}
+          inTray={false}
+          trayFull={false}
+          blocked={recentlyRequestedIds.has(selectedProfile.id)}
+          bookmarked={bookmarks.includes(selectedProfile.id)}
+          onClose={() => setSelectedProfile(null)}
+          onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
+          onToggleTray={() => {}}
+        />
+      )}
     </div>
   );
 }

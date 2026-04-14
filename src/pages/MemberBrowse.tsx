@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
 import { ProfileThumb } from '../member/ProfileThumb';
+import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
+import type { ProfileRow } from '../member/memberContext';
 import { cmToFeetInches } from '../lib/heights';
 import { invokeFunction } from '../lib/supabase';
 
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
     useMemberArea();
-  const [ageRange, setAgeRange] = useState<[number, number]>([18, 55]);
+  const [ageRange, setAgeRange] = useState<[number, number]>([18, 70]);
   const [dietF, setDietF] = useState<string[]>([]);
   const [religionF, setReligionF] = useState<string[]>([]);
   const [communityF, setCommunityF] = useState<string[]>([]);
@@ -19,6 +21,8 @@ export default function MemberBrowse() {
     | null
     | { contacts: Array<Record<string, string>>; email: string }
   >(null);
+  const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
+  const [submitError, setSubmitError] = useState<{ type: 'weekly_limit' | 'feedback_required' | 'generic'; message: string; requestIds?: string[] } | null>(null);
 
   const filtered = useMemo(() => {
     if (!profile) return [];
@@ -55,6 +59,8 @@ export default function MemberBrowse() {
     return ids;
   }, [requests]);
 
+  const trayFull = tray.length >= 3;
+
   if (!profile) return null;
 
   function addTray(id: string) {
@@ -62,18 +68,22 @@ export default function MemberBrowse() {
       setTray((t) => t.filter((x) => x !== id));
       return;
     }
-    if (tray.length >= 3) return;
+    if (trayFull) return;
     setTray((t) => [...t, id]);
   }
 
   async function submitTray() {
     if (!profile || tray.length === 0) return;
+    setSubmitError(null);
     try {
       const res = (await invokeFunction('submit-contact-request', {
         candidate_ids: tray,
       })) as {
         contacts?: Array<Record<string, string>>;
         requester_email?: string;
+        error?: string;
+        message?: string;
+        request_ids?: string[];
       };
       setTray([]);
       setTrayDrawerOpen(false);
@@ -83,7 +93,15 @@ export default function MemberBrowse() {
       });
       void loadAll();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Request failed');
+      const msg = e instanceof Error ? e.message : 'Request failed';
+      // Parse structured errors from the edge function
+      if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
+        setSubmitError({ type: 'weekly_limit', message: msg });
+      } else if (msg.includes('feedback_required') || msg.includes('Outstanding feedback')) {
+        setSubmitError({ type: 'feedback_required', message: msg });
+      } else {
+        setSubmitError({ type: 'generic', message: msg });
+      }
     }
   }
 
@@ -103,13 +121,13 @@ export default function MemberBrowse() {
                 id="browse-age-min"
                 type="number"
                 min={18}
-                max={55}
+                max={80}
                 value={ageRange[0]}
                 onChange={(e) => setAgeRange([Number(e.target.value), ageRange[1]])}
                 style={{ width: 72 }}
                 aria-label="Minimum age"
               />
-              <span aria-hidden="true">–</span>
+              <span aria-hidden="true">to</span>
               <label htmlFor="browse-age-max" className="visually-hidden">
                 Maximum age
               </label>
@@ -117,7 +135,7 @@ export default function MemberBrowse() {
                 id="browse-age-max"
                 type="number"
                 min={18}
-                max={55}
+                max={80}
                 value={ageRange[1]}
                 onChange={(e) => setAgeRange([ageRange[0], Number(e.target.value)])}
                 style={{ width: 72 }}
@@ -138,7 +156,7 @@ export default function MemberBrowse() {
                 aria-labelledby="browse-height-label"
                 aria-label="Minimum height in cm"
               />
-              <span aria-hidden="true">–</span>
+              <span aria-hidden="true">to</span>
               <input
                 type="number"
                 value={heightRange[1]}
@@ -149,7 +167,7 @@ export default function MemberBrowse() {
               />
             </div>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-              {cmToFeetInches(heightRange[0])} – {cmToFeetInches(heightRange[1])}
+              {cmToFeetInches(heightRange[0])} to {cmToFeetInches(heightRange[1])}
             </p>
           </div>
           {(
@@ -197,64 +215,72 @@ export default function MemberBrowse() {
           </div>
         </aside>
         <section className="member-browse-grid">
+          <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+            {filtered.length === 0
+              ? 'No profiles match your filters.'
+              : `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`}
+            {trayFull && (
+              <span style={{ marginLeft: 16, color: 'var(--color-warning)', fontWeight: 500 }}>
+                Tray full (3/3). Submit or remove one before adding another.
+              </span>
+            )}
+          </div>
           <div className="member-browse-cards">
+            {filtered.length === 0 && (
+              <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                <p style={{ margin: 0, fontWeight: 500 }}>No profiles found</p>
+                <p style={{ margin: '8px 0 0', fontSize: 14 }}>
+                  Try adjusting your filters to see more results.
+                </p>
+              </div>
+            )}
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = recentlyRequestedCandidateIds.has(c.id);
               return (
-                <div key={c.id} className="card" style={{ padding: 16, position: 'relative' }}>
+                <div
+                  key={c.id}
+                  className="card"
+                  style={{ padding: 0, position: 'relative', cursor: 'pointer', overflow: 'hidden' }}
+                  onClick={() => setSelectedProfile(c)}
+                >
                   <span
                     className="badge badge-muted"
-                    style={{ position: 'absolute', top: 12, left: 12, zIndex: 1 }}
+                    style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(255,255,255,0.9)', fontSize: 11 }}
                   >
                     {c.reference_number}
                   </span>
                   <ProfileThumb profileId={c.id} firstName={c.first_name} />
-                  <h3 style={{ margin: '12px 0 4px', fontSize: 18 }}>
-                    {c.first_name}, {c.age ?? '—'}
-                  </h3>
-                  <p style={{ margin: 0, fontSize: 14, color: 'var(--color-text-secondary)' }}>
-                    {c.job_title} · {cmToFeetInches(c.height_cm)} · {c.diet}
-                  </p>
-                  <p style={{ margin: '6px 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                    {c.religion} · {c.community} · {c.nationality}
-                  </p>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 13,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {c.hobbies}
-                  </p>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ flex: 1, padding: '8px 12px' }}
-                      onClick={() => void toggleBookmark(c.id)}
-                    >
-                      {bookmarks.includes(c.id) ? 'Saved' : 'Bookmark'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      style={{ flex: 1, padding: '8px 12px' }}
-                      disabled={blocked || (!inTray && tray.length >= 3)}
-                      onClick={() => addTray(c.id)}
-                    >
-                      {blocked ? 'Requested' : inTray ? 'Remove' : 'Request details'}
-                    </button>
+                  <div style={{ padding: '12px 14px 14px' }}>
+                    <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
+                      {c.first_name}{c.age ? `, ${c.age}` : ''}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                      {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      {[c.religion, c.community, c.nationality].filter(Boolean).join(' · ')}
+                    </p>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
+                        onClick={(e) => { e.stopPropagation(); void toggleBookmark(c.id); }}
+                      >
+                        {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
+                        disabled={blocked || (!inTray && trayFull)}
+                        onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
+                      >
+                        {blocked ? '✓ Requested' : inTray ? '✕ Remove' : '+ Request'}
+                      </button>
+                    </div>
                   </div>
-                  {blocked && (
-                    <span className="badge badge-warning" style={{ marginTop: 8, display: 'inline-block' }}>
-                      Already requested (6 mo)
-                    </span>
-                  )}
                 </div>
               );
             })}
@@ -271,7 +297,7 @@ export default function MemberBrowse() {
             aria-controls="member-tray-panel"
             onClick={() => setTrayDrawerOpen((o) => !o)}
           >
-            Tray ({tray.length}){trayDrawerOpen ? ' — hide' : ' — show'}
+            {tray.length}/3 selected{trayDrawerOpen ? ' - hide' : ' - show'}
           </button>
           <div
             id="member-tray-panel"
@@ -281,17 +307,52 @@ export default function MemberBrowse() {
               {tray.map((id) => {
                 const c = candidates.find((x) => x.id === id);
                 return (
-                  <span key={id} className="badge badge-muted">
-                    {c?.first_name ?? id}
-                  </span>
+                  <button
+                    key={id}
+                    type="button"
+                    className="badge badge-muted"
+                    style={{ cursor: 'pointer', border: '1px solid var(--color-border)' }}
+                    title={`Remove ${c?.first_name ?? 'this candidate'}`}
+                    onClick={() => addTray(id)}
+                  >
+                    {c?.first_name ?? '…'} ✕
+                  </button>
                 );
               })}
             </div>
             <button type="button" className="btn btn-primary" onClick={() => void submitTray()}>
-              Submit request ({tray.length})
+              Request contact details ({tray.length})
             </button>
+            {submitError && (
+              <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13,
+                background: submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.08)',
+                color: submitError.type === 'feedback_required' ? 'var(--color-warning)' : 'var(--color-danger)',
+                border: `1px solid ${submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.3)' : 'rgba(220,38,38,0.2)'}` }}>
+                {submitError.type === 'feedback_required' && (
+                  <><strong>Feedback required before new requests.</strong> Please visit{' '}
+                    <a href="/dashboard/requests" style={{ color: 'inherit', fontWeight: 600 }}>My requests</a> to submit outstanding feedback.</>
+                )}
+                {submitError.type === 'weekly_limit' && (
+                  <><strong>Weekly limit reached.</strong> {submitError.message.replace('Weekly limit reached (3 candidates). ', '')}</>
+                )}
+                {submitError.type === 'generic' && submitError.message}
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {selectedProfile && (
+        <ProfileModal
+          candidate={selectedProfile}
+          inTray={tray.includes(selectedProfile.id)}
+          trayFull={trayFull}
+          blocked={recentlyRequestedCandidateIds.has(selectedProfile.id)}
+          bookmarked={bookmarks.includes(selectedProfile.id)}
+          onClose={() => setSelectedProfile(null)}
+          onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
+          onToggleTray={() => addTray(selectedProfile.id)}
+        />
       )}
 
       {contactsOpen && (

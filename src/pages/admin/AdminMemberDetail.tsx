@@ -45,6 +45,8 @@ const ACTION_LABELS: Record<string, string> = {
   marked_matched: 'Marked as matched',
   photo_approved: 'Profile photo approved',
   photo_rejected: 'Profile photo rejected',
+  archived: 'Member archived',
+  reinstated: 'Member reinstated',
 };
 
 function humanizeAction(type: string) {
@@ -64,6 +66,8 @@ export default function AdminMemberDetail() {
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineRow[]>([]);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   useEffect(() => {
     if (!id || ok !== true || mfaOk !== true) return;
@@ -220,22 +224,39 @@ export default function AdminMemberDetail() {
               </label>
             ))}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ background: 'var(--color-success)' }}
-                disabled={!checklist.every(Boolean)}
-                onClick={async () => {
-                  try {
-                    await invokeFunction('admin-approve-member', { profile_id: profile.id });
-                    navigate('/admin/members');
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : 'Failed');
-                  }
-                }}
-              >
-                Approve
-              </button>
+              {confirmApprove ? (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 14 }}>Confirm approval?</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ background: 'var(--color-success)' }}
+                    onClick={async () => {
+                      try {
+                        await invokeFunction('admin-approve-member', { profile_id: profile.id });
+                        navigate('/admin/members');
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : 'Failed');
+                      }
+                    }}
+                  >
+                    Yes, approve
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setConfirmApprove(false)}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ background: 'var(--color-success)' }}
+                  disabled={!checklist.every(Boolean)}
+                  onClick={() => setConfirmApprove(true)}
+                >
+                  Approve
+                </button>
+              )}
             </div>
             <div style={{ marginTop: 24 }}>
               <label className="label">Reject reason</label>
@@ -346,7 +367,7 @@ export default function AdminMemberDetail() {
                   </span>
                   <p style={{ margin: '6px 0 0', fontSize: 14 }}>
                     <span style={{ color: 'var(--color-text-secondary)' }}>By:</span>{' '}
-                    {row.admin_email ?? '—'}
+                    {row.admin_email ?? '-'}
                   </p>
                   {row.notes && (
                     <p style={{ margin: '8px 0 0', fontSize: 14 }}>{row.notes}</p>
@@ -354,6 +375,70 @@ export default function AdminMemberDetail() {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+
+        <div className="card" style={{ marginTop: 24 }}>
+          <h3>Account status</h3>
+          {profile.status !== 'archived' && (
+            <div>
+              {!confirmArchive ? (
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirmArchive(true)}>
+                  Archive member
+                </button>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, color: 'var(--color-danger)' }}>
+                    Archive this member? They will be hidden from the register.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ background: 'var(--color-danger)' }}
+                    onClick={async () => {
+                      try {
+                        await invokeFunction('admin-update-member-status', {
+                          profile_id: profile.id,
+                          action: 'archive',
+                        });
+                        navigate('/admin/members');
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : 'Failed');
+                      }
+                    }}
+                  >
+                    Confirm archive
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setConfirmArchive(false)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {profile.status === 'archived' && (
+            <div>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+                This member is archived. Reinstating will set status to active and extend membership by 1 year.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={async () => {
+                  try {
+                    await invokeFunction('admin-update-member-status', {
+                      profile_id: profile.id,
+                      action: 'reinstate',
+                    });
+                    navigate('/admin/members');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  }
+                }}
+              >
+                Reinstate member
+              </button>
+            </div>
           )}
         </div>
 
@@ -369,7 +454,6 @@ export default function AdminMemberDetail() {
               <h2 id="match-dialog-title" style={{ marginTop: 0 }}>
                 Mark as matched
               </h2>
-              <h2 style={{ marginTop: 0 }}>Mark as matched</h2>
               <p>
                 This sets status to <strong>matched</strong>, hides the profile from the register (
                 <code>show_on_register = false</code>), sends the congratulations email, and logs an admin action.

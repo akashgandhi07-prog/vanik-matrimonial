@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import type { User } from '@supabase/supabase-js';
 import { isAdminUser } from '../lib/auth';
@@ -15,7 +15,6 @@ export type ProfileRow = {
   education: string | null;
   job_title: string | null;
   height_cm: number | null;
-  weight_kg: number | null;
   diet: string | null;
   religion: string | null;
   community: string | null;
@@ -77,6 +76,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     { id: string; created_at: string; candidate_ids: string[]; email_status: string }[]
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
+  const mountedRef = useRef(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -155,8 +155,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       navigate('/membership-expired', { replace: true });
       return;
     }
+    if (p.status === 'archived') {
+      // Account was deleted/archived — sign out and return home
+      setLoading(false);
+      await supabase.auth.signOut();
+      navigate('/', { replace: true });
+      return;
+    }
 
-    const { data: list } = await supabase.from('profiles').select('*').neq('gender', p.gender);
+    const now = new Date().toISOString();
+    const { data: list } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('gender', p.gender)
+      .eq('status', 'active')
+      .eq('show_on_register', true)
+      .gt('membership_expires_at', now);
     setCandidates((list ?? []) as ProfileRow[]);
 
     const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', p.id);
@@ -182,14 +196,33 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void loadAll();
-  }, [loadAll]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentionally runs once on mount
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') void loadAll();
+      if (event === 'SIGNED_IN') {
+        // Skip the first SIGNED_IN event which fires on session restore at mount —
+        // the mount effect above handles that initial load.
+        if (!mountedRef.current) {
+          mountedRef.current = true;
+          return;
+        }
+        void loadAll();
+      }
+      if (event === 'SIGNED_OUT') {
+        // Clear stale member state immediately so the auth gate redirects correctly
+        setUser(null);
+        setProfile(null);
+        setPrivateRow(null);
+        setCandidates([]);
+        setBookmarks([]);
+        setRequests([]);
+        setFeedbackKeys(new Set());
+        navigate('/', { replace: true });
+      }
     });
     return () => sub.subscription.unsubscribe();
-  }, [loadAll]);
+  }, [loadAll, navigate]);
 
   const toggleBookmark = useCallback(
     async (id: string) => {

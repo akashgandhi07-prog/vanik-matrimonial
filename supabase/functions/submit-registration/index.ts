@@ -194,7 +194,6 @@ Deno.serve(async (req) => {
     education: stripHtml(String(body.education ?? ''), 500),
     job_title: stripHtml(String(body.job_title ?? ''), 200),
     height_cm: Number(body.height_cm) || null,
-    weight_kg: body.weight_kg != null ? Number(body.weight_kg) : null,
     diet: body.diet as string,
     religion: body.religion as string,
     community: body.community as string,
@@ -255,13 +254,8 @@ Deno.serve(async (req) => {
   const referenceNumber = refResult as string;
 
   if (couponValid) {
-    const { data: cur } = await admin.from('coupons').select('use_count').eq('code', couponRaw).single();
-    if (cur) {
-      await admin
-        .from('coupons')
-        .update({ use_count: (cur.use_count ?? 0) + 1 })
-        .eq('code', couponRaw);
-    }
+    // Atomic increment — avoids race condition if two registrations use the same coupon concurrently.
+    await admin.rpc('increment_coupon_use', { p_code: couponRaw });
   }
 
   if (stripeCheckoutSessionId) {

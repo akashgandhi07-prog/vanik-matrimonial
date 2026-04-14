@@ -1,4 +1,8 @@
-const FROM = 'Vanik Matrimonial Register <noreply@vanikmatrimonial.co.uk>';
+// TESTING: uses Resend's shared test sender (no domain required).
+// Emails can only be delivered to the Resend account owner's address during testing.
+// When you add vanikmatrimonial.co.uk to Resend, change this back to:
+//   'Vanik Matrimonial Register <noreply@vanikmatrimonial.co.uk>'
+const FROM = 'Vanik Matrimonial Register <onboarding@resend.dev>';
 
 export type EmailPayload = {
   to: string;
@@ -36,7 +40,7 @@ export function letterHtml(title: string, innerHtml: string): string {
   <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 32px;">
     <p style="margin:0 0 16px;font-weight:600;color:#4f46e5;">${title}</p>
     ${innerHtml}
-    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">Vanik Council — Vanik Matrimonial Register</p>
+    <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">Vanik Council · Vanik Matrimonial Register</p>
   </div>
 </body></html>`;
 }

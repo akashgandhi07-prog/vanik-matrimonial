@@ -76,7 +76,7 @@ export async function dispatchEmail(
     case 'account_archived': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      subject = 'Your account has been archived — Vanik Matrimonial Register';
+      subject = 'Your account has been archived';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>As requested, your profile has been archived and hidden from the register. Our team will retain minimal records for 30 days in line with our retention policy.</p>
         <p>If this was a mistake, please contact <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
@@ -130,7 +130,7 @@ export async function dispatchEmail(
     case 'contact_details': {
       const listHtml = String(extraData.candidates_html ?? '');
       const memberEmail = stripHtml(String(extraData.requester_email ?? ''), 120);
-      subject = 'Your requested candidate details — Vanik Matrimonial Register';
+      subject = 'Your requested candidate details';
       inner = `<p>Dear ${stripHtml(String(extraData.requester_first_name ?? ''), 60)},</p>
         <p>Please find below the contact details you requested. We ask that you use this information respectfully and in line with our community values.</p>
         ${listHtml}
@@ -142,17 +142,15 @@ export async function dispatchEmail(
     case 'candidate_notification': {
       const { profile } = await fetchProfile(recipientProfileId!);
       if (!profile) return { ok: false, error: 'Profile not found' };
-      const reqRef = stripHtml(String(extraData.requester_reference ?? ''), 20);
-      const reqFirst = stripHtml(String(extraData.requester_first_name ?? ''), 60);
       const reqGender = stripHtml(String(extraData.requester_gender ?? ''), 20);
-      subject = 'Your profile was viewed — Vanik Matrimonial Register';
+      subject = 'Your profile was viewed';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register (reference: <strong>${reqRef}</strong>, first name: <strong>${reqFirst}</strong>).</p>
+        <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register.</p>
         <p>If you have any concerns, please contact us at <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
       break;
     }
     case 'feedback_reminder_21': {
-      subject = 'Feedback reminder — Vanik Matrimonial Register';
+      subject = 'Feedback reminder';
       inner = `<p>Dear ${stripHtml(String(extraData.first_name ?? ''),60)},</p>
         <p>It has been 21 days since you requested candidate details. We would be grateful for a few moments of your time to share brief feedback.</p>
         <p>${String(extraData.links_html ?? '')}</p>
@@ -160,7 +158,7 @@ export async function dispatchEmail(
       break;
     }
     case 'feedback_reminder_35': {
-      subject = 'Outstanding feedback — action required';
+      subject = 'Outstanding feedback: action required';
       inner = `<p>Dear ${stripHtml(String(extraData.first_name ?? ''), 60)},</p>
         <p>Outstanding feedback is now delaying further contact requests on your account. Please complete the short feedback forms as soon as you can.</p>
         <p>${String(extraData.links_html ?? '')}</p>
@@ -178,23 +176,25 @@ export async function dispatchEmail(
             year: 'numeric',
           })
         : '';
-      subject = `Your membership expires in ${n} days — Vanik Matrimonial Register`;
+      subject = `Your membership expires in ${n} days`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your membership expires on <strong>${exp}</strong>. To renew (£10 per year), please email <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>
-        <p>Sign in: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>`;
+        <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
+        <p>You can renew online here: <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>Alternatively, email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
       break;
     }
     case 'membership_expired': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      subject = 'Your membership has expired — Vanik Matrimonial Register';
+      subject = 'Your membership has expired';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership has now expired and your profile is hidden from the register.</p>
-        <p>To renew, please contact <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
+        <p>To renew online (£10/year): <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>Or email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
       break;
     }
     case 'admin_daily_digest': {
-      subject = 'Daily summary — Vanik Matrimonial Register';
+      subject = 'Daily summary | Vanik Matrimonial Register';
       inner = `<p>Good morning,</p>
         <ul>
           <li>Pending approvals: <strong>${extraData.pending ?? 0}</strong></li>
@@ -218,7 +218,7 @@ export async function dispatchEmail(
     case 'photo_update_rejected': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      subject = 'Profile photo not accepted — Vanik Matrimonial Register';
+      subject = 'Profile photo not accepted';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>We were unable to accept the new profile photo you submitted. Your previous approved photo will continue to be shown.</p>
         <p>If you would like to try again with a different image, please sign in and upload a new photo from your profile.</p>

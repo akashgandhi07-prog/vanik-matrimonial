@@ -5,57 +5,69 @@ export default function Landing() {
   return (
     <PublicLayout>
       <div className="layout-max">
-        <section className="landing-hero" aria-labelledby="landing-heading">
-          <div>
+        <div className="landing-wrap">
+          <div className="landing-body">
             <p className="landing-kicker">Vanik Council</p>
-            <h1 id="landing-heading" className="landing-title">
-              A trusted register for Vanik and wider community families
+
+            <h1 className="landing-title">
+              Vanik Matrimonial Register
             </h1>
+
             <p className="landing-lead">
-              The Vanik Matrimonial Register is a private service for Hindu and Jain families in
-              North London and beyond. Membership is verified, respectful, and handled with care.
+              A private introduction service for Vanik and wider Hindu and Jain families,
+              run by Vanik Council volunteers. We have been helping families find
+              respectful introductions for many years.
             </p>
+
+            <p className="landing-lead">
+              Membership is open to adults 18 and over. Every application is reviewed
+              by our team before a profile goes live. Contact details are shared only
+              by email, and only when you ask us to. Nothing is displayed publicly.
+            </p>
+
             <div className="landing-actions">
               <Link to="/register" className="btn btn-primary">
-                Register
+                Apply to join
               </Link>
               <Link to="/login" className="btn btn-secondary">
                 Member login
               </Link>
             </div>
-            <ul className="landing-trust">
-              <li>
-                <span className="landing-trust-icon" aria-hidden="true">
-                  ✓
-                </span>
-                Verified membership
-              </li>
-              <li>
-                <span className="landing-trust-icon" aria-hidden="true">
-                  ✓
-                </span>
-                Run by Vanik Council, not commercial
-              </li>
-              <li>
-                <span className="landing-trust-icon" aria-hidden="true">
-                  ✓
-                </span>
-                Respectful introductions
-              </li>
-            </ul>
-          </div>
-          <div className="landing-visual-wrap">
-            <div className="landing-visual" role="img" aria-label="Decorative community motif">
-              <div className="landing-visual-pattern" aria-hidden="true" />
-              <div className="landing-visual-caption">
-                <strong>Built for families</strong>
-                <span>
-                  A calm, dignified space for introductions within the community you know and trust.
-                </span>
-              </div>
+
+            <div className="landing-details">
+              <p>
+                <strong>Annual membership</strong> is £10, payable by card when you
+                register. Coupons are available; ask the Vanik Council if you have
+                one.
+              </p>
+              <p>
+                If you have any questions before applying, please{' '}
+                <a href="mailto:register@vanikmatrimonial.co.uk">
+                  email our team
+                </a>
+                .
+              </p>
             </div>
           </div>
-        </section>
+
+          <aside className="landing-aside">
+            <div className="landing-aside-card">
+              <h2>How it works</h2>
+              <ol className="landing-steps-list">
+                <li>Register and upload proof of identity. We review your application within five working days.</li>
+                <li>Once approved, browse verified profiles and save anyone you'd like to know more about.</li>
+                <li>Request contact details from us. We share them by email to both families.</li>
+              </ol>
+            </div>
+
+            <div className="landing-aside-card landing-aside-card--muted">
+              <p>
+                This is a not-for-profit service run by the community, for the community.
+                We do not sell data or show advertising.
+              </p>
+            </div>
+          </aside>
+        </div>
       </div>
     </PublicLayout>
   );
