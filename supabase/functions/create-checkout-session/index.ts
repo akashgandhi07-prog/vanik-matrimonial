@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
 type Purpose = 'registration' | 'renewal';
@@ -22,21 +22,21 @@ function siteBase(req: Request, body: { client_origin?: string }): string | null
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const secret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
   const priceId = Deno.env.get('STRIPE_MEMBERSHIP_PRICE_ID')?.trim();
   if (!secret || !priceId) {
-    return jsonResponse({ error: 'Stripe is not configured on the server.' }, 503);
+    return jsonResponse({ error: 'Stripe is not configured on the server.' }, req, 503);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -47,23 +47,20 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   let body: { purpose?: Purpose; client_origin?: string; renewal_success_path?: string; renewal_cancel_path?: string };
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const purpose = body.purpose === 'renewal' ? 'renewal' : 'registration';
   const base = siteBase(req, body);
   if (!base) {
-    return jsonResponse(
-      { error: 'Set PUBLIC_SITE_URL in Edge Function secrets, or send client_origin from the browser.' },
-      400
-    );
+    return jsonResponse({ error: 'Set PUBLIC_SITE_URL in Edge Function secrets, or send client_origin from the browser.' }, req, 400);
   }
 
   const admin = getAdminClient();
@@ -74,7 +71,7 @@ Deno.serve(async (req) => {
   if (purpose === 'registration') {
     const { data: existing } = await admin.from('profiles').select('id').eq('auth_user_id', uid).maybeSingle();
     if (existing) {
-      return jsonResponse({ error: 'You already have a profile. Use renewal instead.' }, 400);
+      return jsonResponse({ error: 'You already have a profile. Use renewal instead.' }, req, 400);
     }
   } else {
     const { data: prof, error: pe } = await admin
@@ -83,11 +80,11 @@ Deno.serve(async (req) => {
       .eq('auth_user_id', uid)
       .maybeSingle();
     if (pe || !prof) {
-      return jsonResponse({ error: 'No profile found for this account.' }, 404);
+      return jsonResponse({ error: 'No profile found for this account.' }, req, 404);
     }
     const st = prof.status as string;
     if (st !== 'active' && st !== 'expired' && st !== 'archived') {
-      return jsonResponse({ error: 'Membership renewal is only available for active, expired, or archived members.' }, 400);
+      return jsonResponse({ error: 'Membership renewal is only available for active, expired, or archived members.' }, req, 400);
     }
     profileId = prof.id as string;
   }
@@ -135,14 +132,14 @@ Deno.serve(async (req) => {
   }
   if (!res.ok) {
     const msg = (json.error as { message?: string } | undefined)?.message ?? text.slice(0, 300);
-    return jsonResponse({ error: msg || 'Stripe checkout create failed' }, 502);
+    return jsonResponse({ error: msg || 'Stripe checkout create failed' }, req, 502);
   }
 
   const url = json.url as string | undefined;
   const id = json.id as string | undefined;
   if (!url || !id) {
-    return jsonResponse({ error: 'Invalid Stripe response' }, 502);
+    return jsonResponse({ error: 'Invalid Stripe response' }, req, 502);
   }
 
-  return jsonResponse({ url, session_id: id });
+  return jsonResponse({ url, session_id: id }, req);
 });

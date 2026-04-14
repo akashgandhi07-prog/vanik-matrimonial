@@ -1,18 +1,18 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -23,19 +23,19 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   let body: { code?: string };
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const raw = (body.code ?? '').trim().toUpperCase();
   if (!raw) {
-    return jsonResponse({ valid: false });
+    return jsonResponse({ valid: false }, req);
   }
 
   const admin = createClient(
@@ -50,19 +50,19 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (error || !row) {
-    return jsonResponse({ valid: false });
+    return jsonResponse({ valid: false }, req);
   }
 
   const now = new Date();
   if (!row.is_active) {
-    return jsonResponse({ valid: false });
+    return jsonResponse({ valid: false }, req);
   }
   if (row.expires_at && new Date(row.expires_at) < now) {
-    return jsonResponse({ valid: false });
+    return jsonResponse({ valid: false }, req);
   }
   if (row.max_uses != null && row.use_count >= row.max_uses) {
-    return jsonResponse({ valid: false });
+    return jsonResponse({ valid: false }, req);
   }
 
-  return jsonResponse({ valid: true, kind: row.type });
+  return jsonResponse({ valid: true, kind: row.type }, req);
 });

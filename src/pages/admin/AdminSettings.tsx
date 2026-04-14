@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeFunction, supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type AuthRow = { id: string; email: string | undefined; is_admin: boolean; created_at: string };
 
@@ -13,48 +13,47 @@ export default function AdminSettings() {
     emailOk: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = (await invokeFunction('admin-manage-users', { action: 'list' })) as {
-      users?: AuthRow[];
-    };
-    setUsers(res.users ?? []);
-
-    const statuses = [
-      'pending_approval',
-      'active',
-      'expired',
-      'rejected',
-      'archived',
-      'matched',
-    ] as const;
-    const byStatus: Record<string, number> = {};
-    for (const s of statuses) {
-      const { count } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', s);
-      byStatus[s] = count ?? 0;
+    setLoadError(null);
+    try {
+      const [listRes, statsRes] = await Promise.all([
+        invokeFunction('admin-manage-users', { action: 'list' }) as Promise<{ users?: AuthRow[] }>,
+        invokeFunction('admin-manage-users', { action: 'settings_stats' }) as Promise<{
+          byStatus?: Record<string, number>;
+          requests?: number;
+          feedback?: number;
+          emailAttempted?: number;
+          emailOk?: number;
+        }>,
+      ]);
+      setUsers(listRes.users ?? []);
+      if (
+        statsRes.byStatus != null &&
+        statsRes.requests !== undefined &&
+        statsRes.feedback !== undefined &&
+        statsRes.emailAttempted !== undefined &&
+        statsRes.emailOk !== undefined
+      ) {
+        setStats({
+          byStatus: statsRes.byStatus,
+          requests: statsRes.requests,
+          feedback: statsRes.feedback,
+          emailAttempted: statsRes.emailAttempted,
+          emailOk: statsRes.emailOk,
+        });
+      } else {
+        setStats(null);
+        setLoadError('Incomplete stats from server');
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load settings');
+      setStats(null);
+    } finally {
+      setLoading(false);
     }
-    const { count: requests } = await supabase.from('requests').select('id', { count: 'exact', head: true });
-    const { count: feedback } = await supabase.from('feedback').select('id', { count: 'exact', head: true });
-    const { count: emailAttempted } = await supabase
-      .from('email_log')
-      .select('id', { count: 'exact', head: true })
-      .not('resend_message_id', 'is', null);
-    const { count: emailOk } = await supabase
-      .from('email_log')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['sent', 'delivered']);
-    setStats({
-      byStatus,
-      requests: requests ?? 0,
-      feedback: feedback ?? 0,
-      emailAttempted: emailAttempted ?? 0,
-      emailOk: emailOk ?? 0,
-    });
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -94,6 +93,12 @@ export default function AdminSettings() {
         Promote or demote administrators. Demotion is blocked if this would remove the last admin. See{' '}
         <code style={{ fontSize: 13 }}>docs/SETUP.md</code> for creating the first and second admin accounts.
       </p>
+
+      {loadError && (
+        <p className="card" style={{ color: 'var(--color-danger)', marginBottom: 16, padding: 12 }}>
+          {loadError}
+        </p>
+      )}
 
       {loading && <p>Loading…</p>}
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type UsageRow = {
   profile_id: string;
@@ -34,6 +34,7 @@ export default function AdminCoupons() {
   const [rows, setRows] = useState<Coupon[]>([]);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageFilter, setUsageFilter] = useState<string>('');
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [form, setForm] = useState({
     code: '',
     type: 'free' as 'free' | 'discount_percent',
@@ -44,19 +45,21 @@ export default function AdminCoupons() {
   });
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false });
-    setRows((data ?? []) as Coupon[]);
-
-    const { data: usage } = await supabase
-      .from('member_private')
-      .select('profile_id, coupon_used, profiles(first_name, reference_number, created_at)')
-      .not('coupon_used', 'is', null)
-      .order('profile_id');
-    setUsageRows((usage ?? []) as unknown as UsageRow[]);
+    setLoadError(null);
+    try {
+      const res = (await invokeFunction('admin-manage-users', { action: 'coupons_data' })) as {
+        coupons?: Coupon[];
+        usage?: UsageRow[];
+      };
+      setRows((res.coupons ?? []) as Coupon[]);
+      setUsageRows((res.usage ?? []) as UsageRow[]);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load coupons');
+    }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- coupon list from Supabase
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- coupon list from Edge Function
     void load();
   }, [load]);
 
@@ -71,55 +74,55 @@ export default function AdminCoupons() {
         return;
       }
     }
-    const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from('coupons').insert({
-      code,
-      type: form.type,
-      discount_percent:
-        form.type === 'discount_percent' && form.discount_percent          ? Number(form.discount_percent)
-          : null,
-      max_uses: form.max_uses ? Number(form.max_uses) : null,
-      expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
-      notes: form.notes.trim() || null,
-      is_active: true,
-      created_by: u.user?.id ?? null,
-    });
-    if (error) {
-      alert(error.message);
-      return;
+    try {
+      await invokeFunction('admin-manage-users', {
+        action: 'create_coupon',
+        code,
+        type: form.type,
+        discount_percent: form.type === 'discount_percent' && form.discount_percent ? form.discount_percent : undefined,
+        max_uses: form.max_uses || undefined,
+        expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : undefined,
+        notes: form.notes.trim() || undefined,
+      });
+      setForm({
+        code: '',
+        type: 'free',
+        discount_percent: '',
+        max_uses: '',
+        expires_at: '',
+        notes: '',
+      });
+      void load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to create coupon');
     }
-    setForm({
-      code: '',
-      type: 'free',
-      discount_percent: '',
-      max_uses: '',
-      expires_at: '',
-      notes: '',
-    });
-    void load();
   }
 
   async function revoke(code: string) {
     if (!confirm(`Revoke coupon ${code}?`)) return;
-    await supabase.from('coupons').update({ is_active: false }).eq('code', code);
-    void load();
+    try {
+      await invokeFunction('admin-manage-users', { action: 'revoke_coupon', code });
+      void load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to revoke');
+    }
   }
 
   return (
     <div>
       <h1>Coupons</h1>
+      {loadError && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{loadError}</p>}
 
       <div className="card" style={{ maxWidth: 520, marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>Create coupon</h2>
         <form onSubmit={(e) => void createCoupon(e)} style={{ display: 'grid', gap: 12 }}>
           <div>
             <span className="label">Code</span>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="flex-input-with-btn">
               <input
                 value={form.code}
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
                 placeholder="e.g. SUMMER2026"
-                style={{ flex: 1 }}
               />
               <button
                 type="button"
@@ -179,7 +182,7 @@ export default function AdminCoupons() {
         </form>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -226,7 +229,11 @@ export default function AdminCoupons() {
 
       <div style={{ marginBottom: 12 }}>
         <span className="label">Filter by coupon code</span>
-        <select value={usageFilter} onChange={(e) => setUsageFilter(e.target.value)} style={{ maxWidth: 240 }}>
+        <select
+          value={usageFilter}
+          onChange={(e) => setUsageFilter(e.target.value)}
+          style={{ width: 'min(100%, 280px)' }}
+        >
           <option value="">All coupons</option>
           {[...new Set(usageRows.map((u) => u.coupon_used))].sort().map((code) => (
             <option key={code} value={code}>{code}</option>
@@ -237,7 +244,7 @@ export default function AdminCoupons() {
       {usageRows.length === 0 ? (
         <p style={{ color: '#6b7280' }}>No coupon usage recorded yet.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>

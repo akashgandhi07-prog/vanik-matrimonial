@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 export default function AdminOverview() {
   const navigate = useNavigate();
@@ -14,66 +14,41 @@ export default function AdminOverview() {
   const [actions, setActions] = useState<
     { id: string; action_type: string; created_at: string; notes: string | null }[]
   >([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
-    const { count: pending } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending_approval');
-    const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
-    const { count: requestsWeek } = await supabase
-      .from('requests')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', weekAgo);
-    const monthEnd = new Date();
-    monthEnd.setDate(monthEnd.getDate() + 30);
-    const { count: expiring } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .lte('membership_expires_at', monthEnd.toISOString())
-      .gte('membership_expires_at', new Date().toISOString());
-    const { count: flagged } = await supabase
-      .from('feedback')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_flagged', true);
-    const lapseCutoff = new Date(Date.now() - 90 * 864e5).toISOString();
-    const { count: lapsed90 } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'expired')
-      .lt('membership_expires_at', lapseCutoff);
-    setMetrics({
-      pending: pending ?? 0,
-      requestsWeek: requestsWeek ?? 0,
-      expiring: expiring ?? 0,
-      flagged: flagged ?? 0,
-      lapsed90: lapsed90 ?? 0,
-    });
-    const { data: act } = await supabase
-      .from('admin_actions')
-      .select('id, action_type, created_at, notes')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setActions(act ?? []);
+    setLoadError(null);
+    try {
+      const res = (await invokeFunction('admin-manage-users', { action: 'overview_metrics' })) as {
+        metrics?: typeof metrics;
+        actions?: typeof actions;
+      };
+      if (res.metrics) setMetrics(res.metrics);
+      setActions(res.actions ?? []);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load overview');
+    }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- metrics from Supabase
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- metrics from Edge Function
     void loadOverview();
   }, [loadOverview]);
 
   return (
     <div>
       <h1>Overview</h1>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
+      {loadError && (
+        <p className="card" style={{ color: 'var(--color-danger)', marginBottom: 16, padding: 12 }}>
+          {loadError}
+        </p>
+      )}
+      <p className="field-hint" style={{ marginTop: -8, marginBottom: 16 }}>
+        Counts use the admin service (not limited by row-level security in your browser). If loading fails,
+        redeploy the <code style={{ fontSize: 13 }}>admin-manage-users</code> Edge Function and confirm your
+        session is from the same Supabase project as the app.
+      </p>
+      <div className="admin-metric-grid" style={{ marginBottom: 32 }}>
         {(
           [
             ['Pending approvals', metrics.pending, '/admin/members', 'pending'],
@@ -98,6 +73,13 @@ export default function AdminOverview() {
         ))}
       </div>
       <h2>Recent activity</h2>
+      <p className="field-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+        Logged when you approve, reject, or take other admin actions (via the dashboard functions). It does
+        not list member self‑service events.
+      </p>
+      {actions.length === 0 && !loadError && (
+        <p style={{ color: 'var(--color-text-secondary)' }}>No admin actions recorded yet.</p>
+      )}
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {actions.map((a) => (
           <li key={a.id} className="card" style={{ marginBottom: 8, padding: 12 }}>

@@ -1,19 +1,19 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const admin = getAdminClient();
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', userData.user.id)
     .single();
   if (!prof) {
-    return jsonResponse({ error: 'No profile' }, 400);
+    return jsonResponse({ error: 'No profile' }, req, 400);
   }
 
   await admin
@@ -50,5 +50,5 @@ Deno.serve(async (req) => {
     });
   }
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true }, req);
 });

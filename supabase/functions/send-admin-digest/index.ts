@@ -1,11 +1,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
   const deny = cronUnauthorized(req);
   if (deny) return deny;
@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     Deno.env.get('ADMIN_DIGEST_EMAIL') ?? Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'register@vanikmatrimonial.co.uk';
 
   if (!resendKey) {
-    return jsonResponse({ ok: true, skipped: true, reason: 'no_resend' });
+    return jsonResponse({ ok: true, skipped: true, reason: 'no_resend' }, req);
   }
 
   const { count: pending } = await admin
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
   const sum = metrics.pending + metrics.requests_yesterday + metrics.expiring + metrics.flagged;
   if (sum === 0) {
-    return jsonResponse({ ok: true, skipped: true, reason: 'no_metrics' });
+    return jsonResponse({ ok: true, skipped: true, reason: 'no_metrics' }, req);
   }
 
   await dispatchEmail(admin, resendKey, {
@@ -68,5 +68,5 @@ Deno.serve(async (req) => {
     extraData: metrics,
   });
 
-  return jsonResponse({ ok: true, metrics });
+  return jsonResponse({ ok: true, metrics }, req);
 });

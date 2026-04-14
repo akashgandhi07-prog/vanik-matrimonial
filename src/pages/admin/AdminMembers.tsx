@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type Profile = {
   id: string;
@@ -38,35 +38,25 @@ export default function AdminMembers() {
   const [search, setSearch] = useState('');
   const [members, setMembers] = useState<Profile[]>([]);
   const [emailByProfileId, setEmailByProfileId] = useState<Record<string, string>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const loadMembers = useCallback(async () => {
-    const lapseCutoff = new Date(Date.now() - 90 * 864e5).toISOString();
-    let q = supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    if (filter === 'pending') q = q.eq('status', 'pending_approval');
-    else if (filter === 'active') q = q.eq('status', 'active');
-    else if (filter === 'expired') q = q.eq('status', 'expired');
-    else if (filter === 'rejected') q = q.eq('status', 'rejected');
-    else if (filter === 'archived') q = q.eq('status', 'archived');
-    else if (filter === 'matched') q = q.eq('status', 'matched');
-    else if (filter === 'lapsed90') {
-      q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
-    }
-    const { data } = await q;
-    const profiles = (data ?? []) as Profile[];
-    setMembers(profiles);
-
-    // Fetch emails from member_private for these profile IDs
-    if (profiles.length > 0) {
-      const ids = profiles.map((p) => p.id);
-      const { data: privateData } = await supabase
-        .from('member_private')
-        .select('profile_id, email')
-        .in('profile_id', ids);
-      const map: Record<string, string> = {};
-      for (const row of (privateData ?? []) as { profile_id: string; email: string }[]) {
-        map[row.profile_id] = row.email ?? '';
-      }
-      setEmailByProfileId(map);
+    setLoadError(null);
+    setLoading(true);
+    try {
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'list_profiles',
+        filter,
+      })) as { profiles?: Profile[]; emails?: Record<string, string> };
+      setMembers((res.profiles ?? []) as Profile[]);
+      setEmailByProfileId(res.emails ?? {});
+    } catch (e) {
+      setMembers([]);
+      setEmailByProfileId({});
+      setLoadError(e instanceof Error ? e.message : 'Could not load members');
+    } finally {
+      setLoading(false);
     }
   }, [filter]);
 
@@ -94,11 +84,21 @@ export default function AdminMembers() {
   return (
     <div>
       <h1>Members</h1>
+      {loadError && (
+        <p className="card" style={{ color: 'var(--color-danger)', marginBottom: 12, padding: 12 }}>
+          {loadError}
+        </p>
+      )}
+      <p className="field-hint" style={{ marginTop: -8, marginBottom: 12 }}>
+        Member rows are loaded via the <code>admin-manage-users</code> edge function (service role) so pending
+        applications show up even if table-level admin rules are misconfigured. You must still be an admin in
+        Auth metadata to call it.
+      </p>
       <input
         placeholder="Search reference, name or email"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        style={{ maxWidth: 320, marginBottom: 12 }}
+        style={{ width: 'min(100%, 360px)', marginBottom: 12 }}
       />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         {FILTERS.map((f) => (
@@ -112,7 +112,7 @@ export default function AdminMembers() {
           </button>
         ))}
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
@@ -129,7 +129,24 @@ export default function AdminMembers() {
             </tr>
           </thead>
           <tbody>
-            {filteredMembers.map((m) => (
+            {loading && (
+              <tr>
+                <td colSpan={10} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loading && filteredMembers.length === 0 && (
+              <tr>
+                <td colSpan={10} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                  {loadError
+                    ? 'Could not load members.'
+                    : 'No rows for this filter. If you expect pending applications, confirm their status is pending_approval in Supabase and that your admin session can read all profiles (see note above).'}
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              filteredMembers.map((m) => (
               <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 8 }}>{m.reference_number}</td>
                 <td style={{ padding: 8 }}>{m.first_name}</td>
@@ -150,7 +167,7 @@ export default function AdminMembers() {
                   <Link to={`/admin/members/${m.id}`}>View</Link>
                 </td>
               </tr>
-            ))}
+              ))}
           </tbody>
         </table>
       </div>

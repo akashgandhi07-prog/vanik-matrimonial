@@ -125,7 +125,7 @@ export default function AdminAddMember() {
         <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'grid', gap: 14 }}>
           <h2 style={{ margin: 0 }}>Personal details</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="First name *">
               <input
                 required
@@ -151,7 +151,7 @@ export default function AdminAddMember() {
             <input value={form.mobile_phone} onChange={(e) => set('mobile_phone', e.target.value)} />
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="Date of birth">
               <input
                 type="date"
@@ -169,7 +169,7 @@ export default function AdminAddMember() {
 
           <h2 style={{ margin: 0, marginTop: 8 }}>Background</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="Community">
               <input value={form.community} onChange={(e) => set('community', e.target.value)} />
             </Field>
@@ -189,7 +189,7 @@ export default function AdminAddMember() {
 
           <h2 style={{ margin: 0, marginTop: 8 }}>Professional &amp; lifestyle</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="Education">
               <input value={form.education} onChange={(e) => set('education', e.target.value)} />
             </Field>
@@ -231,7 +231,7 @@ export default function AdminAddMember() {
 
           <h2 style={{ margin: 0, marginTop: 8 }}>Family</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="Father's name">
               <input value={form.father_name} onChange={(e) => set('father_name', e.target.value)} />
             </Field>
@@ -249,7 +249,7 @@ export default function AdminAddMember() {
             />
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-3">
             <Field label="City">
               <input value={form.city} onChange={(e) => set('city', e.target.value)} />
             </Field>
@@ -263,7 +263,7 @@ export default function AdminAddMember() {
 
           <h2 style={{ margin: 0, marginTop: 8 }}>Membership</h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="responsive-form-row-2">
             <Field label="Status">
               <select
                 value={form.status}
@@ -282,7 +282,7 @@ export default function AdminAddMember() {
             </Field>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+          <label className="form-checkbox-label">
             <input
               type="checkbox"
               checked={form.show_on_register}

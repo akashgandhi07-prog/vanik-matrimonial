@@ -80,9 +80,8 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 /**
- * Call Edge Functions with explicit headers. Also set verify_jwt = false in supabase/config.toml
- * for each function and redeploy — otherwise the gateway often returns 401 Invalid JWT even when
- * the function would accept the token.
+ * Call Edge Functions with the session access token. Hosted functions use `verify_jwt = true` in
+ * config.toml where the gateway should reject invalid/expired JWTs before the handler runs.
  */
 export async function invokeFunction(name: string, body?: object) {
   if (!url || !anon) {
@@ -117,7 +116,7 @@ export async function invokeFunction(name: string, body?: object) {
     const msg = responseMessage(res, text, json);
     if (res.status === 401 && msg.includes('JWT')) {
       throw new Error(
-        `${msg} — Redeploy functions so config.toml has verify_jwt = false for this function, or sign out and sign in again with keys from the same Supabase project as VITE_SUPABASE_URL.`
+        `${msg} — Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed.`
       );
     }
     throw new Error(msg);

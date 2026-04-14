@@ -36,22 +36,21 @@ function MemberLayoutBody() {
         style={{
           background: 'white',
           borderBottom: '1px solid var(--color-border)',
-          padding: '16px 20px',
         }}
       >
         <div className="layout-max member-dashboard-header-inner">
-          <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="member-dashboard-header-meta">
             <strong>Welcome back, {profile.first_name}</strong>
-            {profile.reference_number && (
-              <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12, fontSize: 13 }}>
-                Ref: {profile.reference_number}
-              </span>
-            )}
-            {exp && (
-              <span style={{ color: 'var(--color-text-secondary)', marginLeft: 12, fontSize: 13 }}>
-                Membership expires{' '}
-                {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
+            {(profile.reference_number || exp) && (
+              <div className="member-dashboard-header-sub">
+                {profile.reference_number && <span>Ref: {profile.reference_number}</span>}
+                {exp && (
+                  <span>
+                    Membership expires{' '}
+                    {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
             )}
           </div>
           <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
@@ -60,7 +59,7 @@ function MemberLayoutBody() {
         </div>
         {showAmber && (
           <div
-            className="layout-max"
+            className="layout-max member-dashboard-renew-banner"
             style={{
               marginTop: 12,
               padding: '10px 16px',
@@ -70,15 +69,15 @@ function MemberLayoutBody() {
               fontSize: 14,
             }}
           >
-            Your membership expires in {daysToExp} days. Renew to keep access.{' '}
-            <NavLink to="/renew-membership" className="btn btn-primary" style={{ marginLeft: 8, padding: '4px 12px', fontSize: 13 }}>
+            <span>Your membership expires in {daysToExp} days. Renew to keep access.</span>
+            <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew online
             </NavLink>
           </div>
         )}
         {showRed && (
           <div
-            className="layout-max"
+            className="layout-max member-dashboard-renew-banner"
             style={{
               marginTop: 12,
               padding: '10px 16px',
@@ -88,8 +87,8 @@ function MemberLayoutBody() {
               fontSize: 14,
             }}
           >
-            Your membership expires in {daysToExp} days. After this date your profile will be hidden.{' '}
-            <NavLink to="/renew-membership" className="btn btn-primary" style={{ marginLeft: 8, padding: '4px 12px', fontSize: 13 }}>
+            <span>Your membership expires in {daysToExp} days. After this date your profile will be hidden.</span>
+            <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew online
             </NavLink>
           </div>

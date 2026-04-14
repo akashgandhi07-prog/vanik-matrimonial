@@ -1,26 +1,21 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
-function isUserAdmin(user: { user_metadata?: unknown; app_metadata?: unknown }) {
-  const m = user.user_metadata as Record<string, unknown> | undefined;
-  const a = user.app_metadata as Record<string, unknown> | undefined;
-  return m?.is_admin === true || a?.is_admin === true;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -31,20 +26,20 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
-    return jsonResponse({ error: 'Forbidden' }, 403);
+    return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
 
   let body: { profile_id?: string; action?: 'approve' | 'reject' };
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const profileId = body.profile_id;
   const action = body.action;
   if (!profileId || (action !== 'approve' && action !== 'reject')) {
-    return jsonResponse({ error: 'profile_id and action approve|reject required' }, 400);
+    return jsonResponse({ error: 'profile_id and action approve|reject required' }, req, 400);
   }
 
   const admin = getAdminClient();
@@ -54,7 +49,7 @@ Deno.serve(async (req) => {
     .eq('id', profileId)
     .single();
   if (pe || !profile?.pending_photo_url) {
-    return jsonResponse({ error: 'No pending photo' }, 400);
+    return jsonResponse({ error: 'No pending photo' }, req, 400);
   }
 
   const pendingPath = profile.pending_photo_url as string;
@@ -72,7 +67,7 @@ Deno.serve(async (req) => {
         photo_status: 'approved',
       })
       .eq('id', profileId);
-    if (up) return jsonResponse({ error: up.message }, 500);
+    if (up) return jsonResponse({ error: up.message }, req, 500);
     await admin.from('admin_actions').insert({
       admin_user_id: userData.user.id,
       action_type: 'photo_approved',
@@ -88,7 +83,7 @@ Deno.serve(async (req) => {
         photo_status: 'approved',
       })
       .eq('id', profileId);
-    if (up) return jsonResponse({ error: up.message }, 500);
+    if (up) return jsonResponse({ error: up.message }, req, 500);
     await admin.from('admin_actions').insert({
       admin_user_id: userData.user.id,
       action_type: 'photo_rejected',
@@ -104,5 +99,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true }, req);
 });

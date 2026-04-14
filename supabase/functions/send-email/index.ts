@@ -1,19 +1,20 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, EmailType } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -24,18 +25,11 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
-  const meta = userData.user.user_metadata as Record<string, unknown> | undefined;
-  const appMeta = userData.user.app_metadata as Record<string, unknown> | undefined;
-  const isAdmin =
-    meta?.is_admin === true ||
-    meta?.is_admin === 'true' ||
-    appMeta?.is_admin === true;
-
-  if (!isAdmin) {
-    return jsonResponse({ error: 'Forbidden' }, 403);
+  if (!isUserAdmin(userData.user)) {
+    return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
 
   let body: {
@@ -48,13 +42,13 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
-  if (!body.type) return jsonResponse({ error: 'type required' }, 400);
+  if (!body.type) return jsonResponse({ error: 'type required' }, req, 400);
 
   const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (!resendKey) return jsonResponse({ error: 'Email not configured' }, 500);
+  if (!resendKey) return jsonResponse({ error: 'Email not configured' }, req, 500);
 
   const admin = createClient(
     supabaseUrl,
@@ -69,7 +63,7 @@ Deno.serve(async (req) => {
   });
 
   if (!result.ok) {
-    return jsonResponse({ error: result.error ?? 'Send failed' }, 500);
+    return jsonResponse({ error: result.error ?? 'Send failed' }, req, 500);
   }
-  return jsonResponse({ ok: true, messageId: result.messageId });
+  return jsonResponse({ ok: true, messageId: result.messageId }, req);
 });

@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'https://esm.sh/stripe@16.12.0?target=deno';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
 function addOneYear(from: Date): Date {
@@ -11,23 +11,23 @@ function addOneYear(from: Date): Date {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const secret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
   const whSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')?.trim();
   if (!secret || !whSecret) {
-    return jsonResponse({ error: 'Stripe webhook not configured' }, 503);
+    return jsonResponse({ error: 'Stripe webhook not configured' }, req, 503);
   }
 
   const stripe = new Stripe(secret, { httpClient: Stripe.createFetchHttpClient() });
 
   const sig = req.headers.get('stripe-signature');
   if (!sig) {
-    return jsonResponse({ error: 'Missing stripe-signature' }, 400);
+    return jsonResponse({ error: 'Missing stripe-signature' }, req, 400);
   }
 
   const body = await req.text();
@@ -37,16 +37,16 @@ Deno.serve(async (req) => {
     event = stripe.webhooks.constructEvent(body, sig, whSecret);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return jsonResponse({ error: `Webhook signature: ${msg}` }, 400);
+    return jsonResponse({ error: `Webhook signature: ${msg}` }, req, 400);
   }
 
   if (event.type !== 'checkout.session.completed') {
-    return jsonResponse({ received: true });
+    return jsonResponse({ received: true }, req);
   }
 
   const session = event.data.object as Stripe.Checkout.Session;
   if (session.payment_status !== 'paid') {
-    return jsonResponse({ received: true, skipped: 'not_paid' });
+    return jsonResponse({ received: true, skipped: 'not_paid' }, req);
   }
 
   const meta = session.metadata ?? {};
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
   const currency = session.currency ?? null;
 
   if (!checkoutSessionId || typeof authUserId !== 'string') {
-    return jsonResponse({ received: true, skipped: 'bad_metadata' });
+    return jsonResponse({ received: true, skipped: 'bad_metadata' }, req);
   }
 
   const admin = getAdminClient();
@@ -75,19 +75,19 @@ Deno.serve(async (req) => {
     };
     const { error } = await admin.from('stripe_checkout_sessions').insert(row);
     if (error?.code === '23505') {
-      return jsonResponse({ received: true, idempotent: true });
+      return jsonResponse({ received: true, idempotent: true }, req);
     }
     if (error) {
       console.error('stripe_checkout_sessions insert registration', error);
-      return jsonResponse({ error: error.message }, 500);
+      return jsonResponse({ error: error.message }, req, 500);
     }
-    return jsonResponse({ received: true });
+    return jsonResponse({ received: true }, req);
   }
 
   if (purpose === 'renewal') {
     const profileId = meta.profile_id;
     if (typeof profileId !== 'string') {
-      return jsonResponse({ received: true, skipped: 'no_profile_id' });
+      return jsonResponse({ received: true, skipped: 'no_profile_id' }, req);
     }
 
     const { data: prof, error: pe } = await admin
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (pe || !prof || (prof.auth_user_id as string) !== authUserId) {
-      return jsonResponse({ received: true, skipped: 'profile_mismatch' });
+      return jsonResponse({ received: true, skipped: 'profile_mismatch' }, req);
     }
 
     // Belt-and-braces: warn if Stripe customer_email doesn't match registered email
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
 
     const st = prof.status as string;
     if (st !== 'active' && st !== 'expired' && st !== 'archived') {
-      return jsonResponse({ received: true, skipped: 'bad_status' });
+      return jsonResponse({ received: true, skipped: 'bad_status' }, req);
     }
 
     const appliedAt = new Date().toISOString();
@@ -136,10 +136,10 @@ Deno.serve(async (req) => {
 
     if (insErr) {
       if (insErr.code === '23505') {
-        return jsonResponse({ received: true, idempotent: true });
+        return jsonResponse({ received: true, idempotent: true }, req);
       }
       console.error('stripe_checkout_sessions insert renewal', insErr);
-      return jsonResponse({ error: insErr.message }, 500);
+      return jsonResponse({ error: insErr.message }, req, 500);
     }
 
     const now = new Date();
@@ -163,11 +163,11 @@ Deno.serve(async (req) => {
       // Leaving the record in place means Stripe's next retry hits the 23505 idempotency check
       // and receives a 200, stopping retries. The payment record is preserved for manual recovery.
       console.error('profile renewal update failed — payment recorded, membership NOT extended', upErr);
-      return jsonResponse({ error: upErr.message }, 500);
+      return jsonResponse({ error: upErr.message }, req, 500);
     }
 
-    return jsonResponse({ received: true, renewed: true });
+    return jsonResponse({ received: true, renewed: true }, req);
   }
 
-  return jsonResponse({ received: true, skipped: 'unknown_purpose' });
+  return jsonResponse({ received: true, skipped: 'unknown_purpose' }, req);
 });

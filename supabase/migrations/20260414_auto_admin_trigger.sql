@@ -1,16 +1,11 @@
--- Function to auto-promote specific emails to admin on user creation
+-- Placeholder trigger: grant admin via Supabase Dashboard or admin-manage-users promote (app_metadata).
 CREATE OR REPLACE FUNCTION public.auto_promote_admin()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  admin_emails text[] := ARRAY['akashgandhi07@gmail.com', 'mahesh.gandhi@vanikcouncil.uk'];
 BEGIN
-  IF NEW.email = ANY(admin_emails) THEN
-    NEW.raw_app_meta_data := COALESCE(NEW.raw_app_meta_data, '{}'::jsonb) || '{"is_admin": true}'::jsonb;
-  END IF;
   RETURN NEW;
 END;
 $$;

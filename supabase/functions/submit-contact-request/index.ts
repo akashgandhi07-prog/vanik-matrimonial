@@ -1,20 +1,20 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -25,19 +25,19 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   let body: { candidate_ids?: string[] };
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const ids = (body.candidate_ids ?? []).filter(Boolean).slice(0, 3);
   if (ids.length === 0) {
-    return jsonResponse({ error: 'candidates required' }, 400);
+    return jsonResponse({ error: 'candidates required' }, req, 400);
   }
 
   const admin = getAdminClient();
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', userData.user.id)
     .single();
   if (reErr || !requester) {
-    return jsonResponse({ error: 'Profile not found' }, 400);
+    return jsonResponse({ error: 'Profile not found' }, req, 400);
   }
 
   if (
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     !requester.membership_expires_at ||
     new Date(requester.membership_expires_at) <= new Date()
   ) {
-    return jsonResponse({ error: 'Membership not active' }, 403);
+    return jsonResponse({ error: 'Membership not active' }, req, 403);
   }
 
   const { data: requesterPrivate } = await admin
@@ -87,24 +87,18 @@ Deno.serve(async (req) => {
     const reset = oldestCreatedAt
       ? new Date(new Date(oldestCreatedAt).getTime() + 7 * 864e5)
       : new Date(Date.now() + 7 * 864e5);
-    return jsonResponse(
-      {
+    return jsonResponse({
         error: 'weekly_limit',
         message: `Weekly limit reached (3 candidates). Resets on ${reset.toLocaleDateString('en-GB')}.`,
-      },
-      400
-    );
+      }, req, 400);
   }
 
   if (ids.length > slotsRemaining) {
-    return jsonResponse(
-      {
+    return jsonResponse({
         error: 'weekly_limit',
         message: `You have ${slotsRemaining} candidate slot${slotsRemaining === 1 ? '' : 's'} remaining this week. Please reduce your selection.`,
         slots_remaining: slotsRemaining,
-      },
-      400
-    );
+      }, req, 400);
   }
 
   const cutoff = new Date(Date.now() - 21 * 864e5).toISOString();
@@ -129,14 +123,11 @@ Deno.serve(async (req) => {
     }
   }
   if (outstandingIds.length) {
-    return jsonResponse(
-      {
+    return jsonResponse({
         error: 'feedback_required',
         message: 'Outstanding feedback required before new requests.',
         request_ids: [...new Set(outstandingIds)],
-      },
-      400
-    );
+      }, req, 400);
   }
 
   const { data: ins, error: insErr } = await admin
@@ -149,7 +140,7 @@ Deno.serve(async (req) => {
     .select('id')
     .single();
   if (insErr || !ins) {
-    return jsonResponse({ error: insErr?.message ?? 'Insert failed' }, 500);
+    return jsonResponse({ error: insErr?.message ?? 'Insert failed' }, req, 500);
   }
 
   const requestId = ins.id as string;
@@ -225,5 +216,5 @@ Deno.serve(async (req) => {
     request_id: requestId,
     contacts: contactPayload,
     requester_email: requesterPrivate?.email ?? '',
-  });
+  }, req);
 });

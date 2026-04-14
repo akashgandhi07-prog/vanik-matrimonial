@@ -25,7 +25,7 @@ export default function RegistrationRejected() {
   return (
     <PublicLayout>
       <div className="layout-max" style={{ maxWidth: 560, marginTop: 48 }}>
-        <div className="card">
+        <div className="card prose-safe">
           <h1>Application not approved</h1>
           {noSession ? (
             <>

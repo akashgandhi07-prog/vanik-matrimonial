@@ -12,31 +12,31 @@ additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app"]
 [auth.email]
 enable_confirmations = true
 
-# Gateway JWT checks often return 401 "Invalid JWT" (stale token, env mismatch, etc.).
-# Each function still verifies the user with supabase.auth.getUser() + service role where needed.
+# Gateway JWT validation: on for user-facing endpoints (Bearer = session or anon key).
+# Keep verify_jwt = false for webhooks, cron (no Supabase JWT), and billing-status-style public POSTs if schedulers omit JWT.
 [functions.serve-photo]
-verify_jwt = false
+verify_jwt = true
 
 [functions.validate-coupon]
-verify_jwt = false
+verify_jwt = true
 
 [functions.submit-registration]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-approve-member]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-reject-member]
-verify_jwt = false
+verify_jwt = true
 
 [functions.submit-contact-request]
-verify_jwt = false
+verify_jwt = true
 
 [functions.request-account-deletion]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.expire-memberships]
 verify_jwt = false
@@ -57,31 +57,31 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.feedback-flow]
-verify_jwt = false
+verify_jwt = true
 
 [functions.resend-webhook]
 verify_jwt = false
 
 [functions.admin-mark-matched]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-resolve-pending-photo]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-manage-users]
-verify_jwt = false
+verify_jwt = true
 
 [functions.billing-status]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-checkout-session]
-verify_jwt = false
+verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
 
 [functions.admin-add-member]
-verify_jwt = false
+verify_jwt = true
 
 [functions.admin-update-member-status]
-verify_jwt = false
+verify_jwt = true

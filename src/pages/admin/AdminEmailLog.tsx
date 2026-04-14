@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeFunction, supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type LogRow = {
   id: string;
@@ -15,18 +15,23 @@ type LogRow = {
 
 export default function AdminEmailLog() {
   const [rows, setRows] = useState<LogRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('email_log')
-      .select('*')
-      .order('sent_at', { ascending: false })
-      .limit(300);
-    setRows((data ?? []) as LogRow[]);
+    setError(null);
+    try {
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'list_email_log',
+        limit: 300,
+      })) as { rows?: LogRow[] };
+      setRows((res.rows ?? []) as LogRow[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load email log');
+    }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- email log from Supabase
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- email log from Edge Function
     void load();
   }, [load]);
 
@@ -46,13 +51,14 @@ export default function AdminEmailLog() {
   return (
     <div>
       <h1>Email log</h1>
+      {error && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{error}</p>}
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
         Configure Resend webhooks to POST to your deployed Edge Function{' '}
         <code style={{ fontSize: 13 }}>/functions/v1/resend-webhook</code>. In local dev, Vite proxies{' '}
         <code style={{ fontSize: 13 }}>/api/resend-webhook</code> to the same function (requires a tunnel such as
         ngrok for Resend to reach your machine).
       </p>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>

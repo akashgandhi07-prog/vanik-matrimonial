@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 const PAGE_SIZE = 50;
 
@@ -13,27 +13,36 @@ type RequestRow = {
 
 export default function AdminRequests() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchPage(pageNum: number, append: boolean) {
     setLoading(true);
-    const from = (pageNum - 1) * PAGE_SIZE;
-    const to = pageNum * PAGE_SIZE - 1;
-    const { data } = await supabase
-      .from('requests')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    const rows = (data ?? []) as RequestRow[];
-    setHasMore(rows.length === PAGE_SIZE);
-    if (append) {
-      setRequests((prev) => [...prev, ...rows]);
-    } else {
-      setRequests(rows);
+    setError(null);
+    try {
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'list_requests',
+        page: pageNum,
+        page_size: PAGE_SIZE,
+      })) as { requests?: RequestRow[]; names?: Record<string, string> };
+      const rows = (res.requests ?? []) as RequestRow[];
+      setHasMore(rows.length === PAGE_SIZE);
+      if (append) {
+        setRequests((prev) => [...prev, ...rows]);
+      } else {
+        setRequests(rows);
+      }
+      if (res.names && Object.keys(res.names).length > 0) {
+        setNames((prev) => ({ ...prev, ...res.names }));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load requests');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -49,10 +58,11 @@ export default function AdminRequests() {
   return (
     <div>
       <h1>Requests</h1>
+      {error && <p style={{ color: 'var(--color-danger)', marginBottom: 12 }}>{error}</p>}
       <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
         Showing {requests.length} request{requests.length !== 1 ? 's' : ''}
       </p>
-      <RequestsTable requests={requests} />
+      <RequestsTable requests={requests} names={names} />
       {hasMore && (
         <div style={{ marginTop: 16 }}>
           <button
@@ -71,29 +81,13 @@ export default function AdminRequests() {
 
 function RequestsTable({
   requests,
+  names,
 }: {
   requests: RequestRow[];
+  names: Record<string, string>;
 }) {
-  const [names, setNames] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const ids = new Set<string>();
-    requests.forEach((r) => {
-      ids.add(r.requester_id);
-      (r.candidate_ids as string[])?.forEach((c) => ids.add(c));
-    });
-    if (ids.size === 0) return;
-    void (async () => {
-      const { data } = await supabase.from('profiles').select('id, first_name, reference_number').in('id', [...ids]);
-      const map: Record<string, string> = {};
-      (data ?? []).forEach((p: { id: string; first_name: string; reference_number: string | null }) => {
-        map[p.id] = `${p.first_name} (${p.reference_number ?? '-'})`;
-      });
-      setNames((prev) => ({ ...prev, ...map }));
-    })();
-  }, [requests]);
-
   return (
+    <div className="table-scroll">
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
       <thead>
         <tr>
@@ -116,5 +110,6 @@ function RequestsTable({
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

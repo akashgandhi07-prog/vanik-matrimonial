@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { sendResendEmail, letterHtml } from '../_shared/resend.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
@@ -73,15 +73,15 @@ async function verifyObjectExists(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user?.email) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const forwarded = req.headers.get('x-forwarded-for');
@@ -101,14 +101,14 @@ Deno.serve(async (req) => {
   const admin = getAdminClient();
   const okLimit = await checkRateLimit(admin, ip);
   if (!okLimit) {
-    return jsonResponse({ error: 'Too many attempts. Try again later.' }, 429);
+    return jsonResponse({ error: 'Too many attempts. Try again later.' }, req, 429);
   }
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const { data: existing } = await admin
@@ -117,23 +117,23 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
   if (existing) {
-    return jsonResponse({ error: 'Profile already exists' }, 400);
+    return jsonResponse({ error: 'Profile already exists' }, req, 400);
   }
 
   const gender = body.gender === 'Female' ? 'Female' : 'Male';
   const photoPath = String(body.photo_path ?? '');
   const idPath = String(body.id_document_path ?? '');
   if (!photoPath || !idPath) {
-    return jsonResponse({ error: 'Files required' }, 400);
+    return jsonResponse({ error: 'Files required' }, req, 400);
   }
 
   if (!pathExtensionOk(photoPath, 'photo') || !pathExtensionOk(idPath, 'id')) {
-    return jsonResponse({ error: 'Invalid file type' }, 400);
+    return jsonResponse({ error: 'Invalid file type' }, req, 400);
   }
   const photoOk = await verifyObjectExists(admin, 'profile-photos', photoPath);
   const idOk = await verifyObjectExists(admin, 'id-documents', idPath);
   if (!photoOk || !idOk) {
-    return jsonResponse({ error: 'Upload not found' }, 400);
+    return jsonResponse({ error: 'Upload not found' }, req, 400);
   }
 
   const couponRaw = stripHtml(String(body.coupon_code ?? ''), 32).toUpperCase();
@@ -160,13 +160,10 @@ Deno.serve(async (req) => {
   if (paymentRequired) {
     const sid = stripHtml(String(body.stripe_checkout_session_id ?? ''), 128);
     if (!sid.startsWith('cs_')) {
-      return jsonResponse(
-        {
+      return jsonResponse({
           error: 'Membership fee payment is required before submitting your registration.',
           code: 'PAYMENT_REQUIRED',
-        },
-        402
-      );
+        }, req, 402);
     }
     try {
       await verifyPaidCheckoutSession({
@@ -177,7 +174,7 @@ Deno.serve(async (req) => {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Payment verification failed';
-      return jsonResponse({ error: msg }, 400);
+      return jsonResponse({ error: msg }, req, 400);
     }
     stripeCheckoutSessionId = sid;
   }
@@ -215,7 +212,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (pErr || !insProfile) {
-    return jsonResponse({ error: pErr?.message ?? 'Insert failed' }, 500);
+    return jsonResponse({ error: pErr?.message ?? 'Insert failed' }, req, 500);
   }
 
   const profileId = insProfile.id as string;
@@ -239,7 +236,7 @@ Deno.serve(async (req) => {
   const { error: mErr } = await admin.from('member_private').insert(privateRow);
   if (mErr) {
     await admin.from('profiles').delete().eq('id', profileId);
-    return jsonResponse({ error: mErr.message }, 500);
+    return jsonResponse({ error: mErr.message }, req, 500);
   }
 
   const { data: refResult, error: refErr } = await admin.rpc('assign_next_reference_number', {
@@ -248,7 +245,7 @@ Deno.serve(async (req) => {
   });
 
   if (refErr) {
-    return jsonResponse({ error: refErr.message }, 500);
+    return jsonResponse({ error: refErr.message }, req, 500);
   }
 
   const referenceNumber = refResult as string;
@@ -304,5 +301,5 @@ Deno.serve(async (req) => {
     ok: true,
     profile_id: profileId,
     reference_number: referenceNumber,
-  });
+  }, req);
 });

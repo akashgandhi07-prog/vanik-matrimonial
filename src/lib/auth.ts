@@ -120,11 +120,11 @@ function metaIsAdmin(v: unknown): boolean {
   return false;
 }
 
+/** Admin flag is stored in app_metadata only (not user_metadata — clients can edit that). */
 export function isAdminUser(user: User | null | undefined): boolean {
   if (!user) return false;
-  const um = user.user_metadata as { is_admin?: unknown } | undefined;
   const am = user.app_metadata as { is_admin?: unknown } | undefined;
-  return metaIsAdmin(um?.is_admin) || metaIsAdmin(am?.is_admin);
+  return metaIsAdmin(am?.is_admin);
 }
 
 export function ageFromDob(dob: string): number {

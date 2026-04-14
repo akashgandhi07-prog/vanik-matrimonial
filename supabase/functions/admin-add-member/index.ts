@@ -1,12 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
-
-function isUserAdmin(user: { user_metadata?: unknown; app_metadata?: unknown }) {
-  const m = user.user_metadata as Record<string, unknown> | undefined;
-  const a = user.app_metadata as Record<string, unknown> | undefined;
-  return m?.is_admin === true || a?.is_admin === true;
-}
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 
 function randomPassword(len = 16): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
@@ -19,15 +14,15 @@ function randomPassword(len = 16): string {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -41,23 +36,23 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
-    return jsonResponse({ error: 'Forbidden' }, 403);
+    return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
 
   let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const email = String(body.email ?? '').trim().toLowerCase();
   if (!email) {
-    return jsonResponse({ error: 'email is required' }, 400);
+    return jsonResponse({ error: 'email is required' }, req, 400);
   }
   const firstName = String(body.first_name ?? '').trim();
   if (!firstName) {
-    return jsonResponse({ error: 'first_name is required' }, 400);
+    return jsonResponse({ error: 'first_name is required' }, req, 400);
   }
 
   // 1. Create auth user
@@ -68,7 +63,7 @@ Deno.serve(async (req) => {
     email_confirm: true,
   });
   if (authErr || !authData.user) {
-    return jsonResponse({ error: authErr?.message ?? 'Failed to create auth user' }, 500);
+    return jsonResponse({ error: authErr?.message ?? 'Failed to create auth user' }, req, 500);
   }
   const userId = authData.user.id;
 
@@ -108,7 +103,7 @@ Deno.serve(async (req) => {
   if (profileErr || !profileData) {
     // Cleanup auth user on failure
     await admin.auth.admin.deleteUser(userId);
-    return jsonResponse({ error: profileErr?.message ?? 'Failed to create profile' }, 500);
+    return jsonResponse({ error: profileErr?.message ?? 'Failed to create profile' }, req, 500);
   }
 
   const profileId = profileData.id as string;
@@ -130,7 +125,7 @@ Deno.serve(async (req) => {
     // Fatal — roll back profile and auth user
     await admin.from('profiles').delete().eq('id', profileId);
     await admin.auth.admin.deleteUser(userId);
-    return jsonResponse({ error: `Failed to save private details: ${privateErr.message}` }, 500);
+    return jsonResponse({ error: `Failed to save private details: ${privateErr.message}` }, req, 500);
   }
 
   // 4. Assign reference number if status is active
@@ -148,5 +143,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true, profile_id: profileId, reference_number: referenceNumber });
+  return jsonResponse({ ok: true, profile_id: profileId, reference_number: referenceNumber }, req);
 });

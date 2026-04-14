@@ -3,7 +3,7 @@ import { PublicLayout } from '../components/Layout';
 export default function Privacy() {
   return (
     <PublicLayout>
-      <div className="layout-max card" style={{ marginTop: 24 }}>
+      <div className="layout-max card prose-safe" style={{ marginTop: 24 }}>
         <h1>Privacy policy</h1>
         <p style={{ color: 'var(--color-text-secondary)' }}>
           Last updated: 13 April 2026. Data controller: <strong>Vanik Council</strong> (

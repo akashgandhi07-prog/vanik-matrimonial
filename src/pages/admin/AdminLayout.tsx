@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import { MfaEnroll } from './MfaEnroll';
 import { useAdminGuard } from './useAdminGuard';
 
@@ -7,6 +8,7 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
   isActive ? 'btn btn-primary' : 'btn btn-secondary';
 
 export default function AdminLayout() {
+  const navigate = useNavigate();
   const { ok, mfaOk, denyReason, refresh } = useAdminGuard();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wide, setWide] = useState(() =>
@@ -94,9 +96,33 @@ export default function AdminLayout() {
         <NavLink to="/admin/settings" className={navCls} onClick={() => setSidebarOpen(false)}>
           Settings
         </NavLink>
-        <NavLink to="/dashboard/browse" className="btn btn-secondary" style={{ marginTop: 24 }} onClick={() => setSidebarOpen(false)}>
-          Exit admin
-        </NavLink>
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <NavLink
+            to="/"
+            replace
+            className="btn btn-secondary"
+            onClick={() => setSidebarOpen(false)}
+          >
+            Exit admin
+          </NavLink>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setSidebarOpen(false);
+              void (async () => {
+                try {
+                  await supabase.auth.signOut();
+                } catch {
+                  /* still leave */
+                }
+                navigate('/', { replace: true });
+              })();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </aside>
       <main className="admin-main table-scroll">
         <Outlet />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase, invokeFunction } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type CronJobRun = {
   id: string;
@@ -53,32 +53,28 @@ export default function AdminScheduledJobs() {
     setError(null);
     try {
       const jobNames = JOBS.map((j) => j.name);
-      const { data, error: qErr } = await supabase
-        .from('cron_job_runs')
-        .select('*')
-        .in('job_name', jobNames)
-        .order('started_at', { ascending: false })
-        .limit(100);
-
-      if (qErr) {
-        setError(qErr.message);
-        return;
-      }
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'list_cron_runs',
+        job_names: jobNames,
+        limit: 100,
+      })) as { runs?: CronJobRun[] };
 
       const map: Record<string, CronJobRun> = {};
-      for (const row of (data ?? []) as CronJobRun[]) {
+      for (const row of (res.runs ?? []) as CronJobRun[]) {
         if (!map[row.job_name]) {
           map[row.job_name] = row;
         }
       }
       setLatestRuns(map);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load job runs');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load data from Supabase
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load from Edge Function
     void load();
   }, [load]);
 
@@ -97,8 +93,8 @@ export default function AdminScheduledJobs() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-        <h1 style={{ margin: 0 }}>Scheduled jobs</h1>
+      <div className="admin-page-title-row">
+        <h1>Scheduled jobs</h1>
         <button
           type="button"
           className="btn btn-secondary"
@@ -113,7 +109,7 @@ export default function AdminScheduledJobs() {
         <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{error}</p>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>

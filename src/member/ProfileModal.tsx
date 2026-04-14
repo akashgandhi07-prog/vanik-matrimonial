@@ -17,11 +17,9 @@ type Props = {
 function Row({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null;
   return (
-    <div style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
-      <span style={{ minWidth: 150, fontSize: 13, color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-        {label}
-      </span>
-      <span style={{ fontSize: 14 }}>{value}</span>
+    <div className="profile-modal-kv">
+      <span className="profile-modal-kv-label">{label}</span>
+      <span className="profile-modal-kv-value">{value}</span>
     </div>
   );
 }
@@ -117,7 +115,7 @@ export function ProfileModal({
         </div>
 
         {/* Content */}
-        <div style={{ padding: '20px 24px 24px' }}>
+        <div className="profile-modal-body" style={{ padding: '20px 24px 24px' }}>
           <h2
             id="profile-modal-title"
             style={{ margin: '0 0 4px', fontSize: 22 }}
@@ -150,19 +148,13 @@ export function ProfileModal({
           )}
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ flex: 1 }}
-              onClick={onToggleBookmark}
-            >
+          <div className="profile-modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
               {bookmarked ? '★ Saved' : '☆ Save profile'}
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              style={{ flex: 1 }}
               disabled={blocked || (!inTray && trayFull)}
               title={
                 blocked

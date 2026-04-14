@@ -641,7 +641,7 @@ export default function Register() {
                 placeholder="you@example.com"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                style={{ flex: 1, minWidth: 200 }}
+                style={{ flex: 1, minWidth: 0 }}
               />
               <button
                 type="button"

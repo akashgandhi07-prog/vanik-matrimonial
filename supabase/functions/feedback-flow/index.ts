@@ -1,12 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
 
   const admin = getAdminClient();
@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const candidateId = url.searchParams.get('candidate_id');
     const token = url.searchParams.get('token');
     if (!requestId || !candidateId || !token) {
-      return jsonResponse({ valid: false, error: 'missing_params' }, 400);
+      return jsonResponse({ valid: false, error: 'missing_params' }, req, 400);
     }
 
     const { data: row, error } = await admin
@@ -31,13 +31,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (error || !row) {
-      return jsonResponse({ valid: false });
+      return jsonResponse({ valid: false }, req);
     }
     if (row.used_at) {
-      return jsonResponse({ valid: false, error: 'used' });
+      return jsonResponse({ valid: false, error: 'used' }, req);
     }
     if (new Date(row.expires_at as string) <= new Date()) {
-      return jsonResponse({ valid: false, error: 'expired' });
+      return jsonResponse({ valid: false, error: 'expired' }, req);
     }
 
     const { data: cand } = await admin
@@ -50,11 +50,11 @@ Deno.serve(async (req) => {
       valid: true,
       magic: true,
       candidate_label: `${stripHtml(String(cand?.first_name ?? ''), 60)} (${stripHtml(String(cand?.reference_number ?? ''), 20)})`,
-    });
+    }, req);
   }
 
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
 
   let body: {
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: 'Invalid JSON' }, 400);
+    return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
   const requestId = body.request_id;
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
   const made_contact = body.made_contact;
   const recommend_retain = body.recommend_retain;
   if (!requestId || !candidateId || !made_contact || !recommend_retain) {
-    return jsonResponse({ error: 'missing_fields' }, 400);
+    return jsonResponse({ error: 'missing_fields' }, req, 400);
   }
 
   const notes = stripHtml(String(body.notes ?? ''), 4000);
@@ -95,27 +95,27 @@ Deno.serve(async (req) => {
       .eq('candidate_id', candidateId)
       .maybeSingle();
     if (te || !tok) {
-      return jsonResponse({ error: 'invalid_token' }, 403);
+      return jsonResponse({ error: 'invalid_token' }, req, 403);
     }
     if (tok.used_at) {
-      return jsonResponse({ error: 'token_used' }, 403);
+      return jsonResponse({ error: 'token_used' }, req, 403);
     }
     if (new Date(tok.expires_at as string) <= new Date()) {
-      return jsonResponse({ error: 'token_expired' }, 403);
+      return jsonResponse({ error: 'token_expired' }, req, 403);
     }
     requesterId = tok.requester_id as string;
     tokenRowId = tok.id as string;
   } else {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({ error: 'Unauthorized' }, req, 401);
     }
     const userClient = createClient(supabaseUrl, anon, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({ error: 'Unauthorized' }, req, 401);
     }
     const { data: prof } = await admin
       .from('profiles')
@@ -123,12 +123,12 @@ Deno.serve(async (req) => {
       .eq('auth_user_id', userData.user.id)
       .single();
     if (!prof) {
-      return jsonResponse({ error: 'Profile not found' }, 400);
+      return jsonResponse({ error: 'Profile not found' }, req, 400);
     }
     const myId = prof.id as string;
     const { data: rq } = await admin.from('requests').select('requester_id').eq('id', requestId).single();
     if (!rq || (rq.requester_id as string) !== myId) {
-      return jsonResponse({ error: 'forbidden' }, 403);
+      return jsonResponse({ error: 'forbidden' }, req, 403);
     }
     requesterId = myId;
   }
@@ -143,12 +143,12 @@ Deno.serve(async (req) => {
     is_flagged,
   });
   if (insErr) {
-    return jsonResponse({ error: insErr.message }, 500);
+    return jsonResponse({ error: insErr.message }, req, 500);
   }
 
   if (tokenRowId) {
     await admin.from('feedback_tokens').update({ used_at: new Date().toISOString() }).eq('id', tokenRowId);
   }
 
-  return jsonResponse({ ok: true });
+  return jsonResponse({ ok: true }, req);
 });

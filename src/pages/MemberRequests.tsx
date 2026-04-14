@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ProfileThumb } from '../member/ProfileThumb';
 import { useMemberArea } from '../member/memberContext';
 
 export default function MemberRequests() {
@@ -17,12 +18,13 @@ export default function MemberRequests() {
   }
 
   return (
-    <div className="card table-scroll">
+    <div className="card">
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
         You can request details for up to 3 candidates per rolling 7-day window. Please provide feedback for each candidate once you have
         had a chance to make contact.
       </p>
+      <div className="table-scroll">
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
         <thead>
           <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
@@ -48,13 +50,35 @@ export default function MemberRequests() {
                 <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
                   {new Date(r.created_at).toLocaleDateString('en-GB')}
                 </td>
-                <td style={{ padding: 8 }}>
-                  {(r.candidate_ids as string[])
-                    .map((id) => {
+                <td style={{ padding: 8, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {(r.candidate_ids as string[]).map((id) => {
                       const c = candidates.find((x) => x.id === id);
-                      return c ? `${c.first_name} (${c.reference_number ?? id.slice(0, 6)})` : id.slice(0, 8) + '…';
-                    })
-                    .join(', ')}
+                      const label = c
+                        ? `${c.first_name} (${c.reference_number ?? id.slice(0, 6)})`
+                        : `${id.slice(0, 8)}…`;
+                      return (
+                        <div
+                          key={id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+                        >
+                          <div
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 8,
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                              border: '1px solid var(--color-border)',
+                            }}
+                          >
+                            <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} />
+                          </div>
+                          <span style={{ fontSize: 14, overflowWrap: 'anywhere' }}>{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </td>
                 <td style={{ padding: 8 }}>
                   <span className={r.email_status === 'sent' ? 'badge badge-success' : 'badge badge-danger'}>
@@ -94,6 +118,7 @@ export default function MemberRequests() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

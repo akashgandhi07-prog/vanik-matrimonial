@@ -161,6 +161,23 @@ export default function Feedback() {
         <p style={{ color: 'var(--color-text-secondary)' }}>
           Candidate: <strong>{candidateLabel}</strong>
         </p>
+        <p
+          className="prose-safe"
+          style={{
+            fontSize: 14,
+            lineHeight: 1.5,
+            padding: '12px 14px',
+            background: 'var(--color-surface-muted, #f4f4f5)',
+            borderRadius: 8,
+            border: '1px solid var(--color-border)',
+            margin: 0,
+          }}
+        >
+          <strong>Who sees this?</strong> The register committee (admins) can read your answers and link them
+          to your account and contact request.{' '}
+          <strong>The candidate does not see your feedback.</strong> Optional notes should avoid sharing
+          another person&apos;s private information unless necessary.
+        </p>
         <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 14 }}>
           <div>
             <span className="label">Did you make contact?</span>
@@ -186,7 +203,7 @@ export default function Feedback() {
             <span className="label">Notes (optional)</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} maxLength={4000} />
           </div>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label className="form-checkbox-label">
             <input type="checkbox" checked={flagged} onChange={(e) => setFlagged(e.target.checked)} />
             Flag for admin review
           </label>

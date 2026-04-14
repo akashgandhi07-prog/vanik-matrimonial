@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { fetchPhotoSignedUrl, invokeFunction, supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 import { MfaEnroll } from './MfaEnroll';
 import { useAdminGuard } from './useAdminGuard';
 
@@ -68,63 +68,52 @@ export default function AdminMemberDetail() {
   const [timeline, setTimeline] = useState<TimelineRow[]>([]);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  /** Pre-signed ID document URL from server (short-lived); refreshed on each detail load. */
+  const [idDocSignedFromServer, setIdDocSignedFromServer] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id || ok !== true || mfaOk !== true) return;
+    setDetailError(null);
     void (async () => {
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', id).single();
-      setProfile(p as Profile);
-      const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', id).single();
-      setPriv(m as PrivateRow);
-      if (p) {
-        const u = await fetchPhotoSignedUrl(p.id);
-        setPhotoUrl(u);
+      try {
+        const res = (await invokeFunction('admin-manage-users', {
+          action: 'get_member_detail',
+          profile_id: id,
+        })) as {
+          profile?: Profile;
+          member_private?: PrivateRow;
+          timeline?: TimelineRow[];
+          signed_urls?: { photo: string | null; pending_photo: string | null; id_document: string | null };
+        };
+        if (!res.profile || !res.member_private) {
+          setDetailError('Member not found or incomplete data.');
+          setProfile(null);
+          setPriv(null);
+          return;
+        }
+        setProfile(res.profile);
+        setPriv(res.member_private);
+        setTimeline(res.timeline ?? []);
+        const su = res.signed_urls;
+        setPhotoUrl(su?.photo ?? null);
+        setPendingPreview(su?.pending_photo ?? null);
+        setIdDocSignedFromServer(su?.id_document ?? null);
+      } catch (e) {
+        setDetailError(e instanceof Error ? e.message : 'Failed to load member');
+        setProfile(null);
+        setPriv(null);
       }
     })();
   }, [id, ok, mfaOk]);
 
-  useEffect(() => {
-    if (!id || ok !== true || mfaOk !== true) return;
-    void (async () => {
-      const { data, error } = await supabase.rpc('admin_actions_for_profile', {
-        p_profile_id: id,
-      });
-      if (error) {
-        console.warn(error.message);
-        setTimeline([]);
-        return;
-      }
-      setTimeline((data ?? []) as TimelineRow[]);
-    })();
-  }, [id, ok, mfaOk]);
-
-  useEffect(() => {
-    const path = profile?.pending_photo_url;
-    if (!path) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear preview when no pending upload
-      setPendingPreview(null);
-      return;
-    }
-    let alive = true;
-    void (async () => {
-      const { data, error } = await supabase.storage.from('profile-photos').createSignedUrl(path, 900);
-      if (alive && !error) setPendingPreview(data?.signedUrl ?? null);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [profile?.pending_photo_url]);
-
-  async function viewIdDoc() {
+  function viewIdDoc() {
     if (!priv?.id_document_url) return;
-    const { data, error } = await supabase.storage
-      .from('id-documents')
-      .createSignedUrl(priv.id_document_url, 900);
-    if (error) {
-      alert(error.message);
+    if (!idDocSignedFromServer) {
+      alert('Could not open ID document. Refresh the page or check storage permissions.');
       return;
     }
-    setSignedIdUrl(data?.signedUrl ?? null);
+    setSignedIdUrl(idDocSignedFromServer);
   }
 
   if (ok === false) return <Navigate to="/dashboard/browse" replace />;
@@ -132,6 +121,14 @@ export default function AdminMemberDetail() {
     return <div className="layout-max">Loading…</div>;
   }
   if (!mfaOk) return <MfaEnroll onDone={() => void refresh()} />;
+  if (detailError && !profile) {
+    return (
+      <div className="layout-max">
+        <p style={{ color: 'var(--color-danger)' }}>{detailError}</p>
+        <Link to="/admin/members">← Members</Link>
+      </div>
+    );
+  }
   if (!profile || !priv) {
     return <div className="layout-max">Loading…</div>;
   }
@@ -162,14 +159,7 @@ export default function AdminMemberDetail() {
           </div>
         )}
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 20,
-            marginTop: 24,
-          }}
-        >
+        <div className="admin-detail-photo-grid" style={{ marginTop: 24 }}>
           <div className="card">
             <h3>Profile photo</h3>
             {photoUrl && (
@@ -294,46 +284,47 @@ export default function AdminMemberDetail() {
                 style={{ width: '100%', maxWidth: 320, borderRadius: 8, marginBottom: 12 }}
               />
             )}
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ background: 'var(--color-success)' }}
-              onClick={async () => {
-                try {
-                  await invokeFunction('admin-resolve-pending-photo', {
-                    profile_id: profile.id,
-                    action: 'approve',
-                  });
-                  navigate('/admin/members');
-                } catch (e) {
-                  alert(e instanceof Error ? e.message : 'Failed');
-                }
-              }}
-            >
-              Approve new photo
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ marginLeft: 8 }}
-              onClick={async () => {
-                try {
-                  await invokeFunction('admin-resolve-pending-photo', {
-                    profile_id: profile.id,
-                    action: 'reject',
-                  });
-                  navigate('/admin/members');
-                } catch (e) {
-                  alert(e instanceof Error ? e.message : 'Failed');
-                }
-              }}
-            >
-              Reject new photo (keep current)
-            </button>
+            <div className="admin-inline-btn-row" style={{ marginTop: 0 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: 'var(--color-success)' }}
+                onClick={async () => {
+                  try {
+                    await invokeFunction('admin-resolve-pending-photo', {
+                      profile_id: profile.id,
+                      action: 'approve',
+                    });
+                    navigate('/admin/members');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  }
+                }}
+              >
+                Approve new photo
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={async () => {
+                  try {
+                    await invokeFunction('admin-resolve-pending-photo', {
+                      profile_id: profile.id,
+                      action: 'reject',
+                    });
+                    navigate('/admin/members');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed');
+                  }
+                }}
+              >
+                Reject new photo (keep current)
+              </button>
+            </div>
           </div>
         )}
 
-        <div className="card" style={{ marginTop: 24 }}>
+        <div className="card prose-safe" style={{ marginTop: 24 }}>
           <h3>Private details</h3>
           <p>
             Email: {priv.email}
@@ -458,7 +449,7 @@ export default function AdminMemberDetail() {
                 This sets status to <strong>matched</strong>, hides the profile from the register (
                 <code>show_on_register = false</code>), sends the congratulations email, and logs an admin action.
               </p>
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setMatchOpen(false)}>
                   Cancel
                 </button>

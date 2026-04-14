@@ -218,7 +218,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               ))}
             </select>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="member-form-actions">
             <button
               type="button"
               className="btn btn-primary"
@@ -307,7 +307,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             minLength={8}
             disabled={pwStatus === 'saving' || pwStatus === 'saved'}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="member-form-actions">
             <button
               type="submit"
               className="btn btn-secondary"
@@ -357,7 +357,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               placeholder="DELETE"
               autoComplete="off"
             />
-            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <div className="modal-actions" style={{ marginTop: 12 }}>
               <button type="button" className="btn btn-secondary" onClick={() => setDelOpen(false)}>
                 Cancel
               </button>

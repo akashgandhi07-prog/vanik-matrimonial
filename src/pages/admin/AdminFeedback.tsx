@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction } from '../../lib/supabase';
 
 type FeedbackRow = {
   id: string;
@@ -10,7 +10,8 @@ type FeedbackRow = {
   recommend_retain: string | null;
   notes: string | null;
   is_flagged: boolean;
-  created_at: string;
+  /** DB column is `submitted_at` (not `created_at`). */
+  submitted_at: string;
 };
 
 type CandidateProfile = {
@@ -48,39 +49,21 @@ export default function AdminFeedback() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: qErr } = await supabase
-        .from('feedback')
-        .select('id, request_id, candidate_id, requester_id, made_contact, recommend_retain, notes, is_flagged, created_at')
-        .order('created_at', { ascending: false });
-
-      if (qErr) {
-        setError(qErr.message);
-        return;
-      }
-
-      const rows = (data ?? []) as FeedbackRow[];
-      setFeedback(rows);
-
-      // Fetch candidate profiles
-      const candidateIds = [...new Set(rows.map((r) => r.candidate_id))];
-      if (candidateIds.length > 0) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id, first_name, reference_number')
-          .in('id', candidateIds);
-        const map: Record<string, CandidateProfile> = {};
-        for (const p of (profileData ?? []) as CandidateProfile[]) {
-          map[p.id] = p;
-        }
-        setProfiles(map);
-      }
+      const res = (await invokeFunction('admin-manage-users', { action: 'list_feedback' })) as {
+        feedback?: FeedbackRow[];
+        profiles?: Record<string, CandidateProfile>;
+      };
+      setFeedback((res.feedback ?? []) as FeedbackRow[]);
+      setProfiles(res.profiles ?? {});
+    } catch (ex) {
+      setError(ex instanceof Error ? ex.message : 'Failed to load feedback');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- load feedback from Supabase
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load from Edge Function
     void load();
   }, [load]);
 
@@ -110,7 +93,7 @@ export default function AdminFeedback() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Feedback</h1>
         <button
           type="button"
@@ -129,6 +112,10 @@ export default function AdminFeedback() {
           Show only flagged / negative
         </label>
       </div>
+      <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, maxWidth: 720, margin: '0 0 16px' }}>
+        Feedback is grouped by candidate profile. Submissions are tied to the member who made the contact
+        request (stored as requester); candidates do not see these responses.
+      </p>
 
       {error && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{error}</p>}
 
@@ -146,7 +133,7 @@ export default function AdminFeedback() {
             </span>
           </h2>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
@@ -169,7 +156,7 @@ export default function AdminFeedback() {
                       }}
                     >
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
-                        {fmtDate(row.created_at)}
+                        {fmtDate(row.submitted_at)}
                       </td>
                       <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                       <td style={{ padding: '6px 8px' }}>

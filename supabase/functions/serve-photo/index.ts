@@ -1,21 +1,22 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeadersFor(req) });
   }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const url = new URL(req.url);
   const profileId = url.searchParams.get('profile_id');
   if (!profileId) {
-    return jsonResponse({ error: 'profile_id required' }, 400);
+    return jsonResponse({ error: 'profile_id required' }, req, 400);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -28,7 +29,7 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
@@ -39,22 +40,18 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
 
-  const meta = userData.user.user_metadata as Record<string, unknown> | undefined;
-  const appMeta = userData.user.app_metadata as Record<string, unknown> | undefined;
-  const isAdmin =
-    meta?.is_admin === true ||
-    appMeta?.is_admin === true;
+  const isAdmin = isUserAdmin(userData.user);
 
   if (!isAdmin) {
     if (!requester) {
-      return jsonResponse({ error: 'Profile required' }, 403);
+      return jsonResponse({ error: 'Profile required' }, req, 403);
     }
     const activeMember =
       requester.status === 'active' &&
       requester.membership_expires_at &&
       new Date(requester.membership_expires_at) > new Date();
     if (!activeMember && requester.id !== profileId) {
-      return jsonResponse({ error: 'Membership not active' }, 403);
+      return jsonResponse({ error: 'Membership not active' }, req, 403);
     }
   }
 
@@ -65,7 +62,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (!target?.photo_url) {
-    return jsonResponse({ error: 'No photo' }, 404);
+    return jsonResponse({ error: 'No photo' }, req, 404);
   }
 
   const ownsTarget = target.auth_user_id === userData.user.id;
@@ -76,7 +73,7 @@ Deno.serve(async (req) => {
     new Date(target.membership_expires_at) > new Date();
 
   if (!isAdmin && !ownsTarget && !targetVisible) {
-    return jsonResponse({ error: 'Forbidden' }, 403);
+    return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
 
   if (!isAdmin && !ownsTarget && requester) {
@@ -85,7 +82,7 @@ Deno.serve(async (req) => {
       requester.membership_expires_at &&
       new Date(requester.membership_expires_at) > new Date();
     if (!activeViewer) {
-      return jsonResponse({ error: 'Forbidden' }, 403);
+      return jsonResponse({ error: 'Forbidden' }, req, 403);
     }
   }
 
@@ -94,12 +91,12 @@ Deno.serve(async (req) => {
     .createSignedUrl(target.photo_url, 3600);
 
   if (signErr || !signed?.signedUrl) {
-    return jsonResponse({ error: 'Could not sign URL' }, 500);
+    return jsonResponse({ error: 'Could not sign URL' }, req, 500);
   }
 
   if (req.method === 'GET' && url.searchParams.get('redirect') === '1') {
     return Response.redirect(signed.signedUrl, 302);
   }
 
-  return jsonResponse({ signedUrl: signed.signedUrl });
+  return jsonResponse({ signedUrl: signed.signedUrl }, req);
 });

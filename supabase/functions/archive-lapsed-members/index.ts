@@ -1,11 +1,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
   const deny = cronUnauthorized(req);
   if (deny) return deny;
@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     .lt('membership_expires_at', cutoff);
 
   if (error) {
-    return jsonResponse({ error: error.message }, 500);
+    return jsonResponse({ error: error.message }, req, 500);
   }
 
   let archived = 0;
@@ -51,5 +51,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ ok: true, archived_count: archived });
+  return jsonResponse({ ok: true, archived_count: archived }, req);
 });

@@ -4,7 +4,24 @@ import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
 import { cmToFeetInches } from '../lib/heights';
+import { whatsappUrlFromPhone } from '../lib/whatsapp';
 import { invokeFunction } from '../lib/supabase';
+
+type ContactDetailRow = {
+  profile_id: string;
+  first_name: string;
+  full_name: string;
+  reference_number: string;
+  mobile: string;
+  email: string;
+  father_name: string;
+  mother_name: string;
+};
+
+function telHref(phone: string): string {
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  return cleaned ? `tel:${cleaned}` : `tel:${encodeURIComponent(phone)}`;
+}
 
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
@@ -17,10 +34,9 @@ export default function MemberBrowse() {
   const [sort, setSort] = useState<'newest' | 'youngest' | 'oldest'>('newest');
   const [tray, setTray] = useState<string[]>([]);
   const [trayDrawerOpen, setTrayDrawerOpen] = useState(false);
-  const [contactsOpen, setContactsOpen] = useState<
-    | null
-    | { contacts: Array<Record<string, string>>; email: string }
-  >(null);
+  const [contactsOpen, setContactsOpen] = useState<null | { contacts: ContactDetailRow[]; email: string }>(
+    null
+  );
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
   const [submitError, setSubmitError] = useState<{ type: 'weekly_limit' | 'feedback_required' | 'generic'; message: string; requestIds?: string[] } | null>(null);
 
@@ -88,7 +104,7 @@ export default function MemberBrowse() {
       setTray([]);
       setTrayDrawerOpen(false);
       setContactsOpen({
-        contacts: res.contacts ?? [],
+        contacts: (res.contacts ?? []) as ContactDetailRow[],
         email: res.requester_email ?? privateRow?.email ?? '',
       });
       void loadAll();
@@ -215,12 +231,14 @@ export default function MemberBrowse() {
           </div>
         </aside>
         <section className="member-browse-grid">
-          <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-            {filtered.length === 0
-              ? 'No profiles match your filters.'
-              : `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`}
+          <div className="member-browse-result-line">
+            <span>
+              {filtered.length === 0
+                ? 'No profiles match your filters.'
+                : `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`}
+            </span>
             {trayFull && (
-              <span style={{ marginLeft: 16, color: 'var(--color-warning)', fontWeight: 500 }}>
+              <span className="member-browse-result-line-warn">
                 Tray full (3/3). Submit or remove one before adding another.
               </span>
             )}
@@ -261,7 +279,7 @@ export default function MemberBrowse() {
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                       {[c.religion, c.community, c.nationality].filter(Boolean).join(' · ')}
                     </p>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                    <div className="member-browse-card-actions" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                       <button
                         type="button"
                         className="btn btn-secondary"
@@ -307,16 +325,22 @@ export default function MemberBrowse() {
               {tray.map((id) => {
                 const c = candidates.find((x) => x.id === id);
                 return (
-                  <button
-                    key={id}
-                    type="button"
-                    className="badge badge-muted"
-                    style={{ cursor: 'pointer', border: '1px solid var(--color-border)' }}
-                    title={`Remove ${c?.first_name ?? 'this candidate'}`}
-                    onClick={() => addTray(id)}
-                  >
-                    {c?.first_name ?? '…'} ✕
-                  </button>
+                  <div key={id} className="member-tray-chip">
+                    <div className="member-tray-chip-photo">
+                      <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} />
+                    </div>
+                    <div className="member-tray-chip-meta">
+                      <span className="member-tray-chip-name">{c?.first_name ?? 'Member'}</span>
+                      <button
+                        type="button"
+                        className="member-tray-chip-remove"
+                        title={`Remove ${c?.first_name ?? 'this candidate'}`}
+                        onClick={() => addTray(id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -363,34 +387,86 @@ export default function MemberBrowse() {
           className="modal-backdrop"
           onClick={() => setContactsOpen(null)}
         >
-          <div className="card modal-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="card modal-panel modal-panel--wide" onClick={(e) => e.stopPropagation()}>
             <h2 id="contacts-dialog-title" style={{ marginTop: 0 }}>
-              Contact details
+              Here are their contact details
             </h2>
-            {contactsOpen.contacts.map((c) => (
-              <div
-                key={c.profile_id}
-                style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--color-border)' }}
-              >
-                <p style={{ margin: 0 }}>
-                  <strong>{c.full_name}</strong> ({c.reference_number})
-                </p>
-                <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-                  Phone: {c.mobile}
-                  <br />
-                  Email: {c.email}
-                  <br />
-                  Father: {c.father_name}
-                  <br />
-                  Mother: {c.mother_name}
-                </p>
-              </div>
-            ))}
-            <p style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>
-              A copy of these details has also been sent to your email at {contactsOpen.email}.
+            <p style={{ margin: '0 0 4px', fontSize: 14, color: 'var(--color-text-secondary)' }}>
+              You requested {contactsOpen.contacts.length} profile{contactsOpen.contacts.length === 1 ? '' : 's'}.
+              Respect their privacy and the society&apos;s guidelines when you get in touch.
+            </p>
+            <div className="contacts-success-grid">
+              {contactsOpen.contacts.map((c) => {
+                const wa = whatsappUrlFromPhone(c.mobile);
+                return (
+                  <article key={c.profile_id} className="contact-success-card">
+                    <div className="contact-success-card-photo">
+                      <ProfileThumb profileId={c.profile_id} firstName={c.first_name} />
+                    </div>
+                    <div className="contact-success-card-body">
+                      <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
+                        {c.full_name}
+                        {c.reference_number ? (
+                          <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', fontSize: 14 }}>
+                            {' '}
+                            · Ref {c.reference_number}
+                          </span>
+                        ) : null}
+                      </h3>
+                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+                        <a href={telHref(c.mobile)} style={{ fontWeight: 600 }}>
+                          {c.mobile}
+                        </a>
+                        <br />
+                        <a href={`mailto:${encodeURIComponent(c.email)}`}>{c.email}</a>
+                      </p>
+                      {(c.father_name || c.mother_name) && (
+                        <p
+                          style={{
+                            margin: '10px 0 0',
+                            fontSize: 13,
+                            color: 'var(--color-text-secondary)',
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {c.father_name ? (
+                            <>
+                              Father: {c.father_name}
+                              <br />
+                            </>
+                          ) : null}
+                          {c.mother_name ? <>Mother: {c.mother_name}</> : null}
+                        </p>
+                      )}
+                      <div className="contact-success-actions">
+                        {wa ? (
+                          <a
+                            className="btn-whatsapp"
+                            href={wa}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`WhatsApp ${c.first_name}`}
+                          >
+                            WhatsApp
+                          </a>
+                        ) : null}
+                        <a className="btn btn-secondary" href={telHref(c.mobile)}>
+                          Call
+                        </a>
+                        <a className="btn btn-secondary" href={`mailto:${encodeURIComponent(c.email)}`}>
+                          Email
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
+              A copy of these details has also been sent to <strong>{contactsOpen.email}</strong>.
             </p>
             <button type="button" className="btn btn-primary" onClick={() => setContactsOpen(null)}>
-              Close
+              Done
             </button>
           </div>
         </div>

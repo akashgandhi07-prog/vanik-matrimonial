@@ -1,11 +1,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { jsonResponse } from '../_shared/cors.ts';
+import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Method not allowed' }, 405);
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
   }
   const deny = cronUnauthorized(req);
   if (deny) return deny;
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
           .update({ status: 'error', finished_at: new Date().toISOString(), result: { error: error.message } })
           .eq('id', runId);
       }
-      return jsonResponse({ error: error.message }, 500);
+      return jsonResponse({ error: error.message }, req, 500);
     }
 
     let expired = 0;
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         .eq('id', runId);
     }
 
-    return jsonResponse({ ok: true, expired_count: expired });
+    return jsonResponse({ ok: true, expired_count: expired }, req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (runId) {
@@ -83,6 +83,6 @@ Deno.serve(async (req) => {
         .update({ status: 'error', finished_at: new Date().toISOString(), result: { error: message } })
         .eq('id', runId);
     }
-    return jsonResponse({ error: message }, 500);
+    return jsonResponse({ error: message }, req, 500);
   }
 });
