@@ -217,7 +217,10 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
       async function loadBrowseCandidates(): Promise<ProfileRow[]> {
         const rpc = await supabase.rpc('browse_opposite_profiles');
-        if (!rpc.error && Array.isArray(rpc.data)) {
+        // Only skip the table query when RPC returns rows. An empty array is still a successful
+        // response: a stale SECURITY DEFINER function can yield [] (auth.uid() null) while RLS
+        // on a direct .from('profiles') select still works with the JWT.
+        if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
           return rpc.data as ProfileRow[];
         }
         if (rpc.error) {
