@@ -5,6 +5,12 @@ import type { ProfileRow } from './memberContext';
 
 type Props = {
   candidate: ProfileRow;
+  contactDetails?: {
+    mobile?: string | null;
+    email?: string | null;
+    father_name?: string | null;
+    mother_name?: string | null;
+  };
   inTray: boolean;
   trayFull: boolean;
   blocked: boolean;
@@ -27,6 +33,7 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 
 export function ProfileModal({
   candidate: c,
+  contactDetails,
   inTray,
   trayFull,
   blocked,
@@ -67,8 +74,8 @@ export function ProfileModal({
       onClick={onClose}
     >
       <div
-        className="card modal-panel"
-        style={{ padding: 0, overflow: 'hidden', maxWidth: 620 }}
+        className="card modal-panel profile-modal-panel"
+        style={{ padding: 0, maxWidth: 620 }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Photo header */}
@@ -107,6 +114,10 @@ export function ProfileModal({
           <Row label="Height" value={heightDisplay} />
           <Row label="Education" value={c.education} />
           <Row label="Settlement plans" value={c.future_settlement_plans} />
+          <Row label="Father's name" value={contactDetails?.father_name} />
+          <Row label="Mother's name" value={contactDetails?.mother_name} />
+          <Row label="Phone" value={contactDetails?.mobile} />
+          <Row label="Email" value={contactDetails?.email} />
 
           {c.hobbies && (
             <div style={{ padding: '8px 0' }}>

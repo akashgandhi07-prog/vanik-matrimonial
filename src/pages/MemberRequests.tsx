@@ -48,7 +48,15 @@ export default function MemberRequests() {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
-  const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<{
+    profile: ProfileRow;
+    contactDetails?: {
+      mobile?: string | null;
+      email?: string | null;
+      father_name?: string | null;
+      mother_name?: string | null;
+    };
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,7 +319,19 @@ export default function MemberRequests() {
                                       type="button"
                                       className="btn btn-secondary"
                                       style={{ padding: '4px 10px', fontSize: 12 }}
-                                      onClick={() => setSelectedProfile(candidateProfile)}
+                                      onClick={() =>
+                                        setSelectedProfile({
+                                          profile: candidateProfile,
+                                          contactDetails: details
+                                            ? {
+                                                mobile: details.mobile,
+                                                email: details.email,
+                                                father_name: details.father_name,
+                                                mother_name: details.mother_name,
+                                              }
+                                            : undefined,
+                                        })
+                                      }
                                     >
                                       View profile
                                     </button>
@@ -370,14 +390,15 @@ export default function MemberRequests() {
       </div>
       {selectedProfile && (
         <ProfileModal
-          candidate={selectedProfile}
+          candidate={selectedProfile.profile}
+          contactDetails={selectedProfile.contactDetails}
           inTray={false}
           trayFull={false}
           blocked
-          bookmarked={bookmarks.includes(selectedProfile.id)}
+          bookmarked={bookmarks.includes(selectedProfile.profile.id)}
           allowRequestAction={false}
           onClose={() => setSelectedProfile(null)}
-          onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
+          onToggleBookmark={() => void toggleBookmark(selectedProfile.profile.id)}
           onToggleTray={() => {}}
         />
       )}

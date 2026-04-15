@@ -1786,6 +1786,10 @@ textarea:focus-visible {
     flex-direction: column;
     overflow: auto;
   }
+
+  .profile-modal-panel {
+    overflow: hidden;
+  }
 }
 
 .profile-modal-close {
@@ -1828,6 +1832,18 @@ textarea:focus-visible {
   object-fit: cover;
   border-radius: 0;
   display: block;
+}
+
+.profile-modal-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.profile-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .profile-modal-kv {
