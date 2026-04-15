@@ -8,6 +8,7 @@ import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
 type ContactDetailRow = {
+  request_id?: string;
   profile_id: string;
   first_name: string;
   full_name: string;
@@ -16,6 +17,41 @@ type ContactDetailRow = {
   email: string;
   father_name: string;
   mother_name: string;
+};
+
+type RequestedProfileRpcRow = {
+  request_id: string;
+  profile_id: string;
+  reference_number: string | null;
+  gender: string;
+  seeking_gender: 'Male' | 'Female' | 'Both' | null;
+  first_name: string;
+  age: number | null;
+  created_at: string;
+  updated_at: string;
+  education: string | null;
+  job_title: string | null;
+  height_cm: number | null;
+  diet: string | null;
+  religion: string | null;
+  community: string | null;
+  nationality: string | null;
+  place_of_birth: string | null;
+  town_country_of_origin: string | null;
+  future_settlement_plans: string | null;
+  hobbies: string | null;
+  photo_url: string | null;
+  pending_photo_url: string | null;
+  photo_status: string;
+  status: string;
+  show_on_register: boolean;
+  membership_expires_at: string | null;
+  rejection_reason: string | null;
+  full_name: string | null;
+  mobile: string | null;
+  email: string | null;
+  father_name: string | null;
+  mother_name: string | null;
 };
 
 function telHref(phone: string): string {
@@ -28,6 +64,19 @@ const WEEK_MS = 7 * 86400000;
 function friendlyContactsError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
   const msg = raw.toLowerCase();
+  if (
+    msg.includes('member_request_profiles') ||
+    msg.includes('function public.member_request_profiles') ||
+    msg.includes('could not find the function public.member_request_profiles')
+  ) {
+    return 'Server update required: requested-profile contact lookup is not installed yet. Apply the latest Supabase migration and reload.';
+  }
+  if (
+    msg.includes('member-request-contacts') &&
+    (msg.includes('not found') || msg.includes('404'))
+  ) {
+    return 'Server update required: member-request-contacts function is not deployed in this project.';
+  }
   if (
     msg.includes('could not reach edge function') ||
     msg.includes('failed to fetch') ||
@@ -62,6 +111,7 @@ export default function MemberRequests() {
     let cancelled = false;
     if (requests.length === 0) {
       setContactsByRequest({});
+      setProfilesById({});
       setContactsError(null);
       return () => {
         cancelled = true;
@@ -72,13 +122,95 @@ export default function MemberRequests() {
       setContactsLoading(true);
       setContactsError(null);
       try {
-        const res = (await invokeFunction('member-request-contacts', {
-          request_ids: requests.map((r) => r.id),
-        })) as {
-          contacts_by_request?: Record<string, ContactDetailRow[]>;
-        };
+        const requestIds = requests.map((r) => r.id);
+        const { data: rpcRows, error: rpcErr } = await supabase.rpc('member_request_profiles', {
+          p_request_ids: requestIds,
+        });
+        if (!rpcErr && Array.isArray(rpcRows)) {
+          if (cancelled) return;
+          const byRequest: Record<string, ContactDetailRow[]> = {};
+          const byProfile: Record<string, ProfileRow> = {};
+          for (const row of rpcRows as RequestedProfileRpcRow[]) {
+            const contact: ContactDetailRow = {
+              request_id: row.request_id,
+              profile_id: row.profile_id,
+              first_name: row.first_name,
+              full_name: row.full_name ?? row.first_name,
+              reference_number: row.reference_number ?? '',
+              mobile: row.mobile ?? '',
+              email: row.email ?? '',
+              father_name: row.father_name ?? '',
+              mother_name: row.mother_name ?? '',
+            };
+            if (!byRequest[row.request_id]) byRequest[row.request_id] = [];
+            byRequest[row.request_id].push(contact);
+            byProfile[row.profile_id] = {
+              id: row.profile_id,
+              reference_number: row.reference_number,
+              gender: row.gender,
+              seeking_gender: row.seeking_gender ?? undefined,
+              first_name: row.first_name,
+              age: row.age,
+              created_at: row.created_at,
+              updated_at: row.updated_at,
+              education: row.education,
+              job_title: row.job_title,
+              height_cm: row.height_cm,
+              diet: row.diet,
+              religion: row.religion,
+              community: row.community,
+              nationality: row.nationality,
+              place_of_birth: row.place_of_birth,
+              town_country_of_origin: row.town_country_of_origin,
+              future_settlement_plans: row.future_settlement_plans,
+              hobbies: row.hobbies,
+              photo_url: row.photo_url,
+              pending_photo_url: row.pending_photo_url,
+              photo_status: row.photo_status,
+              status: row.status,
+              show_on_register: row.show_on_register,
+              membership_expires_at: row.membership_expires_at,
+              rejection_reason: row.rejection_reason,
+            };
+          }
+          setContactsByRequest(byRequest);
+          setProfilesById(byProfile);
+          return;
+        }
+
+        const rpcMessage = rpcErr?.message ?? 'RPC failed';
+        // Fallback to edge function if RPC is unavailable (e.g. migration not applied yet).
+        let res: { contacts_by_request?: Record<string, ContactDetailRow[]> } | null = null;
+        let edgeMessage: string | null = null;
+        try {
+          res = (await invokeFunction('member-request-contacts', {
+            request_ids: requestIds,
+          })) as {
+            contacts_by_request?: Record<string, ContactDetailRow[]>;
+          };
+        } catch (edgeErr) {
+          edgeMessage = edgeErr instanceof Error ? edgeErr.message : String(edgeErr ?? '');
+        }
+        if (!res) {
+          throw new Error(`RPC: ${rpcMessage}. EDGE: ${edgeMessage ?? 'unknown failure'}`);
+        }
         if (cancelled) return;
         setContactsByRequest((res.contacts_by_request ?? {}) as Record<string, ContactDetailRow[]>);
+
+        // Best-effort profile fallback from browse cache and direct profile query.
+        const ids = [...new Set(requests.flatMap((r) => (Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [])))];
+        const fromCandidates: Record<string, ProfileRow> = {};
+        for (const c of candidates) fromCandidates[c.id] = c;
+        const missing = ids.filter((id) => !fromCandidates[id]);
+        if (missing.length === 0) {
+          setProfilesById(fromCandidates);
+          return;
+        }
+        const { data } = await supabase.from('profiles').select('*').in('id', missing);
+        if (cancelled) return;
+        const merged: Record<string, ProfileRow> = { ...fromCandidates };
+        for (const row of (data ?? []) as ProfileRow[]) merged[row.id] = row;
+        setProfilesById(merged);
       } catch (e) {
         if (cancelled) return;
         setContactsError(friendlyContactsError(e));
@@ -88,39 +220,6 @@ export default function MemberRequests() {
     }
 
     void loadContacts();
-    return () => {
-      cancelled = true;
-    };
-  }, [requests]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const ids = [...new Set(requests.flatMap((r) => (Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [])))];
-    if (ids.length === 0) {
-      setProfilesById({});
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const fromCandidates: Record<string, ProfileRow> = {};
-    for (const c of candidates) fromCandidates[c.id] = c;
-
-    async function loadProfiles() {
-      const missing = ids.filter((id) => !fromCandidates[id]);
-      if (missing.length === 0) {
-        if (!cancelled) setProfilesById(fromCandidates);
-        return;
-      }
-      const { data } = await supabase.from('profiles').select('*').in('id', missing);
-      if (cancelled) return;
-      const merged: Record<string, ProfileRow> = { ...fromCandidates };
-      for (const row of (data ?? []) as ProfileRow[]) merged[row.id] = row;
-      setProfilesById(merged);
-    }
-
-    void loadProfiles();
     return () => {
       cancelled = true;
     };
