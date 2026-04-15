@@ -213,10 +213,11 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
       const myId = p.id;
       const myStatus = p.status;
+      const myGender = p.gender;
 
       async function loadBrowseCandidates(): Promise<ProfileRow[]> {
         const rpc = await supabase.rpc('browse_opposite_profiles');
-        if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
+        if (!rpc.error && Array.isArray(rpc.data)) {
           return rpc.data as ProfileRow[];
         }
         if (rpc.error) {
@@ -225,7 +226,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .neq('gender', p.gender)
+          .neq('gender', myGender)
           .eq('status', 'active')
           .eq('show_on_register', true);
         if (error) {

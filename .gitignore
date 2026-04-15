@@ -20,6 +20,9 @@ dist-ssr
 # Local Python env for migration script
 .venv-migrate
 
+# Claude Code local worktrees (must not be git submodules — breaks Vercel clone)
+.claude/worktrees/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
