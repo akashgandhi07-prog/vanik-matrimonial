@@ -413,11 +413,12 @@ export default function MemberBrowse() {
               </p>
               {candidates.length === 0 ? (
                 <p className="member-browse-empty-desc">
-                  We only show opposite-gender listings that are <strong>active</strong>, visible for browsing, and have{' '}
-                  <strong>membership_expires_at</strong> in the future. Pending approval, no expiry date, or expired
-                  membership hides a row in the app—even when other columns look filled in. Photos and weight are not
-                  required. In Supabase, compare <strong>status</strong>, <strong>show_on_register</strong>, and{' '}
-                  <strong>membership_expires_at</strong> on <strong>profiles</strong>. Need help?{' '}
+                  Nothing loaded to show. The database only returns profiles that match your{' '}
+                  <strong>Show profiles of</strong> setting (stored as <strong>seeking_gender</strong>), are{' '}
+                  <strong>active</strong>, visible for browsing, and have <strong>membership_expires_at</strong> in the
+                  future. Other people must also have <strong>auth_user_id</strong> linked to their login. Run{' '}
+                  <code style={{ fontSize: 13 }}>supabase/verify_browse_setup.sql</code> in the Supabase SQL editor (same
+                  project as the app) to verify migration and data. Need help?{' '}
                   <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
                 </p>
               ) : (

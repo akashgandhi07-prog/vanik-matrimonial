@@ -213,8 +213,9 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const myId = p.id;
-      const myStatus = p.status;
+      const viewer = p;
+      const myId = viewer.id;
+      const myStatus = viewer.status;
 
       async function loadBrowseCandidates(): Promise<ProfileRow[]> {
         const rpc = await supabase.rpc('browse_opposite_profiles');
