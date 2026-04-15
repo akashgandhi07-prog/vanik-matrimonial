@@ -29,6 +29,11 @@ const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
 const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
 const COMMUNITY_ALL = ['Vanik', 'Lohana', 'Brahmin', 'Other'] as const;
 
+function inFilterSet(value: string, allowed: readonly string[]): boolean {
+  const v = value.trim().toLowerCase();
+  return allowed.some((a) => a.toLowerCase() === v);
+}
+
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
     useMemberArea();
@@ -53,13 +58,12 @@ export default function MemberBrowse() {
   const filtered = useMemo(() => {
     if (!profile) return [];
     let rows = candidates.filter((c) => {
-      const age = c.age ?? 0;
-      if (age < ageRange[0] || age > ageRange[1]) return false;
-      if (dietF.length && c.diet && !dietF.includes(c.diet)) return false;
-      if (religionF.length && c.religion && !religionF.includes(c.religion)) return false;
-      if (communityF.length && c.community && !communityF.includes(c.community)) return false;
-      const h = c.height_cm ?? 0;
-      if (h && (h < heightRange[0] || h > heightRange[1])) return false;
+      if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
+      if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
+      if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
+      if (communityF.length && c.community && !inFilterSet(c.community, communityF)) return false;
+      const h = c.height_cm;
+      if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
       return true;
     });
     if (sort === 'newest') {
