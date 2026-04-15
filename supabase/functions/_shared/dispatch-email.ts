@@ -80,7 +80,7 @@ export async function dispatchEmail(
       subject = 'Your account has been archived';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>As requested, your profile has been archived and hidden from the register. Our team will retain minimal records for 30 days in line with our retention policy.</p>
-        <p>If this was a mistake, please contact <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
+        <p>If this was a mistake, please contact <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
       break;
     }
     case 'registration_received': {
@@ -119,7 +119,7 @@ export async function dispatchEmail(
           <li>Save favourites and request contact details (up to weekly limits).</li>
           <li>We will email you candidate details securely when requests are approved.</li>
         </ul>
-        <p>With good wishes,<br/>The register team<br/><a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
+        <p>With good wishes,<br/>The register team<br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
        case 'registration_rejected': {
@@ -154,7 +154,7 @@ export async function dispatchEmail(
       subject = 'Your profile was viewed';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register.</p>
-        <p>If you have any concerns, please contact us at <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.</p>`;
+        <p>If you have any concerns, please contact us at <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
       break;
     }
     case 'feedback_reminder_21': {
@@ -188,7 +188,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
         <p>You can renew online here: <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
-        <p>Alternatively, email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
+        <p>Alternatively, email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
     case 'membership_expired': {
@@ -198,7 +198,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership has now expired and your profile is hidden from the register.</p>
         <p>To renew online (£10/year): <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
-        <p>Or email us: <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>`;
+        <p>Or email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
     case 'admin_daily_digest': {

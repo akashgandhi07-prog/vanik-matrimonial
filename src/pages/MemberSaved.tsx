@@ -17,11 +17,9 @@ export default function MemberSaved() {
   const [rows, setRows] = useState<ProfileRow[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
 
-  const recentlyRequestedIds = useMemo(() => {
-    const cutoff = Date.now() - 7 * 86400000;
+  const requestedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const r of requests) {
-      if (new Date(r.created_at).getTime() <= cutoff) continue;
       for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
     }
     return ids;
@@ -143,7 +141,17 @@ export default function MemberSaved() {
             style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}
             onClick={() => setSelectedProfile(c)}
           >
-            <ProfileThumb profileId={c.id} firstName={c.first_name} />
+            <div style={{ position: 'relative' }}>
+              <ProfileThumb profileId={c.id} firstName={c.first_name} />
+              {requestedIds.has(c.id) && (
+                <span
+                  className="badge badge-success"
+                  style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(22,163,74,0.9)' }}
+                >
+                  Details available
+                </span>
+              )}
+            </div>
             <div style={{ padding: '12px 14px 14px' }}>
               <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
                 {c.first_name}{c.age ? `, ${c.age}` : ''}
@@ -151,6 +159,11 @@ export default function MemberSaved() {
               <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
                 {c.reference_number}
               </p>
+              {requestedIds.has(c.id) && (
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                  You already have this profile&apos;s contact details in My requests.
+                </p>
+              )}
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -168,8 +181,9 @@ export default function MemberSaved() {
           candidate={selectedProfile}
           inTray={false}
           trayFull={false}
-          blocked={recentlyRequestedIds.has(selectedProfile.id)}
+          blocked={requestedIds.has(selectedProfile.id)}
           bookmarked={bookmarks.includes(selectedProfile.id)}
+          allowRequestAction={false}
           onClose={() => setSelectedProfile(null)}
           onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
           onToggleTray={() => {}}

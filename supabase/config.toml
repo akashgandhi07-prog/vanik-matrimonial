@@ -90,3 +90,9 @@ verify_jwt = false
 
 [functions.member-bootstrap]
 verify_jwt = false
+
+[functions.member-request-contacts]
+verify_jwt = false
+
+[functions.demo-browse-profiles]
+verify_jwt = false

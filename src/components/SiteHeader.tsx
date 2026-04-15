@@ -12,7 +12,11 @@ export function SiteHeader() {
     } catch {
       /* still leave signed-out UX */
     }
-    await refresh();
+    try {
+      await refresh();
+    } catch {
+      /* refresh can fail transiently; still continue to public landing */
+    }
     navigate('/', { replace: true });
   }
 
@@ -31,6 +35,9 @@ export function SiteHeader() {
             </span>
           ) : !user ? (
             <>
+              <Link to="/demo" className="public-nav-link">
+                Demo
+              </Link>
               <Link to="/login" className="public-nav-link">
                 Member login
               </Link>

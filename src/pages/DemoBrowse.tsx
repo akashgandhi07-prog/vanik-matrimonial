@@ -1,0 +1,435 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { PublicLayout } from '../components/Layout';
+import { ProfileThumb } from '../member/ProfileThumb';
+import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
+import { invokePublicFunction } from '../lib/supabase';
+
+type DemoProfile = {
+  id: string;
+  reference_number: string | null;
+  first_name: string;
+  age: number | null;
+  created_at: string;
+  job_title: string | null;
+  height_cm: number | null;
+  diet: string | null;
+  religion: string | null;
+  community: string | null;
+  nationality: string | null;
+};
+
+const DEFAULT_AGE: [number, number] = [18, 60];
+const DEFAULT_HEIGHT: [number, number] = [142, 198];
+const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
+const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
+const COMMUNITY_ALL = ['Vanik', 'Lohana', 'Brahmin', 'Other'] as const;
+
+type BrowseFilters = {
+  ageRange: [number, number];
+  dietF: string[];
+  religionF: string[];
+  communityF: string[];
+  heightRange: [number, number];
+  sort: 'newest' | 'youngest' | 'oldest';
+};
+
+function defaultFilters(): BrowseFilters {
+  return {
+    ageRange: [...DEFAULT_AGE],
+    dietF: [...DIET_ALL],
+    religionF: [...RELIGION_ALL],
+    communityF: [...COMMUNITY_ALL],
+    heightRange: [...DEFAULT_HEIGHT],
+    sort: 'newest',
+  };
+}
+
+function cloneFilters(filters: BrowseFilters): BrowseFilters {
+  return {
+    ageRange: [...filters.ageRange],
+    dietF: [...filters.dietF],
+    religionF: [...filters.religionF],
+    communityF: [...filters.communityF],
+    heightRange: [...filters.heightRange],
+    sort: filters.sort,
+  };
+}
+
+function inFilterSet(value: string, allowed: readonly string[]): boolean {
+  const v = value.trim().toLowerCase();
+  return allowed.some((a) => a.toLowerCase() === v);
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function filtersEqual(a: BrowseFilters, b: BrowseFilters): boolean {
+  return (
+    a.ageRange[0] === b.ageRange[0] &&
+    a.ageRange[1] === b.ageRange[1] &&
+    a.heightRange[0] === b.heightRange[0] &&
+    a.heightRange[1] === b.heightRange[1] &&
+    sameStringArray(a.dietF, b.dietF) &&
+    sameStringArray(a.religionF, b.religionF) &&
+    sameStringArray(a.communityF, b.communityF) &&
+    a.sort === b.sort
+  );
+}
+
+export default function DemoBrowse() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<DemoProfile[]>([]);
+  const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
+  const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
+
+  useEffect(() => {
+    let alive = true;
+    async function loadProfiles() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = (await invokePublicFunction('demo-browse-profiles', {})) as {
+          profiles?: DemoProfile[];
+        };
+        if (!alive) return;
+        setProfiles(res.profiles ?? []);
+      } catch (e) {
+        if (!alive) return;
+        const msg = e instanceof Error ? e.message : 'Could not load demo profiles.';
+        setError(msg);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    void loadProfiles();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const { ageRange, dietF, religionF, communityF, heightRange, sort } = appliedFilters;
+    let rows = profiles.filter((c) => {
+      if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
+      if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
+      if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
+      if (communityF.length && c.community && !inFilterSet(c.community, communityF)) return false;
+      const h = c.height_cm;
+      if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
+      return true;
+    });
+    if (sort === 'newest') {
+      rows = [...rows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    } else if (sort === 'youngest') {
+      rows = [...rows].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
+    } else {
+      rows = [...rows].sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
+    }
+    return rows;
+  }, [profiles, appliedFilters]);
+
+  const pendingFilterChanges = useMemo(() => {
+    return !filtersEqual(draftFilters, appliedFilters);
+  }, [draftFilters, appliedFilters]);
+
+  const filtersActive = useMemo(() => {
+    return !filtersEqual(appliedFilters, defaultFilters());
+  }, [appliedFilters]);
+
+  function applyFilters() {
+    setAppliedFilters(cloneFilters(draftFilters));
+  }
+
+  function clearFilters() {
+    const defaults = defaultFilters();
+    setDraftFilters(defaults);
+    setAppliedFilters(cloneFilters(defaults));
+  }
+
+  return (
+    <PublicLayout>
+      <div className="layout-max">
+        <div style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Demo browse</h1>
+          <span className="badge badge-warning">No login required</span>
+        </div>
+        <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>
+          This is a temporary public demo view for testing. Contact request actions are disabled here.
+          <Link to="/login" style={{ marginLeft: 6 }}>
+            Member login
+          </Link>
+        </p>
+
+        <div className="member-browse-filters">
+          <div className="member-browse-filters-head">
+            <h2 className="member-browse-filters-title">Filters</h2>
+            <div className="member-browse-filters-actions">
+              <div className="member-browse-filters-sort-wrap">
+                <label htmlFor="demo-sort">Sort</label>
+                <select
+                  id="demo-sort"
+                  className="member-filter-select"
+                  value={draftFilters.sort}
+                  onChange={(e) =>
+                    setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
+                  }
+                >
+                  <option value="newest">Newest</option>
+                  <option value="youngest">Youngest</option>
+                  <option value="oldest">Oldest</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!pendingFilterChanges}
+                onClick={applyFilters}
+              >
+                Filter
+              </button>
+              <button type="button" className="member-filter-clear" disabled={!filtersActive} onClick={clearFilters}>
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="member-browse-filters-grid">
+            <div className="member-filter-section">
+              <span id="demo-age-label" className="member-filter-section-label">
+                Age range
+              </span>
+              <div className="member-filter-range-row" role="group" aria-labelledby="demo-age-label">
+                <input
+                  type="number"
+                  className="member-filter-num-input"
+                  min={18}
+                  max={80}
+                  inputMode="numeric"
+                  value={draftFilters.ageRange[0]}
+                  onChange={(e) =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      ageRange: [Number(e.target.value), prev.ageRange[1]],
+                    }))
+                  }
+                  aria-label="Minimum age"
+                />
+                <span className="member-filter-range-to" aria-hidden>
+                  to
+                </span>
+                <input
+                  type="number"
+                  className="member-filter-num-input"
+                  min={18}
+                  max={80}
+                  inputMode="numeric"
+                  value={draftFilters.ageRange[1]}
+                  onChange={(e) =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      ageRange: [prev.ageRange[0], Number(e.target.value)],
+                    }))
+                  }
+                  aria-label="Maximum age"
+                />
+              </div>
+            </div>
+
+            <div className="member-filter-section">
+              <span id="demo-height-label" className="member-filter-section-label">
+                Height range
+              </span>
+              <div className="member-filter-range-row" role="group" aria-labelledby="demo-height-label">
+                <div className="member-filter-range-field">
+                  <select
+                    className="member-filter-select"
+                    value={draftFilters.heightRange[0]}
+                    onChange={(e) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        heightRange: [Number(e.target.value), prev.heightRange[1]],
+                      }))
+                    }
+                    aria-label="Minimum height"
+                  >
+                    {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
+                      <option key={o.cm} value={o.cm}>
+                        {cmToFeetInches(o.cm)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <span className="member-filter-range-to" aria-hidden>
+                  to
+                </span>
+                <div className="member-filter-range-field">
+                  <select
+                    className="member-filter-select"
+                    value={draftFilters.heightRange[1]}
+                    onChange={(e) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        heightRange: [prev.heightRange[0], Number(e.target.value)],
+                      }))
+                    }
+                    aria-label="Maximum height"
+                  >
+                    {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
+                      <option key={o.cm} value={o.cm}>
+                        {cmToFeetInches(o.cm)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="member-filter-section member-filter-section--full">
+              <span id="demo-diet-label" className="member-filter-section-label">
+                Diet
+              </span>
+              <div className="member-filter-chip-group" role="group" aria-labelledby="demo-diet-label">
+                {DIET_ALL.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={
+                      draftFilters.dietF.includes(o)
+                        ? 'member-filter-chip member-filter-chip--selected'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={draftFilters.dietF.includes(o)}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        dietF: prev.dietF.includes(o) ? prev.dietF.filter((x) => x !== o) : [...prev.dietF, o],
+                      }))
+                    }
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="member-browse-filters-pair member-filter-section--full">
+              <div className="member-filter-section">
+                <span id="demo-religion-label" className="member-filter-section-label">
+                  Religion
+                </span>
+                <div className="member-filter-chip-group" role="group" aria-labelledby="demo-religion-label">
+                  {RELIGION_ALL.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      className={
+                        draftFilters.religionF.includes(o)
+                          ? 'member-filter-chip member-filter-chip--selected'
+                          : 'member-filter-chip'
+                      }
+                      aria-pressed={draftFilters.religionF.includes(o)}
+                      onClick={() =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          religionF: prev.religionF.includes(o)
+                            ? prev.religionF.filter((x) => x !== o)
+                            : [...prev.religionF, o],
+                        }))
+                      }
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="member-filter-section">
+                <span id="demo-community-label" className="member-filter-section-label">
+                  Community
+                </span>
+                <div className="member-filter-chip-group" role="group" aria-labelledby="demo-community-label">
+                  {COMMUNITY_ALL.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      className={
+                        draftFilters.communityF.includes(o)
+                          ? 'member-filter-chip member-filter-chip--selected'
+                          : 'member-filter-chip'
+                      }
+                      aria-pressed={draftFilters.communityF.includes(o)}
+                      onClick={() =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          communityF: prev.communityF.includes(o)
+                            ? prev.communityF.filter((x) => x !== o)
+                            : [...prev.communityF, o],
+                        }))
+                      }
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section className="member-browse-grid">
+          <div className="member-browse-result-line">
+            <span>
+              {filtered.length === 0
+                ? profiles.length === 0
+                  ? 'No demo profiles to show yet.'
+                  : 'No profiles match these filters.'
+                : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
+            </span>
+          </div>
+
+          {loading && <p>Loading demo profiles…</p>}
+          {error && (
+            <div className="member-browse-empty">
+              <p className="member-browse-empty-title">Could not load demo profiles</p>
+              <p className="member-browse-empty-desc">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && (
+            <div className="member-browse-cards">
+              {filtered.map((c) => (
+                <article key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ position: 'relative' }}>
+                    <span
+                      className="badge badge-muted"
+                      style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(255,255,255,0.9)' }}
+                    >
+                      {c.reference_number}
+                    </span>
+                    <ProfileThumb profileId={c.id} firstName={c.first_name} />
+                  </div>
+                  <div style={{ padding: '12px 14px 14px' }}>
+                    <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
+                      {c.first_name}
+                      {c.age ? `, ${c.age}` : ''}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                      {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      {[c.religion, c.community, c.nationality].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </PublicLayout>
+  );
+}

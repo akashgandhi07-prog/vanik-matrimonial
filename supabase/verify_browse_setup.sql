@@ -16,6 +16,34 @@ FROM pg_policy
 WHERE polrelid = 'public.profiles'::regclass
   AND polname = 'profiles_select_opposite_active';
 
+-- 2b) Legacy recursive policy must NOT exist.
+-- If this returns a row, drop it:
+--   DROP POLICY IF EXISTS profiles_select ON public.profiles;
+SELECT polname
+FROM pg_policy
+WHERE polrelid = 'public.profiles'::regclass
+  AND polname = 'profiles_select';
+
+-- 2c) Legacy helper signature should NOT exist.
+SELECT p.oid::regprocedure AS function_signature
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'viewer_can_browse_gender'
+  AND pg_get_function_identity_arguments(p.oid) = 'text';
+
+-- 2d) Atomic request guard function must exist.
+SELECT p.oid::regprocedure AS function_signature
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname = 'create_contact_request_atomic'
+  AND pg_get_function_identity_arguments(p.oid) = 'uuid, uuid[]';
+
+-- 2e) Viewer helper should require a non-null membership expiry for the viewer.
+SELECT pg_get_functiondef('public.viewer_can_browse_gender(uuid, text)'::regprocedure) LIKE '%membership_expires_at IS NOT NULL%'
+  AS viewer_membership_not_null_guard_present;
+
 -- 3) How many male profiles are listable by data alone (postgres role bypasses RLS).
 --    Result is a single NUMBER row (the count), not one row per profile.
 SELECT count(*) AS eligible_male_profiles

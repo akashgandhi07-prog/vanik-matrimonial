@@ -438,7 +438,7 @@ color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Set your pas
 font-size:13px;">{reset_link}</span></p>
 <p>Your profile details have been transferred from the previous register. If anything looks wrong, reply to this email.</p>
 <p>With good wishes,<br/>The register team<br/>
-<a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a></p>"""
+<a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>"""
     return (
         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/></head><body style=\"margin:0;padding:24px;"
         "background:#f9fafb;font-family:system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111827;\">"

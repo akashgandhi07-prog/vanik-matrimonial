@@ -7,7 +7,7 @@ export default function Privacy() {
         <h1>Privacy policy</h1>
         <p style={{ color: 'var(--color-text-secondary)' }}>
           Last updated: 13 April 2026. Data controller: <strong>Vanik Council</strong> (
-          <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>).
+          <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>).
         </p>
         <h2>What we collect</h2>
         <p>
@@ -33,7 +33,7 @@ export default function Privacy() {
         <p>
           You may request access, correction, or deletion of your personal data. To exercise these
           rights, email{' '}
-          <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>. We
+          <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>. We
           respond within statutory timeframes. You may also lodge a complaint with the Information
           Commissioner’s Office (ICO).
         </p>

@@ -13,6 +13,7 @@ import AdminOverview from './pages/admin/AdminOverview';
 import AdminRequests from './pages/admin/AdminRequests';
 import AdminScheduledJobs from './pages/admin/AdminScheduledJobs';
 import AdminSettings from './pages/admin/AdminSettings';
+import DemoBrowse from './pages/DemoBrowse';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
 import Landing from './pages/Landing';
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/demo" element={<DemoBrowse />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />

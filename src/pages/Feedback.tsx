@@ -173,10 +173,10 @@ export default function Feedback() {
             margin: 0,
           }}
         >
-          <strong>Who sees this?</strong> The register committee (admins) can read your answers and link them
-          to your account and contact request.{' '}
-          <strong>The candidate does not see your feedback.</strong> Optional notes should avoid sharing
-          another person&apos;s private information unless necessary.
+          <strong>Anonymous to candidates:</strong> the candidate does not see your feedback or your name.{' '}
+          <strong>Service improvement:</strong> the register committee uses these answers to improve quality and
+          safety of the service. Optional notes should avoid sharing another person&apos;s private information unless
+          necessary.
         </p>
         <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 14 }}>
           <div>

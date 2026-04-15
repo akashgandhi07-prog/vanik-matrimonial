@@ -9,6 +9,7 @@ type Props = {
   trayFull: boolean;
   blocked: boolean;
   bookmarked: boolean;
+  allowRequestAction?: boolean;
   onClose: () => void;
   onToggleBookmark: () => void;
   onToggleTray: () => void;
@@ -30,6 +31,7 @@ export function ProfileModal({
   trayFull,
   blocked,
   bookmarked,
+  allowRequestAction = true,
   onClose,
   onToggleBookmark,
   onToggleTray,
@@ -120,29 +122,36 @@ export function ProfileModal({
             <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
               {bookmarked ? '★ Saved' : '☆ Save profile'}
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={blocked || (!inTray && trayFull)}
-              title={
-                blocked
-                  ? 'Already requested within 6 months'
-                  : !inTray && trayFull
-                  ? 'Tray is full. Submit or remove a candidate first.'
-                  : undefined
-              }
-              onClick={onToggleTray}
-            >
-              {blocked
-                ? '✓ Already requested'
-                : inTray
-                ? '✕ Remove from request'
-                : 'Request contact details'}
-            </button>
+            {allowRequestAction ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={blocked || (!inTray && trayFull)}
+                title={
+                  blocked
+                    ? 'You already have this member\'s details in My requests'
+                    : !inTray && trayFull
+                    ? 'Tray is full. Submit or remove a candidate first.'
+                    : undefined
+                }
+                onClick={onToggleTray}
+              >
+                {blocked
+                  ? '✓ Details available'
+                  : inTray
+                  ? '✕ Remove from request'
+                  : 'Request contact details'}
+              </button>
+            ) : null}
           </div>
+          {!allowRequestAction && (
+            <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              To request contact details, open this profile from Browse and add it to your request tray.
+            </p>
+          )}
           {blocked && (
             <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-warning)' }}>
-              You have already requested this person's details within the last 6 months.
+              You already requested this profile. Their details are available under My requests.
             </p>
           )}
         </div>

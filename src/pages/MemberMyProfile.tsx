@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
@@ -33,6 +33,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [delConfirm, setDelConfirm] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveError, setSaveError] = useState('');
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [seeking, setSeeking] = useState<'Male' | 'Female' | 'Both'>(() =>
@@ -44,9 +45,45 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   }, [p.seeking_gender, p.gender, p.id]);
 
   const heightCm = height === '' ? null : Number(height);
+  const initialHeight = p.height_cm == null ? '' : Number(p.height_cm);
+  const hasUnsavedChanges = useMemo(() => {
+    return (
+      education !== (p.education ?? '') ||
+      jobTitle !== (p.job_title ?? '') ||
+      hobbies !== (p.hobbies ?? '') ||
+      future !== (p.future_settlement_plans ?? '') ||
+      nationality !== (p.nationality ?? '') ||
+      town !== (p.town_country_of_origin ?? '') ||
+      height !== initialHeight ||
+      diet !== (p.diet ?? 'Veg') ||
+      seeking !== (p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'))
+    );
+  }, [
+    education,
+    jobTitle,
+    hobbies,
+    future,
+    nationality,
+    town,
+    height,
+    initialHeight,
+    diet,
+    seeking,
+    p.education,
+    p.job_title,
+    p.hobbies,
+    p.future_settlement_plans,
+    p.nationality,
+    p.town_country_of_origin,
+    p.diet,
+    p.seeking_gender,
+    p.gender,
+  ]);
 
   async function saveField() {
+    if (!hasUnsavedChanges) return;
     setSaveStatus('saving');
+    setSaveError('');
     const { error } = await supabase
       .from('profiles')
       .update({
@@ -63,6 +100,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
       .eq('id', p.id);
     if (error) {
       setSaveStatus('error');
+      setSaveError(error.message);
     } else {
       setSaveStatus('saved');
       void loadAll();
@@ -153,6 +191,42 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
           Changes save when you click &quot;Save changes&quot;. These fields do not require admin approval.
         </p>
+        <div
+          className="member-form-actions"
+          style={{
+            position: 'sticky',
+            top: 8,
+            zIndex: 5,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 10,
+            padding: 10,
+            margin: '0 0 10px',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={saveStatus === 'saving' || !hasUnsavedChanges}
+            onClick={() => void saveField()}
+          >
+            {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
+          </button>
+          {saveStatus === 'saved' && (
+            <span style={{ color: 'var(--color-success)', fontSize: 14 }}>✓ Saved</span>
+          )}
+          {saveStatus === 'error' && (
+            <span style={{ color: 'var(--color-danger)', fontSize: 14 }}>
+              Failed to save{saveError ? `: ${saveError}` : ''}
+            </span>
+          )}
+          {saveStatus !== 'saving' && hasUnsavedChanges && (
+            <span style={{ color: 'var(--color-warning)', fontSize: 13 }}>Unsaved changes</span>
+          )}
+          {saveStatus !== 'saving' && !hasUnsavedChanges && saveStatus !== 'saved' && (
+            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>No pending changes</span>
+          )}
+        </div>
         <div style={{ display: 'grid', gap: 10 }}>
           <div>
             <label className="label" htmlFor="mp-seeking">
@@ -249,7 +323,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={saveStatus === 'saving'}
+              disabled={saveStatus === 'saving' || !hasUnsavedChanges}
               onClick={() => void saveField()}
             >
               {saveStatus === 'saving' ? 'Saving…' : 'Save changes'}
@@ -258,7 +332,12 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               <span style={{ color: 'var(--color-success)', fontSize: 14 }}>✓ Saved</span>
             )}
             {saveStatus === 'error' && (
-              <span style={{ color: 'var(--color-danger)', fontSize: 14 }}>Failed to save</span>
+              <span style={{ color: 'var(--color-danger)', fontSize: 14 }}>
+                Failed to save{saveError ? `: ${saveError}` : ''}
+              </span>
+            )}
+            {saveStatus !== 'saving' && hasUnsavedChanges && (
+              <span style={{ color: 'var(--color-warning)', fontSize: 13 }}>Unsaved changes</span>
             )}
           </div>
         </div>

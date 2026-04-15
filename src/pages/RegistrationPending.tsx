@@ -85,7 +85,7 @@ export default function RegistrationPending() {
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
             Need help? Contact{' '}
-            <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+            <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
             <button

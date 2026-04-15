@@ -7,32 +7,52 @@ export default function Landing() {
       <div className="layout-max">
         <div className="landing-wrap">
           <div className="landing-body">
-            <p className="landing-kicker">Vanik Council</p>
+            <section className="landing-hero">
+              <p className="landing-kicker">Vanik Council</p>
 
-            <h1 className="landing-title">
-              Vanik Matrimonial Register
-            </h1>
+              <h1 className="landing-title">
+                Vanik Matrimonial Register
+              </h1>
 
-            <p className="landing-lead">
-              A private introduction service for Vanik and wider Hindu and Jain families,
-              run by Vanik Council volunteers. We have been helping families find
-              respectful introductions for many years.
-            </p>
+              <p className="landing-lead">
+                A private introduction service for Vanik and wider Hindu and Jain families,
+                run by Vanik Council volunteers. We have been helping families find
+                respectful introductions for many years.
+              </p>
 
-            <p className="landing-lead">
-              Membership is open to adults 18 and over. Every application is reviewed
-              by our team before a profile goes live. Contact details are shared only
-              by email, and only when you ask us to. Nothing is displayed publicly.
-            </p>
+              <p className="landing-lead">
+                Membership is open to adults 18 and over. Every application is reviewed
+                by our team before a profile goes live. Contact details are shared only
+                inside your member dashboard when you ask for them. Nothing is displayed publicly.
+              </p>
 
-            <div className="landing-actions">
-              <Link to="/register" className="btn btn-primary">
-                Apply to join
-              </Link>
-              <Link to="/login" className="btn btn-secondary">
-                Member login
-              </Link>
-            </div>
+              <div className="landing-actions">
+                <Link to="/register" className="btn btn-primary">
+                  Apply to join
+                </Link>
+                <Link to="/login" className="btn btn-secondary">
+                  Member login
+                </Link>
+                <Link to="/demo" className="btn btn-secondary">
+                  View demo (no login)
+                </Link>
+              </div>
+
+              <div className="landing-trust-grid" aria-label="Service highlights">
+                <article className="landing-trust-card">
+                  <h2>Verified members</h2>
+                  <p>Each profile is reviewed by our team before it appears.</p>
+                </article>
+                <article className="landing-trust-card">
+                  <h2>Private by design</h2>
+                  <p>Contact details are only visible after a member request.</p>
+                </article>
+                <article className="landing-trust-card">
+                  <h2>Community run</h2>
+                  <p>Not-for-profit service managed by Vanik Council volunteers.</p>
+                </article>
+              </div>
+            </section>
 
             <div className="landing-details">
               <p>
@@ -42,7 +62,7 @@ export default function Landing() {
               </p>
               <p>
                 If you have any questions before applying, please{' '}
-                <a href="mailto:register@vanikmatrimonial.co.uk">
+                <a href="mailto:mahesh.gandhi@vanikcouncil.uk">
                   email our team
                 </a>
                 .
@@ -56,7 +76,7 @@ export default function Landing() {
               <ol className="landing-steps-list">
                 <li>Register and upload proof of identity. We review your application within five working days.</li>
                 <li>Once approved, browse verified profiles and save anyone you'd like to know more about.</li>
-                <li>Request contact details from us. We share them by email to both families.</li>
+                <li>Request contact details and view them directly in your My requests page.</li>
               </ol>
             </div>
 

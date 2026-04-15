@@ -407,7 +407,7 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
         <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
           You are signed in, but your membership record did not load. This is often temporary — try
           again, or sign out and sign back in. If it keeps happening, contact{' '}
-          <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+          <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
         </p>
         <details style={{ marginTop: 16, fontSize: 14, color: 'var(--color-text-secondary)' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Troubleshooting (site owners)</summary>

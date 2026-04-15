@@ -150,7 +150,7 @@ export default function MembershipExpired() {
             <p style={{ color: 'var(--color-text-secondary)' }}>
               Online renewal is available when your membership is active (due soon) or has expired. For help,
               contact{' '}
-              <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+              <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
             </p>
             <Link to="/" className="btn btn-secondary" style={{ marginTop: 16, display: 'inline-flex' }}>
               Home
@@ -161,7 +161,7 @@ export default function MembershipExpired() {
     );
   }
 
-  const mail = `mailto:register@vanikmatrimonial.co.uk?subject=${encodeURIComponent(
+  const mail = `mailto:mahesh.gandhi@vanikcouncil.uk?subject=${encodeURIComponent(
     `Membership renewal - ${profile.reference_number || 'member'}`
   )}`;
 

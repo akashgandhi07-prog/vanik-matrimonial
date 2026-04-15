@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   const admin = getAdminClient();
   const resendKey = Deno.env.get('RESEND_API_KEY');
   const digestTo =
-    Deno.env.get('ADMIN_DIGEST_EMAIL') ?? Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'register@vanikmatrimonial.co.uk';
+    Deno.env.get('ADMIN_DIGEST_EMAIL') ?? Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
 
   if (!resendKey) {
     return jsonResponse({ ok: true, skipped: true, reason: 'no_resend' }, req);

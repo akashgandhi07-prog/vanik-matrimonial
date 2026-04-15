@@ -249,22 +249,11 @@ Deno.serve(async (req) => {
         : 50;
     const from = (page - 1) * pageSize;
     const to = page * pageSize - 1;
-    const emailFilter = typeof body.email_status_filter === 'string' ? body.email_status_filter.trim() : '';
-
-    let rq = admin.from('requests').select('*').order('created_at', { ascending: false });
-    if (
-      emailFilter === 'failed' ||
-      emailFilter === 'skipped' ||
-      emailFilter === 'pending' ||
-      emailFilter === 'sent' ||
-      emailFilter === 'bounced'
-    ) {
-      rq = rq.eq('email_status', emailFilter);
-    } else if (emailFilter === 'failed_or_skipped') {
-      rq = rq.in('email_status', ['failed', 'skipped']);
-    }
-
-    const { data: requestRows, error: rErr } = await rq.range(from, to);
+    const { data: requestRows, error: rErr } = await admin
+      .from('requests')
+      .select('id, created_at, requester_id, candidate_ids')
+      .order('created_at', { ascending: false })
+      .range(from, to);
     if (rErr) return jsonResponse({ error: rErr.message }, req, 500);
 
     const rows = requestRows ?? [];
@@ -286,125 +275,6 @@ Deno.serve(async (req) => {
       }
     }
     return jsonResponse({ requests: rows, names }, req);
-  }
-
-  if (action === 'resend_contact_request') {
-    const requestId = typeof body.request_id === 'string' ? body.request_id : '';
-    if (!requestId) return jsonResponse({ error: 'request_id required' }, req, 400);
-
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (!resendKey) return jsonResponse({ error: 'Email provider not configured' }, req, 500);
-
-    const { data: reqRow, error: reqErr } = await admin
-      .from('requests')
-      .select('id, requester_id, candidate_ids')
-      .eq('id', requestId)
-      .single();
-    if (reqErr || !reqRow) return jsonResponse({ error: 'Request not found' }, req, 404);
-
-    const requesterId = reqRow.requester_id as string;
-    const candidateIds = (reqRow.candidate_ids as string[]) ?? [];
-    if (candidateIds.length === 0) {
-      return jsonResponse({ error: 'Request has no candidates' }, req, 400);
-    }
-
-    const { data: requester, error: rErr } = await admin
-      .from('profiles')
-      .select('id, first_name, gender, reference_number')
-      .eq('id', requesterId)
-      .single();
-    if (rErr || !requester) return jsonResponse({ error: 'Requester profile not found' }, req, 404);
-
-    const { data: requesterPrivate } = await admin
-      .from('member_private')
-      .select('email')
-      .eq('profile_id', requesterId)
-      .single();
-
-    const { data: candProfiles, error: cpErr } = await admin
-      .from('profiles')
-      .select('id, first_name, reference_number')
-      .in('id', candidateIds);
-    if (cpErr) return jsonResponse({ error: cpErr.message }, req, 500);
-    const profById = new Map(
-      (candProfiles ?? []).map((p) => {
-        const row = p as { id: string; first_name: string; reference_number: string | null };
-        return [row.id, row];
-      })
-    );
-
-    const { data: candPrivate, error: mpErr } = await admin
-      .from('member_private')
-      .select('*')
-      .in('profile_id', candidateIds);
-    if (mpErr) return jsonResponse({ error: mpErr.message }, req, 500);
-    const privById = new Map(
-      (candPrivate ?? []).map((m) => [m.profile_id as string, m as Record<string, unknown>])
-    );
-
-    const candidatesHtmlParts: string[] = [];
-    for (const cid of candidateIds) {
-      const p = profById.get(cid);
-      const m = privById.get(cid);
-      if (!p || !m) {
-        return jsonResponse(
-          { error: `Missing profile or private data for candidate ${cid}` },
-          req,
-          400
-        );
-      }
-      const fullName = `${stripHtml(p.first_name, 80)} ${stripHtml(String(m.surname ?? ''), 80)}`;
-      candidatesHtmlParts.push(
-        `<div style="margin:16px 0;padding:12px;border:1px solid #e5e7eb;border-radius:8px;">
-        <p><strong>${fullName}</strong> - Ref ${stripHtml(p.reference_number ?? '', 20)}</p>
-        <p>Mobile: ${stripHtml(String(m.mobile_phone ?? ''), 40)}<br/>Email: ${stripHtml(String(m.email ?? ''), 120)}</p>
-        <p>Father: ${stripHtml(String(m.father_name ?? ''), 120)}<br/>Mother: ${stripHtml(String(m.mother_name ?? ''), 120)}</p>
-      </div>`
-      );
-    }
-
-    const er = await dispatchEmail(admin, resendKey, {
-      type: 'contact_details',
-      recipientProfileId: requester.id,
-      extra_data: {
-        requester_first_name: requester.first_name,
-        requester_email: requesterPrivate?.email ?? '',
-        candidates_html: candidatesHtmlParts.join(''),
-      },
-    });
-    if (!er.ok) {
-      await admin.from('requests').update({ email_status: 'failed' }).eq('id', requestId);
-      return jsonResponse({ error: er.error ?? 'Send failed' }, req, 500);
-    }
-
-    for (const cid of candidateIds) {
-      await dispatchEmail(admin, resendKey, {
-        type: 'candidate_notification',
-        recipientProfileId: cid,
-        extra_data: {
-          requester_reference: requester.reference_number,
-          requester_first_name: requester.first_name,
-          requester_gender: requester.gender,
-        },
-      });
-    }
-
-    await admin
-      .from('requests')
-      .update({
-        email_sent_at: new Date().toISOString(),
-        email_status: 'sent',
-      })
-      .eq('id', requestId);
-
-    await admin.from('admin_actions').insert({
-      admin_user_id: callerId,
-      target_profile_id: requesterId,
-      action_type: 'contact_request_email_resent',
-      notes: `request_id=${requestId}`,
-    });
-
-    return jsonResponse({ ok: true }, req);
   }
 
   if (action === 'list_feedback') {

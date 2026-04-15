@@ -29,6 +29,54 @@ const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
 const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
 const COMMUNITY_ALL = ['Vanik', 'Lohana', 'Brahmin', 'Other'] as const;
 
+type BrowseFilters = {
+  ageRange: [number, number];
+  dietF: string[];
+  religionF: string[];
+  communityF: string[];
+  heightRange: [number, number];
+  sort: 'newest' | 'youngest' | 'oldest';
+};
+
+function defaultFilters(): BrowseFilters {
+  return {
+    ageRange: [...DEFAULT_AGE],
+    dietF: [...DIET_ALL],
+    religionF: [...RELIGION_ALL],
+    communityF: [...COMMUNITY_ALL],
+    heightRange: [...DEFAULT_HEIGHT],
+    sort: 'newest',
+  };
+}
+
+function cloneFilters(filters: BrowseFilters): BrowseFilters {
+  return {
+    ageRange: [...filters.ageRange],
+    dietF: [...filters.dietF],
+    religionF: [...filters.religionF],
+    communityF: [...filters.communityF],
+    heightRange: [...filters.heightRange],
+    sort: filters.sort,
+  };
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function filtersEqual(a: BrowseFilters, b: BrowseFilters): boolean {
+  return (
+    a.ageRange[0] === b.ageRange[0] &&
+    a.ageRange[1] === b.ageRange[1] &&
+    a.heightRange[0] === b.heightRange[0] &&
+    a.heightRange[1] === b.heightRange[1] &&
+    sameStringArray(a.dietF, b.dietF) &&
+    sameStringArray(a.religionF, b.religionF) &&
+    sameStringArray(a.communityF, b.communityF) &&
+    a.sort === b.sort
+  );
+}
+
 function inFilterSet(value: string, allowed: readonly string[]): boolean {
   const v = value.trim().toLowerCase();
   return allowed.some((a) => a.toLowerCase() === v);
@@ -39,17 +87,13 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
 }
 
 export default function MemberBrowse() {
-  const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
+  const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll } =
     useMemberArea();
-  const [ageRange, setAgeRange] = useState<[number, number]>(DEFAULT_AGE);
-  const [dietF, setDietF] = useState<string[]>([...DIET_ALL]);
-  const [religionF, setReligionF] = useState<string[]>([...RELIGION_ALL]);
-  const [communityF, setCommunityF] = useState<string[]>([...COMMUNITY_ALL]);
-  const [heightRange, setHeightRange] = useState<[number, number]>(DEFAULT_HEIGHT);
-  const [sort, setSort] = useState<'newest' | 'youngest' | 'oldest'>('newest');
+  const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
+  const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [tray, setTray] = useState<string[]>([]);
   const [trayDrawerOpen, setTrayDrawerOpen] = useState(false);
-  const [contactsOpen, setContactsOpen] = useState<null | { contacts: ContactDetailRow[]; email: string }>(
+  const [contactsOpen, setContactsOpen] = useState<null | { contacts: ContactDetailRow[] }>(
     null
   );
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
@@ -74,6 +118,7 @@ export default function MemberBrowse() {
 
   const filtered = useMemo(() => {
     if (!profile) return [];
+    const { ageRange, dietF, religionF, communityF, heightRange, sort } = appliedFilters;
     let rows = candidates.filter((c) => {
       if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
       if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
@@ -93,36 +138,32 @@ export default function MemberBrowse() {
       rows = [...rows].sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
     }
     return rows;
-   }, [profile, candidates, ageRange, dietF, religionF, communityF, heightRange, sort]);
+  }, [profile, candidates, appliedFilters]);
 
   const filtersActive = useMemo(() => {
+    const defaults = defaultFilters();
     return (
-      ageRange[0] !== DEFAULT_AGE[0] ||
-      ageRange[1] !== DEFAULT_AGE[1] ||
-      heightRange[0] !== DEFAULT_HEIGHT[0] ||
-      heightRange[1] !== DEFAULT_HEIGHT[1] ||
-      dietF.length < DIET_ALL.length ||
-      religionF.length < RELIGION_ALL.length ||
-      communityF.length < COMMUNITY_ALL.length ||
-      sort !== 'newest'
+      !filtersEqual(appliedFilters, defaults)
     );
-  }, [ageRange, heightRange, dietF, religionF, communityF, sort]);
+  }, [appliedFilters]);
+
+  const pendingFilterChanges = useMemo(() => {
+    return !filtersEqual(draftFilters, appliedFilters);
+  }, [draftFilters, appliedFilters]);
 
   function clearFilters() {
-    setAgeRange(DEFAULT_AGE);
-    setHeightRange(DEFAULT_HEIGHT);
-    setDietF([...DIET_ALL]);
-    setReligionF([...RELIGION_ALL]);
-    setCommunityF([...COMMUNITY_ALL]);
-    setSort('newest');
+    const defaults = defaultFilters();
+    setDraftFilters(defaults);
+    setAppliedFilters(cloneFilters(defaults));
   }
 
-  const recentlyRequestedCandidateIds = useMemo(() => {
-    // eslint-disable-next-line react-hooks/purity -- matches rolling 7-day request window on server
-    const cutoff = Date.now() - 7 * 86400000;
+  function applyFilters() {
+    setAppliedFilters(cloneFilters(draftFilters));
+  }
+
+  const requestedCandidateIds = useMemo(() => {
     const ids = new Set<string>();
     for (const r of requests) {
-      if (new Date(r.created_at).getTime() <= cutoff) continue;
       for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
     }
     return ids;
@@ -149,16 +190,17 @@ export default function MemberBrowse() {
         candidate_ids: tray,
       })) as {
         contacts?: Array<Record<string, string>>;
-        requester_email?: string;
         error?: string;
         message?: string;
         request_ids?: string[];
       };
+      if (res.error) {
+        throw new Error(res.message || res.error);
+      }
       setTray([]);
       setTrayDrawerOpen(false);
       setContactsOpen({
         contacts: (res.contacts ?? []) as ContactDetailRow[],
-        email: res.requester_email ?? privateRow?.email ?? '',
       });
       void loadAll();
     } catch (e) {
@@ -189,14 +231,24 @@ export default function MemberBrowse() {
               <select
                 id="browse-sort"
                 className="member-filter-select"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as typeof sort)}
+                value={draftFilters.sort}
+                onChange={(e) =>
+                  setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
+                }
               >
                 <option value="newest">Newest</option>
                 <option value="youngest">Youngest</option>
                 <option value="oldest">Oldest</option>
               </select>
             </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!pendingFilterChanges}
+              onClick={applyFilters}
+            >
+              Filter
+            </button>
             <button
               type="button"
               className="member-filter-clear"
@@ -247,8 +299,13 @@ export default function MemberBrowse() {
                 min={18}
                 max={80}
                 inputMode="numeric"
-                value={ageRange[0]}
-                onChange={(e) => setAgeRange([Number(e.target.value), ageRange[1]])}
+                value={draftFilters.ageRange[0]}
+                onChange={(e) =>
+                  setDraftFilters((prev) => ({
+                    ...prev,
+                    ageRange: [Number(e.target.value), prev.ageRange[1]],
+                  }))
+                }
                 aria-label="Minimum age"
               />
               <span className="member-filter-range-to" aria-hidden>
@@ -260,8 +317,13 @@ export default function MemberBrowse() {
                 min={18}
                 max={80}
                 inputMode="numeric"
-                value={ageRange[1]}
-                onChange={(e) => setAgeRange([ageRange[0], Number(e.target.value)])}
+                value={draftFilters.ageRange[1]}
+                onChange={(e) =>
+                  setDraftFilters((prev) => ({
+                    ...prev,
+                    ageRange: [prev.ageRange[0], Number(e.target.value)],
+                  }))
+                }
                 aria-label="Maximum age"
               />
             </div>
@@ -275,11 +337,16 @@ export default function MemberBrowse() {
               <div className="member-filter-range-field">
                 <select
                   className="member-filter-select"
-                  value={heightRange[0]}
-                  onChange={(e) => setHeightRange([Number(e.target.value), heightRange[1]])}
+                  value={draftFilters.heightRange[0]}
+                  onChange={(e) =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      heightRange: [Number(e.target.value), prev.heightRange[1]],
+                    }))
+                  }
                   aria-label="Minimum height"
                 >
-                  {HEIGHT_OPTIONS.filter((o) => o.cm <= heightRange[1]).map((o) => (
+                  {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
                     <option key={o.cm} value={o.cm}>
                       {cmToFeetInches(o.cm)}
                     </option>
@@ -292,11 +359,16 @@ export default function MemberBrowse() {
               <div className="member-filter-range-field">
                 <select
                   className="member-filter-select"
-                  value={heightRange[1]}
-                  onChange={(e) => setHeightRange([heightRange[0], Number(e.target.value)])}
+                  value={draftFilters.heightRange[1]}
+                  onChange={(e) =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      heightRange: [prev.heightRange[0], Number(e.target.value)],
+                    }))
+                  }
                   aria-label="Maximum height"
                 >
-                  {HEIGHT_OPTIONS.filter((o) => o.cm >= heightRange[0]).map((o) => (
+                  {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
                     <option key={o.cm} value={o.cm}>
                       {cmToFeetInches(o.cm)}
                     </option>
@@ -320,11 +392,18 @@ export default function MemberBrowse() {
                   key={o}
                   type="button"
                   className={
-                    dietF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'
+                    draftFilters.dietF.includes(o)
+                      ? 'member-filter-chip member-filter-chip--selected'
+                      : 'member-filter-chip'
                   }
-                  aria-pressed={dietF.includes(o)}
+                  aria-pressed={draftFilters.dietF.includes(o)}
                   onClick={() =>
-                    setDietF(dietF.includes(o) ? dietF.filter((x) => x !== o) : [...dietF, o])
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      dietF: prev.dietF.includes(o)
+                        ? prev.dietF.filter((x) => x !== o)
+                        : [...prev.dietF, o],
+                    }))
                   }
                 >
                   {o}
@@ -344,15 +423,18 @@ export default function MemberBrowse() {
                     key={o}
                     type="button"
                     className={
-                      religionF.includes(o)
+                      draftFilters.religionF.includes(o)
                         ? 'member-filter-chip member-filter-chip--selected'
                         : 'member-filter-chip'
                     }
-                    aria-pressed={religionF.includes(o)}
+                    aria-pressed={draftFilters.religionF.includes(o)}
                     onClick={() =>
-                      setReligionF(
-                        religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o]
-                      )
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        religionF: prev.religionF.includes(o)
+                          ? prev.religionF.filter((x) => x !== o)
+                          : [...prev.religionF, o],
+                      }))
                     }
                   >
                     {o}
@@ -370,15 +452,18 @@ export default function MemberBrowse() {
                     key={o}
                     type="button"
                     className={
-                      communityF.includes(o)
+                      draftFilters.communityF.includes(o)
                         ? 'member-filter-chip member-filter-chip--selected'
                         : 'member-filter-chip'
                     }
-                    aria-pressed={communityF.includes(o)}
+                    aria-pressed={draftFilters.communityF.includes(o)}
                     onClick={() =>
-                      setCommunityF(
-                        communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o]
-                      )
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        communityF: prev.communityF.includes(o)
+                          ? prev.communityF.filter((x) => x !== o)
+                          : [...prev.communityF, o],
+                      }))
                     }
                   >
                     {o}
@@ -419,7 +504,7 @@ export default function MemberBrowse() {
                   future. Other people must also have <strong>auth_user_id</strong> linked to their login. Run{' '}
                   <code style={{ fontSize: 13 }}>supabase/verify_browse_setup.sql</code> in the Supabase SQL editor (same
                   project as the app) to verify migration and data. Need help?{' '}
-                  <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+                  <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
                 </p>
               ) : (
                 <>
@@ -438,7 +523,7 @@ export default function MemberBrowse() {
           )}
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
-              const blocked = recentlyRequestedCandidateIds.has(c.id);
+              const blocked = requestedCandidateIds.has(c.id);
               return (
                 <div
                   key={c.id}
@@ -479,9 +564,14 @@ export default function MemberBrowse() {
                         disabled={blocked || (!inTray && trayFull)}
                         onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
                       >
-                        {blocked ? '✓ Requested' : inTray ? '✕ Remove' : '+ Request'}
+                        {blocked ? '✓ Details available' : inTray ? '✕ Remove' : '+ Request'}
                       </button>
                     </div>
+                    {blocked && (
+                      <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                        Already requested. View details under My requests.
+                      </p>
+                    )}
                   </div>
                 </div>
               );
@@ -557,7 +647,7 @@ export default function MemberBrowse() {
           candidate={selectedProfile}
           inTray={tray.includes(selectedProfile.id)}
           trayFull={trayFull}
-          blocked={recentlyRequestedCandidateIds.has(selectedProfile.id)}
+          blocked={requestedCandidateIds.has(selectedProfile.id)}
           bookmarked={bookmarks.includes(selectedProfile.id)}
           onClose={() => setSelectedProfile(null)}
           onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
@@ -649,7 +739,7 @@ export default function MemberBrowse() {
               })}
             </div>
             <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
-              A copy of these details has also been sent to <strong>{contactsOpen.email}</strong>.
+              These details are also available any time under <strong>My requests</strong>.
             </p>
             <button type="button" className="btn btn-primary" onClick={() => setContactsOpen(null)}>
               Done

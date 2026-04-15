@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'register@vanikmatrimonial.co.uk';
+    const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
     const adminSubject = isResubmit ? 'Registration resubmitted (after rejection)' : 'New Vanik Matrimonial registration';
     const adminLead = isResubmit
       ? '<p>A member <strong>resubmitted</strong> their application after an earlier rejection.</p>'
