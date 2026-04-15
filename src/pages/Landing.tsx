@@ -44,8 +44,8 @@ export default function Landing() {
                   <p>Each profile is reviewed by our team before it appears.</p>
                 </article>
                 <article className="landing-trust-card">
-                  <h2>Private by design</h2>
-                  <p>Contact details are only visible after a member request.</p>
+                  <h2>Running for 40+ years</h2>
+                  <p>Many successful marriages through our community register.</p>
                 </article>
                 <article className="landing-trust-card">
                   <h2>Community run</h2>
@@ -57,8 +57,7 @@ export default function Landing() {
             <div className="landing-details">
               <p>
                 <strong>Annual membership</strong> is £10, payable by card when you
-                register. Coupons are available; ask the Vanik Council if you have
-                one.
+                register.
               </p>
               <p>
                 If you have any questions before applying, please{' '}

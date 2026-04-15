@@ -173,10 +173,10 @@ export default function Feedback() {
             margin: 0,
           }}
         >
-          <strong>Anonymous to candidates:</strong> the candidate does not see your feedback or your name.{' '}
-          <strong>Service improvement:</strong> the register committee uses these answers to improve quality and
-          safety of the service. Optional notes should avoid sharing another person&apos;s private information unless
-          necessary.
+          <strong>Admin-only:</strong> your feedback is reviewed only by the register team and is never sent to the
+          candidate. <strong>Anonymous to candidates:</strong> they do not see your feedback or your name.{' '}
+          <strong>Service improvement:</strong> the register committee uses these answers to improve quality and safety
+          of the service. Optional notes should avoid sharing another person&apos;s private information unless necessary.
         </p>
         <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 14 }}>
           <div>

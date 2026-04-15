@@ -20,15 +20,8 @@ Deno.serve(async (req) => {
 
   const { data, error } = await admin
     .from('profiles')
-    .select(
-      'id, reference_number, first_name, age, created_at, job_title, height_cm, diet, religion, community, nationality'
-    )
-    .eq('status', 'active')
-    .eq('show_on_register', true)
-    .not('membership_expires_at', 'is', null)
-    .gt('membership_expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
-    .limit(300);
+    .select('*')
+    .order('created_at', { ascending: false });
 
   if (error) {
     return jsonResponse({ error: error.message }, req, 500);

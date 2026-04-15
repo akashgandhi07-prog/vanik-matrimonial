@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
+import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
-import { invokeFunction } from '../lib/supabase';
+import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
 type ContactDetailRow = {
@@ -23,11 +25,30 @@ function telHref(phone: string): string {
 
 const WEEK_MS = 7 * 86400000;
 
+function friendlyContactsError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  const msg = raw.toLowerCase();
+  if (
+    msg.includes('could not reach edge function') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('failed to send a request to the edge function')
+  ) {
+    return 'Contact details are temporarily unavailable. Please try again shortly.';
+  }
+  if (msg.includes('unauthorized') || msg.includes('not authenticated')) {
+    return 'Your session has expired. Please sign in again.';
+  }
+  return 'Could not load contact details right now.';
+}
+
 export default function MemberRequests() {
-  const { profile, candidates, requests, feedbackKeys } = useMemberArea();
+  const { profile, candidates, requests, feedbackKeys, bookmarks, toggleBookmark } = useMemberArea();
   const [contactsByRequest, setContactsByRequest] = useState<Record<string, ContactDetailRow[]>>({});
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
+  const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
+  const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +73,7 @@ export default function MemberRequests() {
         setContactsByRequest((res.contacts_by_request ?? {}) as Record<string, ContactDetailRow[]>);
       } catch (e) {
         if (cancelled) return;
-        setContactsError(e instanceof Error ? e.message : 'Could not load contact details.');
+        setContactsError(friendlyContactsError(e));
       } finally {
         if (!cancelled) setContactsLoading(false);
       }
@@ -63,6 +84,39 @@ export default function MemberRequests() {
       cancelled = true;
     };
   }, [requests]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const ids = [...new Set(requests.flatMap((r) => (Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [])))];
+    if (ids.length === 0) {
+      setProfilesById({});
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const fromCandidates: Record<string, ProfileRow> = {};
+    for (const c of candidates) fromCandidates[c.id] = c;
+
+    async function loadProfiles() {
+      const missing = ids.filter((id) => !fromCandidates[id]);
+      if (missing.length === 0) {
+        if (!cancelled) setProfilesById(fromCandidates);
+        return;
+      }
+      const { data } = await supabase.from('profiles').select('*').in('id', missing);
+      if (cancelled) return;
+      const merged: Record<string, ProfileRow> = { ...fromCandidates };
+      for (const row of (data ?? []) as ProfileRow[]) merged[row.id] = row;
+      setProfilesById(merged);
+    }
+
+    void loadProfiles();
+    return () => {
+      cancelled = true;
+    };
+  }, [requests, candidates]);
 
   const weeklyWindow = useMemo(() => {
     const cutoff = Date.now() - WEEK_MS;
@@ -138,7 +192,7 @@ export default function MemberRequests() {
       )}
       {contactsError && (
         <p style={{ marginTop: 0, fontSize: 13, color: 'var(--color-danger)' }}>
-          Could not refresh contact details ({contactsError}). Existing request history is still shown below.
+          {contactsError} Existing request history is still shown below.
         </p>
       )}
       <div className="table-scroll">
@@ -172,10 +226,17 @@ export default function MemberRequests() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {candidateIds.map((id) => {
                       const c = candidates.find((x) => x.id === id);
+                      const candidateProfile = profilesById[id];
                       const details = contacts.find((row) => row.profile_id === id);
                       const displayName = details?.full_name || (c ? c.first_name : `Member ${id.slice(0, 8)}...`);
                       const refNo = details?.reference_number || c?.reference_number || id.slice(0, 6);
                       const wa = details?.mobile ? whatsappUrlFromPhone(details.mobile) : null;
+                      const hasContactDetails = !!(
+                        details?.mobile ||
+                        details?.email ||
+                        details?.father_name ||
+                        details?.mother_name
+                      );
                       return (
                         <div
                           key={id}
@@ -206,16 +267,18 @@ export default function MemberRequests() {
                               {displayName}
                               <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}> · Ref {refNo}</span>
                             </div>
-                            {details?.mobile ? (
+                            {hasContactDetails ? (
                               <>
-                                <div style={{ marginTop: 4, fontSize: 13 }}>
-                                  <a href={telHref(details.mobile)} style={{ fontWeight: 600 }}>
-                                    {details.mobile}
-                                  </a>
-                                </div>
+                                {details?.mobile ? (
+                                  <div style={{ marginTop: 4, fontSize: 13 }}>
+                                    <a href={telHref(details.mobile)} style={{ fontWeight: 600 }}>
+                                      {details.mobile}
+                                    </a>
+                                  </div>
+                                ) : null}
                                 {details.email ? (
                                   <div style={{ marginTop: 2, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                    {details.email}
+                                    <a href={`mailto:${encodeURIComponent(details.email)}`}>{details.email}</a>
                                   </div>
                                 ) : null}
                                 {(details.father_name || details.mother_name) && (
@@ -226,9 +289,11 @@ export default function MemberRequests() {
                                   </div>
                                 )}
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                                  <a className="btn btn-secondary" href={telHref(details.mobile)} style={{ padding: '4px 10px', fontSize: 12 }}>
-                                    Call
-                                  </a>
+                                  {details.mobile ? (
+                                    <a className="btn btn-secondary" href={telHref(details.mobile)} style={{ padding: '4px 10px', fontSize: 12 }}>
+                                      Call
+                                    </a>
+                                  ) : null}
                                   {wa ? (
                                     <a
                                       className="btn-whatsapp"
@@ -241,11 +306,21 @@ export default function MemberRequests() {
                                       WhatsApp
                                     </a>
                                   ) : null}
+                                  {candidateProfile ? (
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '4px 10px', fontSize: 12 }}
+                                      onClick={() => setSelectedProfile(candidateProfile)}
+                                    >
+                                      View profile
+                                    </button>
+                                  ) : null}
                                 </div>
                               </>
                             ) : (
                               <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                Contact details are loading or unavailable.
+                                Contact details are not available for this request yet.
                               </div>
                             )}
                           </div>
@@ -256,7 +331,7 @@ export default function MemberRequests() {
                 </td>
                 <td style={{ padding: 8, fontSize: 13 }}>
                   <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    Feedback is anonymous to candidates and helps us improve the service.
+                    Admin-only feedback: this is reviewed by the register team and is never sent to candidates.
                   </p>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {candidateIds.map((cid) => {
@@ -278,9 +353,9 @@ export default function MemberRequests() {
                             to={`/feedback/${r.id}/${cid}`}
                             className="btn btn-secondary"
                             style={{ padding: '2px 8px', fontSize: 12 }}
-                            title="Anonymous to candidates. Helps us improve the service."
+                            title="Admin-only feedback. Reviewed by the register team and never sent to candidates."
                           >
-                            Give anonymous feedback
+                            Give admin-only feedback
                           </Link>
                         </li>
                       );
@@ -293,6 +368,19 @@ export default function MemberRequests() {
         </tbody>
       </table>
       </div>
+      {selectedProfile && (
+        <ProfileModal
+          candidate={selectedProfile}
+          inTray={false}
+          trayFull={false}
+          blocked
+          bookmarked={bookmarks.includes(selectedProfile.id)}
+          allowRequestAction={false}
+          onClose={() => setSelectedProfile(null)}
+          onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
+          onToggleTray={() => {}}
+        />
+      )}
     </div>
   );
 }

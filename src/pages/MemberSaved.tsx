@@ -148,7 +148,7 @@ export default function MemberSaved() {
                   className="badge badge-success"
                   style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(22,163,74,0.9)' }}
                 >
-                  Details available
+                  Already requested
                 </span>
               )}
             </div>
