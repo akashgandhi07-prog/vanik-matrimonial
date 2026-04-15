@@ -213,7 +213,6 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
       const myId = p.id;
       const myStatus = p.status;
-      const myGender = p.gender;
 
       async function loadBrowseCandidates(): Promise<ProfileRow[]> {
         const rpc = await supabase.rpc('browse_opposite_profiles');
@@ -226,12 +225,10 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         if (rpc.error) {
           console.warn('browse_opposite_profiles RPC:', rpc.error.message, rpc.error.code);
         }
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('gender', myGender)
-          .eq('status', 'active')
-          .eq('show_on_register', true);
+        // RLS (`profiles_select_opposite_active` + own row) already enforces opposite gender, active,
+        // show_on_register, and membership. Only exclude self — duplicating filters here risks drift
+        // (e.g. gender string mismatch) and empty browse despite correct data.
+        const { data, error } = await supabase.from('profiles').select('*').neq('id', myId);
         if (error) {
           console.error('browse candidates query:', error.message, error.code, error.details);
         }
