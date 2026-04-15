@@ -3,7 +3,7 @@ import { ProfileThumb } from '../member/ProfileThumb';
 import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
-import { cmToFeetInches } from '../lib/heights';
+import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 import { invokeFunction } from '../lib/supabase';
 
@@ -23,16 +23,19 @@ function telHref(phone: string): string {
   return cleaned ? `tel:${cleaned}` : `tel:${encodeURIComponent(phone)}`;
 }
 
-const DEFAULT_AGE: [number, number] = [18, 70];
+const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
+const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
+const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
+const COMMUNITY_ALL = ['Vanik', 'Lohana', 'Brahmin', 'Other'] as const;
 
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
     useMemberArea();
   const [ageRange, setAgeRange] = useState<[number, number]>(DEFAULT_AGE);
-  const [dietF, setDietF] = useState<string[]>([]);
-  const [religionF, setReligionF] = useState<string[]>([]);
-  const [communityF, setCommunityF] = useState<string[]>([]);
+  const [dietF, setDietF] = useState<string[]>([...DIET_ALL]);
+  const [religionF, setReligionF] = useState<string[]>([...RELIGION_ALL]);
+  const [communityF, setCommunityF] = useState<string[]>([...COMMUNITY_ALL]);
   const [heightRange, setHeightRange] = useState<[number, number]>(DEFAULT_HEIGHT);
   const [sort, setSort] = useState<'newest' | 'youngest' | 'oldest'>('newest');
   const [tray, setTray] = useState<string[]>([]);
@@ -77,9 +80,9 @@ export default function MemberBrowse() {
       ageRange[1] !== DEFAULT_AGE[1] ||
       heightRange[0] !== DEFAULT_HEIGHT[0] ||
       heightRange[1] !== DEFAULT_HEIGHT[1] ||
-      dietF.length > 0 ||
-      religionF.length > 0 ||
-      communityF.length > 0 ||
+      dietF.length < DIET_ALL.length ||
+      religionF.length < RELIGION_ALL.length ||
+      communityF.length < COMMUNITY_ALL.length ||
       sort !== 'newest'
     );
   }, [ageRange, heightRange, dietF, religionF, communityF, sort]);
@@ -87,9 +90,9 @@ export default function MemberBrowse() {
   function clearFilters() {
     setAgeRange(DEFAULT_AGE);
     setHeightRange(DEFAULT_HEIGHT);
-    setDietF([]);
-    setReligionF([]);
-    setCommunityF([]);
+    setDietF([...DIET_ALL]);
+    setReligionF([...RELIGION_ALL]);
+    setCommunityF([...COMMUNITY_ALL]);
     setSort('newest');
   }
 
@@ -154,143 +157,160 @@ export default function MemberBrowse() {
 
   const trayPaddingBottom = tray.length > 0 ? 'var(--member-tray-height, 100px)' : undefined;
 
+  const selectStyle = {
+    height: 36,
+    borderRadius: 6,
+    border: '1px solid var(--color-border)',
+    fontSize: 13,
+    padding: '0 6px',
+    background: 'var(--color-surface)',
+    color: 'var(--color-text)',
+  };
+
   return (
     <div style={{ paddingBottom: trayPaddingBottom }}>
-      <div className="member-browse-layout">
-        <aside className="card member-browse-filters" style={{ position: 'sticky', top: 16 }}>
-          <div className="member-filter-toolbar">
-            <h3>Filters</h3>
-            <button
-              type="button"
-              className="member-filter-clear"
-              disabled={!filtersActive}
-              onClick={clearFilters}
-            >
-              Clear all
-            </button>
-          </div>
-          <div className="member-filter-section">
-            <label className="member-filter-section-label" htmlFor="browse-age-min">
-              Age (years)
-            </label>
-            <div className="member-filter-range-row">
+      {/* ── Horizontal filter bar ── */}
+      <div className="card" style={{ marginBottom: 16, padding: '14px 16px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px', alignItems: 'flex-end' }}>
+
+          {/* Age */}
+          <div>
+            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Age</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
-                id="browse-age-min"
                 type="number"
                 className="member-filter-num-input"
                 min={18}
-                max={80}
+                max={60}
                 value={ageRange[0]}
                 onChange={(e) => setAgeRange([Number(e.target.value), ageRange[1]])}
                 aria-label="Minimum age"
               />
-              <span className="member-filter-range-to" aria-hidden="true">
-                to
-              </span>
-              <label htmlFor="browse-age-max" className="visually-hidden">
-                Maximum age
-              </label>
+              <span className="member-filter-range-to">to</span>
               <input
-                id="browse-age-max"
                 type="number"
                 className="member-filter-num-input"
                 min={18}
-                max={80}
+                max={60}
                 value={ageRange[1]}
                 onChange={(e) => setAgeRange([ageRange[0], Number(e.target.value)])}
                 aria-label="Maximum age"
               />
             </div>
           </div>
-          <div className="member-filter-section">
-            <span className="member-filter-section-label" id="browse-height-label">
-              Height (cm)
-            </span>
-            <div className="member-filter-range-row">
-              <input
-                type="number"
-                className="member-filter-num-input member-filter-num-input--wide"
+
+          {/* Height */}
+          <div>
+            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Height</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
                 value={heightRange[0]}
                 onChange={(e) => setHeightRange([Number(e.target.value), heightRange[1]])}
-                aria-labelledby="browse-height-label"
-                aria-label="Minimum height in cm"
-              />
-              <span className="member-filter-range-to" aria-hidden="true">
-                to
-              </span>
-              <input
-                type="number"
-                className="member-filter-num-input member-filter-num-input--wide"
+                style={selectStyle}
+                aria-label="Minimum height"
+              >
+                {HEIGHT_OPTIONS.filter((o) => o.cm <= heightRange[1]).map((o) => (
+                  <option key={o.cm} value={o.cm}>{cmToFeetInches(o.cm)}</option>
+                ))}
+              </select>
+              <span className="member-filter-range-to">to</span>
+              <select
                 value={heightRange[1]}
                 onChange={(e) => setHeightRange([heightRange[0], Number(e.target.value)])}
-                aria-labelledby="browse-height-label"
-                aria-label="Maximum height in cm"
-              />
-            </div>
-            <p className="member-filter-hint">
-              {cmToFeetInches(heightRange[0])} to {cmToFeetInches(heightRange[1])}
-            </p>
-          </div>
-          {(
-            [
-              ['diet', 'Diet', ['Veg', 'Non-veg', 'Vegan'], dietF, setDietF, false],
-              ['religion', 'Religion', ['Jain', 'Hindu', 'Other'], religionF, setReligionF, false],
-              [
-                'community',
-                'Community',
-                ['Vanik', 'Lohana', 'Brahmin', 'Other'],
-                communityF,
-                setCommunityF,
-                true,
-              ],
-            ] as const
-          ).map(([key, title, opts, state, setState, useGrid]) => (
-            <div key={key} className="member-filter-section">
-              <span className="member-filter-section-label" id={`browse-${key}-label`}>
-                {title}
-              </span>
-              <div
-                className={useGrid ? 'member-filter-chip-group--grid' : 'member-filter-chip-group'}
-                role="group"
-                aria-labelledby={`browse-${key}-label`}
+                style={selectStyle}
+                aria-label="Maximum height"
               >
-                {opts.map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    className={
-                      state.includes(o)
-                        ? 'member-filter-chip member-filter-chip--selected'
-                        : 'member-filter-chip'
-                    }
-                    aria-pressed={state.includes(o)}
-                    onClick={() =>
-                      setState(state.includes(o) ? state.filter((x) => x !== o) : [...state, o])
-                    }
-                  >
-                    {o}
-                  </button>
+                {HEIGHT_OPTIONS.filter((o) => o.cm >= heightRange[0]).map((o) => (
+                  <option key={o.cm} value={o.cm}>{cmToFeetInches(o.cm)}</option>
                 ))}
-              </div>
+              </select>
             </div>
-          ))}
-          <div className="member-filter-section">
-            <label className="member-filter-section-label" htmlFor="browse-sort">
-              Sort profiles
-            </label>
-            <select
-              id="browse-sort"
-              className="member-filter-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as typeof sort)}
-            >
-              <option value="newest">Newest first</option>
-              <option value="youngest">Youngest first</option>
-              <option value="oldest">Oldest first</option>
-            </select>
           </div>
-        </aside>
-        <section className="member-browse-grid">
+
+          {/* Diet */}
+          <div>
+            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Diet</span>
+            <div className="member-filter-chip-group" role="group" aria-label="Diet filter">
+              {DIET_ALL.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  className={dietF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  aria-pressed={dietF.includes(o)}
+                  onClick={() => setDietF(dietF.includes(o) ? dietF.filter((x) => x !== o) : [...dietF, o])}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Religion */}
+          <div>
+            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Religion</span>
+            <div className="member-filter-chip-group" role="group" aria-label="Religion filter">
+              {RELIGION_ALL.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  className={religionF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  aria-pressed={religionF.includes(o)}
+                  onClick={() => setReligionF(religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o])}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Community */}
+          <div>
+            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Community</span>
+            <div className="member-filter-chip-group" role="group" aria-label="Community filter">
+              {COMMUNITY_ALL.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  className={communityF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  aria-pressed={communityF.includes(o)}
+                  onClick={() => setCommunityF(communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o])}
+                >
+                  {o}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sort + Clear */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label className="member-filter-section-label" htmlFor="browse-sort">Sort</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select
+                id="browse-sort"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as typeof sort)}
+                style={selectStyle}
+              >
+                <option value="newest">Newest first</option>
+                <option value="youngest">Youngest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+              <button
+                type="button"
+                className="member-filter-clear"
+                disabled={!filtersActive}
+                onClick={clearFilters}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                Clear all
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <section className="member-browse-grid">
           <div className="member-browse-result-line">
             <span>
               {filtered.length === 0
@@ -364,7 +384,6 @@ export default function MemberBrowse() {
             })}
           </div>
         </section>
-      </div>
 
       {tray.length > 0 && (
         <div className="member-request-tray">

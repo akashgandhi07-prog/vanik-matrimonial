@@ -216,7 +216,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
       async function loadBrowseCandidates(): Promise<ProfileRow[]> {
         const rpc = await supabase.rpc('browse_opposite_profiles');
-        if (!rpc.error && Array.isArray(rpc.data)) {
+        if (!rpc.error && Array.isArray(rpc.data) && rpc.data.length > 0) {
           return rpc.data as ProfileRow[];
         }
         if (rpc.error) {

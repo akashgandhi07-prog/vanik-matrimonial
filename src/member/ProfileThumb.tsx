@@ -24,16 +24,13 @@ export function ProfileThumb({
   }, [profileId]);
 
   if (!src) {
+    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}&size=300&background=e8d5c4&color=7c4a2d&font-size=0.38&bold=true&format=svg`;
     return (
-      <div
+      <img
+        src={avatarUrl}
+        alt={alt}
         className={className}
-        role="img"
-        aria-label={alt}
-        style={{
-          aspectRatio: '1',
-          background: '#f3f4f6',
-          borderRadius: 8,
-        }}
+        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8 }}
       />
     );
   }
