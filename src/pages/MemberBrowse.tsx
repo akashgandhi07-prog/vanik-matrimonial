@@ -161,41 +161,48 @@ export default function MemberBrowse() {
 
   const trayPaddingBottom = tray.length > 0 ? 'var(--member-tray-height, 100px)' : undefined;
 
-  const selectStyle = {
-    height: 36,
-    borderRadius: 6,
-    border: '1px solid var(--color-border)',
-    fontSize: 13,
-    padding: '0 6px',
-    background: 'var(--color-surface)',
-    color: 'var(--color-text)',
-  };
-
   return (
     <div style={{ paddingBottom: trayPaddingBottom }}>
-      {/* ── Horizontal filter bar ── */}
-      <div className="card" style={{ marginBottom: 16, padding: '14px 16px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 28px', alignItems: 'flex-end' }}>
+      <div className="member-browse-filters">
+        <div className="member-browse-filters-head">
+          <h2 className="member-browse-filters-title">Search &amp; filters</h2>
+          <div className="member-browse-filters-actions">
+            <button
+              type="button"
+              className="member-filter-clear"
+              disabled={!filtersActive}
+              onClick={clearFilters}
+            >
+              Reset filters
+            </button>
+          </div>
+        </div>
 
-          {/* Age */}
-          <div>
-            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Age</span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <div className="member-browse-filters-grid">
+          <div className="member-filter-section">
+            <span id="browse-age-label" className="member-filter-section-label">
+              Age range
+            </span>
+            <div className="member-filter-range-row" role="group" aria-labelledby="browse-age-label">
               <input
                 type="number"
                 className="member-filter-num-input"
                 min={18}
-                max={60}
+                max={80}
+                inputMode="numeric"
                 value={ageRange[0]}
                 onChange={(e) => setAgeRange([Number(e.target.value), ageRange[1]])}
                 aria-label="Minimum age"
               />
-              <span className="member-filter-range-to">to</span>
+              <span className="member-filter-range-to" aria-hidden>
+                to
+              </span>
               <input
                 type="number"
                 className="member-filter-num-input"
                 min={18}
-                max={60}
+                max={80}
+                inputMode="numeric"
                 value={ageRange[1]}
                 onChange={(e) => setAgeRange([ageRange[0], Number(e.target.value)])}
                 aria-label="Maximum age"
@@ -203,45 +210,62 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          {/* Height */}
-          <div>
-            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Height</span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select
-                value={heightRange[0]}
-                onChange={(e) => setHeightRange([Number(e.target.value), heightRange[1]])}
-                style={selectStyle}
-                aria-label="Minimum height"
-              >
-                {HEIGHT_OPTIONS.filter((o) => o.cm <= heightRange[1]).map((o) => (
-                  <option key={o.cm} value={o.cm}>{cmToFeetInches(o.cm)}</option>
-                ))}
-              </select>
-              <span className="member-filter-range-to">to</span>
-              <select
-                value={heightRange[1]}
-                onChange={(e) => setHeightRange([heightRange[0], Number(e.target.value)])}
-                style={selectStyle}
-                aria-label="Maximum height"
-              >
-                {HEIGHT_OPTIONS.filter((o) => o.cm >= heightRange[0]).map((o) => (
-                  <option key={o.cm} value={o.cm}>{cmToFeetInches(o.cm)}</option>
-                ))}
-              </select>
+          <div className="member-filter-section">
+            <span id="browse-height-label" className="member-filter-section-label">
+              Height range
+            </span>
+            <div className="member-filter-range-row" role="group" aria-labelledby="browse-height-label">
+              <div className="member-filter-range-field">
+                <select
+                  className="member-filter-select"
+                  value={heightRange[0]}
+                  onChange={(e) => setHeightRange([Number(e.target.value), heightRange[1]])}
+                  aria-label="Minimum height"
+                >
+                  {HEIGHT_OPTIONS.filter((o) => o.cm <= heightRange[1]).map((o) => (
+                    <option key={o.cm} value={o.cm}>
+                      {cmToFeetInches(o.cm)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <span className="member-filter-range-to" aria-hidden>
+                to
+              </span>
+              <div className="member-filter-range-field">
+                <select
+                  className="member-filter-select"
+                  value={heightRange[1]}
+                  onChange={(e) => setHeightRange([heightRange[0], Number(e.target.value)])}
+                  aria-label="Maximum height"
+                >
+                  {HEIGHT_OPTIONS.filter((o) => o.cm >= heightRange[0]).map((o) => (
+                    <option key={o.cm} value={o.cm}>
+                      {cmToFeetInches(o.cm)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Diet */}
-          <div>
-            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Diet</span>
-            <div className="member-filter-chip-group" role="group" aria-label="Diet filter">
+          <div className="member-filter-section member-filter-section--full">
+            <span id="browse-diet-label" className="member-filter-section-label">
+              Diet{' '}
+              <span className="member-filter-label-hint">· turn off to hide that group</span>
+            </span>
+            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-diet-label">
               {DIET_ALL.map((o) => (
                 <button
                   key={o}
                   type="button"
-                  className={dietF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  className={
+                    dietF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'
+                  }
                   aria-pressed={dietF.includes(o)}
-                  onClick={() => setDietF(dietF.includes(o) ? dietF.filter((x) => x !== o) : [...dietF, o])}
+                  onClick={() =>
+                    setDietF(dietF.includes(o) ? dietF.filter((x) => x !== o) : [...dietF, o])
+                  }
                 >
                   {o}
                 </button>
@@ -249,17 +273,26 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          {/* Religion */}
-          <div>
-            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Religion</span>
-            <div className="member-filter-chip-group" role="group" aria-label="Religion filter">
+          <div className="member-filter-section member-filter-section--full">
+            <span id="browse-religion-label" className="member-filter-section-label">
+              Religion
+            </span>
+            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
               {RELIGION_ALL.map((o) => (
                 <button
                   key={o}
                   type="button"
-                  className={religionF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  className={
+                    religionF.includes(o)
+                      ? 'member-filter-chip member-filter-chip--selected'
+                      : 'member-filter-chip'
+                  }
                   aria-pressed={religionF.includes(o)}
-                  onClick={() => setReligionF(religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o])}
+                  onClick={() =>
+                    setReligionF(
+                      religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o]
+                    )
+                  }
                 >
                   {o}
                 </button>
@@ -267,17 +300,26 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          {/* Community */}
-          <div>
-            <span className="member-filter-section-label" style={{ marginBottom: 6 }}>Community</span>
-            <div className="member-filter-chip-group" role="group" aria-label="Community filter">
+          <div className="member-filter-section member-filter-section--full">
+            <span id="browse-community-label" className="member-filter-section-label">
+              Community
+            </span>
+            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-community-label">
               {COMMUNITY_ALL.map((o) => (
                 <button
                   key={o}
                   type="button"
-                  className={communityF.includes(o) ? 'member-filter-chip member-filter-chip--selected' : 'member-filter-chip'}
+                  className={
+                    communityF.includes(o)
+                      ? 'member-filter-chip member-filter-chip--selected'
+                      : 'member-filter-chip'
+                  }
                   aria-pressed={communityF.includes(o)}
-                  onClick={() => setCommunityF(communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o])}
+                  onClick={() =>
+                    setCommunityF(
+                      communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o]
+                    )
+                  }
                 >
                   {o}
                 </button>
@@ -285,65 +327,69 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          {/* Sort + Clear */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label className="member-filter-section-label" htmlFor="browse-sort">Sort</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select
-                id="browse-sort"
-                value={sort}
-                onChange={(e) => setSort(e.target.value as typeof sort)}
-                style={selectStyle}
-              >
-                <option value="newest">Newest first</option>
-                <option value="youngest">Youngest first</option>
-                <option value="oldest">Oldest first</option>
-              </select>
-              <button
-                type="button"
-                className="member-filter-clear"
-                disabled={!filtersActive}
-                onClick={clearFilters}
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                Clear all
-              </button>
-            </div>
+          <div className="member-filter-section member-filter-section--full">
+            <label className="member-filter-section-label" htmlFor="browse-sort">
+              Sort results
+            </label>
+            <select
+              id="browse-sort"
+              className="member-filter-select member-filter-sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as typeof sort)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="youngest">Youngest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
           </div>
-
         </div>
       </div>
 
       <section className="member-browse-grid">
-          <div className="member-browse-result-line">
-            <span>
-              {filtered.length === 0
-                ? 'No profiles match your filters.'
-                : `${filtered.length} profile${filtered.length === 1 ? '' : 's'}`}
+        <div className="member-browse-result-line">
+          <span>
+            {filtered.length === 0
+              ? candidates.length === 0
+                ? 'No profiles to show yet.'
+                : 'No profiles match these filters.'
+              : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
+          </span>
+          {trayFull && (
+            <span className="member-browse-result-line-warn">
+              Tray full (3/3). Submit or remove one before adding another.
             </span>
-            {trayFull && (
-              <span className="member-browse-result-line-warn">
-                Tray full (3/3). Submit or remove one before adding another.
-              </span>
-            )}
-          </div>
-          <div className="member-browse-cards">
-            {filtered.length === 0 && (
-              <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                <p style={{ margin: 0, fontWeight: 500 }}>No profiles found</p>
-                {candidates.length === 0 ? (
-                  <p style={{ margin: '8px 0 0', fontSize: 14, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto' }}>
-                    Nothing was loaded to browse. The grid uses the public <strong>profiles</strong> list (opposite gender,
-                    active, visible, current membership)—not the private contact / ID table. Each person needs a matching
-                    profile row there; private details alone do not create a listing.
+          )}
+        </div>
+        <div className="member-browse-cards">
+          {filtered.length === 0 && (
+            <div className="member-browse-empty" style={{ gridColumn: '1 / -1' }}>
+              <p className="member-browse-empty-title">
+                {candidates.length === 0 ? 'Nothing to browse yet' : 'No matching profiles'}
+              </p>
+              {candidates.length === 0 ? (
+                <p className="member-browse-empty-desc">
+                  We only show opposite-gender listings that are <strong>active</strong>, visible for browsing, and have{' '}
+                  <strong>membership_expires_at</strong> in the future. Pending approval, no expiry date, or expired
+                  membership hides a row in the app—even when other columns look filled in. Photos and weight are not
+                  required. In Supabase, compare <strong>status</strong>, <strong>show_on_register</strong>, and{' '}
+                  <strong>membership_expires_at</strong> on <strong>profiles</strong>. Need help?{' '}
+                  <a href="mailto:register@vanikmatrimonial.co.uk">register@vanikmatrimonial.co.uk</a>.
+                </p>
+              ) : (
+                <>
+                  <p className="member-browse-empty-desc">
+                    Widen your age or height range, or turn diet / religion / community options back on (all
+                    selected shows everyone in those groups).
                   </p>
-                ) : (
-                  <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-                    Try adjusting your filters to see more results.
-                  </p>
-                )}
-              </div>
-            )}
+                  <div className="member-browse-empty-actions">
+                    <button type="button" className="btn btn-primary" onClick={clearFilters}>
+                      Reset all filters
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = recentlyRequestedCandidateIds.has(c.id);
