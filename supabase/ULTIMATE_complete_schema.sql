@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   reference_number text UNIQUE,
   gender text NOT NULL CHECK (gender IN ('Male', 'Female')),
+  seeking_gender text NOT NULL CHECK (seeking_gender IN ('Male', 'Female', 'Both')),
   first_name text NOT NULL,
   age integer,
   education text,
@@ -344,7 +345,10 @@ CREATE POLICY profiles_select_opposite_active ON public.profiles
             viewer.membership_expires_at IS NULL
             OR viewer.membership_expires_at > now()
           )
-          AND viewer.gender IS DISTINCT FROM profiles.gender
+          AND (
+            viewer.seeking_gender = 'Both'
+            OR viewer.seeking_gender = profiles.gender
+          )
       )
     )
   );
@@ -636,7 +640,7 @@ CREATE TRIGGER stripe_checkout_sessions_set_updated_at
   EXECUTE FUNCTION public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Browse: opposite profiles (server now(); matches profiles_select_opposite_active)
+-- Browse: listable profiles by viewer.seeking_gender (server now(); matches RLS)
 -- ---------------------------------------------------------------------------
 
 -- SECURITY INVOKER: DEFINER hid JWT from auth.uid() in some contexts; RLS on profiles still applies.
@@ -651,7 +655,10 @@ AS $$
   FROM public.profiles p
   INNER JOIN public.profiles v ON v.auth_user_id = auth.uid()
   WHERE p.id <> v.id
-    AND p.gender IS DISTINCT FROM v.gender
+    AND (
+      v.seeking_gender = 'Both'
+      OR v.seeking_gender = p.gender
+    )
     AND p.status = 'active'
     AND p.show_on_register = true
     AND p.membership_expires_at IS NOT NULL

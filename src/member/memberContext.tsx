@@ -9,6 +9,8 @@ export type ProfileRow = {
   id: string;
   reference_number: string | null;
   gender: string;
+  /** Which genders appear in browse / may be contacted (Male, Female, or Both). */
+  seeking_gender?: 'Male' | 'Female' | 'Both';
   first_name: string;
   age: number | null;
   created_at: string;

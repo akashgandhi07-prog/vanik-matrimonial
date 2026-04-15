@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import imageCompression from 'browser-image-compression';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
@@ -35,6 +35,13 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoError, setPhotoError] = useState('');
+  const [seeking, setSeeking] = useState<'Male' | 'Female' | 'Both'>(() =>
+    p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female')
+  );
+
+  useEffect(() => {
+    setSeeking(p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'));
+  }, [p.seeking_gender, p.gender, p.id]);
 
   const heightCm = height === '' ? null : Number(height);
 
@@ -51,6 +58,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         town_country_of_origin: sanitizeText(town, 200),
         height_cm: height === '' ? null : Number(height),
         diet,
+        seeking_gender: seeking,
       })
       .eq('id', p.id);
     if (error) {
@@ -146,6 +154,19 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           Changes save when you click &quot;Save changes&quot;. These fields do not require admin approval.
         </p>
         <div style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <label className="label" htmlFor="mp-seeking">
+              I want to browse profiles of
+            </label>
+            <select id="mp-seeking" value={seeking} onChange={(e) => setSeeking(e.target.value as typeof seeking)}>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Both">Both</option>
+            </select>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+              Who you can see and request contact details for. Save to apply.
+            </p>
+          </div>
           <div>
             <label className="label" htmlFor="mp-education">
               Education

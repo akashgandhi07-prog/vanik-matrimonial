@@ -75,6 +75,14 @@ Deno.serve(async (req) => {
     ? String(body.membership_expires_at)
     : null;
   const showOnRegister = body.show_on_register === true || body.show_on_register === 'true';
+  const genderNorm = String(body.gender ?? 'Male') === 'Female' ? 'Female' : 'Male';
+  const skRaw = String(body.seeking_gender ?? '').trim();
+  const seekingGender =
+    skRaw === 'Male' || skRaw === 'Female' || skRaw === 'Both'
+      ? skRaw
+      : genderNorm === 'Female'
+        ? 'Male'
+        : 'Female';
 
   // 2. Insert into profiles
   const { data: profileData, error: profileErr } = await admin
@@ -83,7 +91,8 @@ Deno.serve(async (req) => {
       id: userId,
       auth_user_id: userId,
       first_name: firstName,
-      gender: String(body.gender ?? 'Male'),
+      gender: genderNorm,
+      seeking_gender: seekingGender,
       status,
       community: body.community ? String(body.community) : null,
       religion: body.religion ? String(body.religion) : null,
@@ -135,10 +144,9 @@ Deno.serve(async (req) => {
   // 4. Assign reference number if status is active
   let referenceNumber: string | null = null;
   if (status === 'active') {
-    const gender = String(body.gender ?? 'Male');
     const { data: refData, error: refErr } = await admin.rpc('assign_next_reference_number', {
       p_profile_id: profileId,
-      p_gender: gender,
+      p_gender: genderNorm,
     });
     if (refErr) {
       console.error('assign_next_reference_number failed:', refErr.message);

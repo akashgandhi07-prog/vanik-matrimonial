@@ -52,6 +52,12 @@ function pathExtensionOk(path: string, kind: 'photo' | 'id'): boolean {
   return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
 }
 
+function seekingGenderFromBody(raw: unknown, gender: 'Male' | 'Female'): 'Male' | 'Female' | 'Both' {
+  const s = String(raw ?? '').trim();
+  if (s === 'Male' || s === 'Female' || s === 'Both') return s;
+  return gender === 'Female' ? 'Male' : 'Female';
+}
+
 async function verifyObjectExists(
   admin: ReturnType<typeof getAdminClient>,
   bucket: string,
@@ -183,6 +189,7 @@ Deno.serve(async (req) => {
 
   const profilePayload = {
     gender,
+    seeking_gender: seekingGenderFromBody(body.seeking_gender, gender),
     first_name: firstName,
     education: stripHtml(String(body.education ?? ''), 500),
     job_title: stripHtml(String(body.job_title ?? ''), 200),

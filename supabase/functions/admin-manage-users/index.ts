@@ -525,6 +525,13 @@ Deno.serve(async (req) => {
         }
         profilePatch.gender = g;
       }
+      if (profIn.seeking_gender !== undefined) {
+        const sg = String(profIn.seeking_gender);
+        if (sg !== 'Male' && sg !== 'Female' && sg !== 'Both') {
+          return jsonResponse({ error: 'seeking_gender must be Male, Female, or Both' }, req, 400);
+        }
+        profilePatch.seeking_gender = sg;
+      }
       if (profIn.first_name !== undefined) {
         const fn = stripHtml(String(profIn.first_name), 80);
         if (!fn) return jsonResponse({ error: 'first_name cannot be empty' }, req, 400);

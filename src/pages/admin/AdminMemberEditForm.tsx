@@ -6,6 +6,7 @@ export type MemberProfileFull = {
   id: string;
   reference_number: string | null;
   gender: string;
+  seeking_gender?: string;
   first_name: string;
   age: number | null;
   education: string | null;
@@ -74,6 +75,9 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
   const [editNote, setEditNote] = useState('');
 
   const [gender, setGender] = useState(profile.gender);
+  const [seekingGender, setSeekingGender] = useState(
+    profile.seeking_gender ?? (profile.gender === 'Female' ? 'Male' : 'Female')
+  );
   const [firstName, setFirstName] = useState(profile.first_name);
   const [education, setEducation] = useState(profile.education ?? '');
   const [jobTitle, setJobTitle] = useState(profile.job_title ?? '');
@@ -111,6 +115,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
 
   const resetFromProps = useCallback(() => {
     setGender(profile.gender);
+    setSeekingGender(profile.seeking_gender ?? (profile.gender === 'Female' ? 'Male' : 'Female'));
     setFirstName(profile.first_name);
     setEducation(profile.education ?? '');
     setJobTitle(profile.job_title ?? '');
@@ -164,6 +169,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
         edit_note: editNote.trim() || undefined,
         profile: {
           gender,
+          seeking_gender: seekingGender,
           first_name: firstName,
           education,
           job_title: jobTitle,
@@ -298,6 +304,14 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           <select value={gender} onChange={(e) => setGender(e.target.value)}>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label className="label">Show profiles of (browse)</label>
+          <select value={seekingGender} onChange={(e) => setSeekingGender(e.target.value)}>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Both">Both</option>
           </select>
         </div>
         <div>

@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
   const { data: requester, error: reErr } = await admin
     .from('profiles')
-    .select('id, first_name, gender, reference_number, status, membership_expires_at')
+    .select('id, first_name, gender, seeking_gender, reference_number, status, membership_expires_at')
     .eq('auth_user_id', userData.user.id)
     .single();
   if (reErr || !requester) {
@@ -171,9 +171,16 @@ Deno.serve(async (req) => {
         400
       );
     }
-    if (p.gender === requester.gender) {
+    const seek =
+      (requester as { seeking_gender?: string }).seeking_gender ??
+      (requester.gender === 'Female' ? 'Male' : 'Female');
+    if (seek !== 'Both' && seek !== p.gender) {
       return jsonResponse(
-        { error: 'invalid_candidate', message: 'You can only request contact details for members of the opposite gender.' },
+        {
+          error: 'invalid_candidate',
+          message:
+            'This profile does not match who you are looking for. Change it under Browse or My profile, then try again.',
+        },
         req,
         400
       );

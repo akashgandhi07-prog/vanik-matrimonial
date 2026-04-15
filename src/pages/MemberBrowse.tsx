@@ -5,7 +5,7 @@ import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
-import { invokeFunction } from '../lib/supabase';
+import { invokeFunction, supabase } from '../lib/supabase';
 
 type ContactDetailRow = {
   profile_id: string;
@@ -34,6 +34,10 @@ function inFilterSet(value: string, allowed: readonly string[]): boolean {
   return allowed.some((a) => a.toLowerCase() === v);
 }
 
+function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
+  return p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female');
+}
+
 export default function MemberBrowse() {
   const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll, privateRow } =
     useMemberArea();
@@ -54,6 +58,19 @@ export default function MemberBrowse() {
     message: string;
     requestIds?: string[];
   } | null>(null);
+  const [seekUpdating, setSeekUpdating] = useState(false);
+
+  async function persistSeeking(g: 'Male' | 'Female' | 'Both') {
+    if (!profile || effectiveSeeking(profile) === g || seekUpdating) return;
+    setSeekUpdating(true);
+    try {
+      const { error } = await supabase.from('profiles').update({ seeking_gender: g }).eq('id', profile.id);
+      if (error) alert(error.message);
+      else void loadAll();
+    } finally {
+      setSeekUpdating(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     if (!profile) return [];
@@ -165,20 +182,60 @@ export default function MemberBrowse() {
     <div style={{ paddingBottom: trayPaddingBottom }}>
       <div className="member-browse-filters">
         <div className="member-browse-filters-head">
-          <h2 className="member-browse-filters-title">Search &amp; filters</h2>
+          <h2 className="member-browse-filters-title">Filters</h2>
           <div className="member-browse-filters-actions">
+            <div className="member-browse-filters-sort-wrap">
+              <label htmlFor="browse-sort">Sort</label>
+              <select
+                id="browse-sort"
+                className="member-filter-select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as typeof sort)}
+              >
+                <option value="newest">Newest</option>
+                <option value="youngest">Youngest</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </div>
             <button
               type="button"
               className="member-filter-clear"
               disabled={!filtersActive}
               onClick={clearFilters}
             >
-              Reset filters
+              Reset
             </button>
           </div>
         </div>
 
         <div className="member-browse-filters-grid">
+          <div className="member-filter-section member-filter-section--full">
+            <span id="browse-seeking-label" className="member-filter-section-label">
+              Show profiles of
+            </span>
+            <div
+              className="member-filter-chip-row"
+              role="group"
+              aria-labelledby="browse-seeking-label"
+              style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}
+            >
+              {(['Male', 'Female', 'Both'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  className={effectiveSeeking(profile) === g ? 'btn btn-primary' : 'btn btn-secondary'}
+                  disabled={seekUpdating}
+                  style={{ padding: '6px 12px', fontSize: 13 }}
+                  onClick={() => void persistSeeking(g)}
+                >
+                  {g === 'Both' ? 'Everyone' : `${g}s`}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+              Saved on your account. You can also change this under My profile.
+            </p>
+          </div>
           <div className="member-filter-section">
             <span id="browse-age-label" className="member-filter-section-label">
               Age range
@@ -250,9 +307,12 @@ export default function MemberBrowse() {
           </div>
 
           <div className="member-filter-section member-filter-section--full">
-            <span id="browse-diet-label" className="member-filter-section-label">
-              Diet{' '}
-              <span className="member-filter-label-hint">· turn off to hide that group</span>
+            <span
+              id="browse-diet-label"
+              className="member-filter-section-label"
+              title="Turn a tag off to hide people in that group"
+            >
+              Diet
             </span>
             <div className="member-filter-chip-group" role="group" aria-labelledby="browse-diet-label">
               {DIET_ALL.map((o) => (
@@ -273,74 +333,59 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          <div className="member-filter-section member-filter-section--full">
-            <span id="browse-religion-label" className="member-filter-section-label">
-              Religion
-            </span>
-            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
-              {RELIGION_ALL.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  className={
-                    religionF.includes(o)
-                      ? 'member-filter-chip member-filter-chip--selected'
-                      : 'member-filter-chip'
-                  }
-                  aria-pressed={religionF.includes(o)}
-                  onClick={() =>
-                    setReligionF(
-                      religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o]
-                    )
-                  }
-                >
-                  {o}
-                </button>
-              ))}
+          <div className="member-browse-filters-pair member-filter-section--full">
+            <div className="member-filter-section">
+              <span id="browse-religion-label" className="member-filter-section-label">
+                Religion
+              </span>
+              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
+                {RELIGION_ALL.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={
+                      religionF.includes(o)
+                        ? 'member-filter-chip member-filter-chip--selected'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={religionF.includes(o)}
+                    onClick={() =>
+                      setReligionF(
+                        religionF.includes(o) ? religionF.filter((x) => x !== o) : [...religionF, o]
+                      )
+                    }
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="member-filter-section member-filter-section--full">
-            <span id="browse-community-label" className="member-filter-section-label">
-              Community
-            </span>
-            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-community-label">
-              {COMMUNITY_ALL.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  className={
-                    communityF.includes(o)
-                      ? 'member-filter-chip member-filter-chip--selected'
-                      : 'member-filter-chip'
-                  }
-                  aria-pressed={communityF.includes(o)}
-                  onClick={() =>
-                    setCommunityF(
-                      communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o]
-                    )
-                  }
-                >
-                  {o}
-                </button>
-              ))}
+            <div className="member-filter-section">
+              <span id="browse-community-label" className="member-filter-section-label">
+                Community
+              </span>
+              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-community-label">
+                {COMMUNITY_ALL.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={
+                      communityF.includes(o)
+                        ? 'member-filter-chip member-filter-chip--selected'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={communityF.includes(o)}
+                    onClick={() =>
+                      setCommunityF(
+                        communityF.includes(o) ? communityF.filter((x) => x !== o) : [...communityF, o]
+                      )
+                    }
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-
-          <div className="member-filter-section member-filter-section--full">
-            <label className="member-filter-section-label" htmlFor="browse-sort">
-              Sort results
-            </label>
-            <select
-              id="browse-sort"
-              className="member-filter-select member-filter-sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as typeof sort)}
-            >
-              <option value="newest">Newest first</option>
-              <option value="youngest">Youngest first</option>
-              <option value="oldest">Oldest first</option>
-            </select>
           </div>
         </div>
       </div>
