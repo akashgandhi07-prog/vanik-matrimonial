@@ -636,6 +636,36 @@ CREATE TRIGGER stripe_checkout_sessions_set_updated_at
   EXECUTE FUNCTION public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- Browse: opposite profiles (server now(); matches profiles_select_opposite_active)
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.browse_opposite_profiles()
+RETURNS SETOF public.profiles
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT p.*
+  FROM public.profiles p
+  INNER JOIN public.profiles v ON v.auth_user_id = auth.uid()
+  WHERE p.id <> v.id
+    AND p.gender IS DISTINCT FROM v.gender
+    AND p.status = 'active'
+    AND p.show_on_register = true
+    AND p.membership_expires_at IS NOT NULL
+    AND p.membership_expires_at > now()
+    AND v.status IN ('active', 'matched')
+    AND (
+      v.membership_expires_at IS NULL
+      OR v.membership_expires_at > now()
+    );
+$$;
+
+REVOKE ALL ON FUNCTION public.browse_opposite_profiles() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.browse_opposite_profiles() TO authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 00006 admin_actions_timeline
 -- ---------------------------------------------------------------------------
 

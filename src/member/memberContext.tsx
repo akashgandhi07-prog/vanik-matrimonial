@@ -211,37 +211,38 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const now = new Date().toISOString();
-      const myGender = p.gender;
       const myId = p.id;
       const myStatus = p.status;
-      async function fetchCandidates() {
-        return supabase
+
+      async function loadBrowseCandidates(): Promise<ProfileRow[]> {
+        const rpc = await supabase.rpc('browse_opposite_profiles');
+        if (!rpc.error && Array.isArray(rpc.data)) {
+          return rpc.data as ProfileRow[];
+        }
+        if (rpc.error) {
+          console.warn('browse_opposite_profiles RPC:', rpc.error.message, rpc.error.code);
+        }
+        const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .neq('gender', myGender)
+          .neq('gender', p.gender)
           .eq('status', 'active')
-          .eq('show_on_register', true)
-          .gt('membership_expires_at', now);
+          .eq('show_on_register', true);
+        if (error) {
+          console.error('browse candidates query:', error.message, error.code, error.details);
+        }
+        return (data ?? []) as ProfileRow[];
       }
-      let { data: list, error: listErr } = await fetchCandidates();
-      if (listErr) {
-        console.error('browse candidates query:', listErr.message, listErr.code, listErr.details);
-      }
-      // Post-login JWT can lag behind PostgREST; one delayed retry fixes empty browse for valid members.
+
+      let list = await loadBrowseCandidates();
       if (
-        (!list || list.length === 0) &&
-        !listErr &&
+        list.length === 0 &&
         (myStatus === 'active' || myStatus === 'matched')
       ) {
         await new Promise((r) => setTimeout(r, 900));
-        const second = await fetchCandidates();
-        if (second.error) {
-          console.error('browse candidates retry:', second.error.message, second.error.code);
-        }
-        if (second.data && second.data.length > 0) list = second.data;
+        list = await loadBrowseCandidates();
       }
-      setCandidates((list ?? []) as ProfileRow[]);
+      setCandidates(list);
 
       const { data: bm } = await supabase.from('bookmarks').select('bookmarked_id').eq('member_id', myId);
       setBookmarks((bm ?? []).map((x) => x.bookmarked_id as string));
