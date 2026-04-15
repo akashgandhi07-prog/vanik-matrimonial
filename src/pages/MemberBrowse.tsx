@@ -331,9 +331,17 @@ export default function MemberBrowse() {
             {filtered.length === 0 && (
               <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                 <p style={{ margin: 0, fontWeight: 500 }}>No profiles found</p>
-                <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-                  Try adjusting your filters to see more results.
-                </p>
+                {candidates.length === 0 ? (
+                  <p style={{ margin: '8px 0 0', fontSize: 14, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto' }}>
+                    Nothing was loaded to browse. The grid uses the public <strong>profiles</strong> list (opposite gender,
+                    active, visible, current membership)—not the private contact / ID table. Each person needs a matching
+                    profile row there; private details alone do not create a listing.
+                  </p>
+                ) : (
+                  <p style={{ margin: '8px 0 0', fontSize: 14 }}>
+                    Try adjusting your filters to see more results.
+                  </p>
+                )}
               </div>
             )}
             {filtered.map((c) => {

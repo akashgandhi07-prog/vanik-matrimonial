@@ -639,11 +639,12 @@ CREATE TRIGGER stripe_checkout_sessions_set_updated_at
 -- Browse: opposite profiles (server now(); matches profiles_select_opposite_active)
 -- ---------------------------------------------------------------------------
 
+-- SECURITY INVOKER: DEFINER hid JWT from auth.uid() in some contexts; RLS on profiles still applies.
 CREATE OR REPLACE FUNCTION public.browse_opposite_profiles()
 RETURNS SETOF public.profiles
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
   SELECT p.*
