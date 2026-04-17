@@ -445,11 +445,15 @@ Deno.serve(async (req) => {
         profilePatch.religion = r;
       }
       if (profIn.community !== undefined) {
-        const c = String(profIn.community);
-        if (!['Vanik', 'Lohana', 'Brahmin', 'Other'].includes(c)) {
-          return jsonResponse({ error: 'Invalid community' }, req, 400);
+        if (profIn.community === null || profIn.community === '') {
+          profilePatch.community = null;
+        } else {
+          const c = String(profIn.community);
+          if (!['Vanik', 'Lohana', 'Brahmin', 'Other'].includes(c)) {
+            return jsonResponse({ error: 'Invalid community' }, req, 400);
+          }
+          profilePatch.community = c;
         }
-        profilePatch.community = c;
       }
 
       if (profIn.photo_url !== undefined) {

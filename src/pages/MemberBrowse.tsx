@@ -20,7 +20,6 @@ type ContactDetailRow = {
   full_name: string;
   reference_number: string;
   mobile: string;
-  email: string;
   father_name: string;
   mother_name: string;
 };
@@ -34,13 +33,11 @@ const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
 const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
 const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
-const COMMUNITY_ALL = ['Vanik', 'Lohana', 'Brahmin', 'Other'] as const;
 
 type BrowseFilters = {
   ageRange: [number, number];
   dietF: string[];
   religionF: string[];
-  communityF: string[];
   heightRange: [number, number];
   sort: 'newest' | 'youngest' | 'oldest';
 };
@@ -50,9 +47,8 @@ function defaultFilters(): BrowseFilters {
     ageRange: [...DEFAULT_AGE],
     dietF: [...DIET_ALL],
     religionF: [...RELIGION_ALL],
-    communityF: [...COMMUNITY_ALL],
     heightRange: [...DEFAULT_HEIGHT],
-    sort: 'newest',
+    sort: 'youngest',
   };
 }
 
@@ -61,7 +57,6 @@ function cloneFilters(filters: BrowseFilters): BrowseFilters {
     ageRange: [...filters.ageRange],
     dietF: [...filters.dietF],
     religionF: [...filters.religionF],
-    communityF: [...filters.communityF],
     heightRange: [...filters.heightRange],
     sort: filters.sort,
   };
@@ -79,7 +74,6 @@ function filtersEqual(a: BrowseFilters, b: BrowseFilters): boolean {
     a.heightRange[1] === b.heightRange[1] &&
     sameStringArray(a.dietF, b.dietF) &&
     sameStringArray(a.religionF, b.religionF) &&
-    sameStringArray(a.communityF, b.communityF) &&
     a.sort === b.sort
   );
 }
@@ -125,12 +119,11 @@ export default function MemberBrowse() {
 
   const filtered = useMemo(() => {
     if (!profile) return [];
-    const { ageRange, dietF, religionF, communityF, heightRange, sort } = appliedFilters;
+    const { ageRange, dietF, religionF, heightRange, sort } = appliedFilters;
     let rows = candidates.filter((c) => {
       if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
       if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
       if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
-      if (communityF.length && c.community && !inFilterSet(c.community, communityF)) return false;
       const h = c.height_cm;
       if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
       return true;
@@ -249,39 +242,6 @@ export default function MemberBrowse() {
       <div className="member-browse-filters">
         <div className="member-browse-filters-head">
           <h2 className="member-browse-filters-title">Filters</h2>
-          <div className="member-browse-filters-actions">
-            <div className="member-browse-filters-sort-wrap">
-              <label htmlFor="browse-sort">Sort</label>
-              <select
-                id="browse-sort"
-                className="member-filter-select"
-                value={draftFilters.sort}
-                onChange={(e) =>
-                  setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
-                }
-              >
-                <option value="newest">Newest</option>
-                <option value="youngest">Youngest</option>
-                <option value="oldest">Oldest</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!pendingFilterChanges}
-              onClick={applyFilters}
-            >
-              Filter
-            </button>
-            <button
-              type="button"
-              className="member-filter-clear"
-              disabled={!filtersActive}
-              onClick={clearFilters}
-            >
-              Reset
-            </button>
-          </div>
         </div>
 
         <div className="member-browse-filters-grid">
@@ -436,65 +396,82 @@ export default function MemberBrowse() {
             </div>
           </div>
 
-          <div className="member-browse-filters-pair member-filter-section--full">
-            <div className="member-filter-section">
-              <span id="browse-religion-label" className="member-filter-section-label">
-                Religion
-              </span>
-              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
-                {RELIGION_ALL.map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    className={
-                      draftFilters.religionF.includes(o)
-                        ? 'member-filter-chip member-filter-chip--selected'
-                        : 'member-filter-chip'
-                    }
-                    aria-pressed={draftFilters.religionF.includes(o)}
-                    onClick={() =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        religionF: prev.religionF.includes(o)
-                          ? prev.religionF.filter((x) => x !== o)
-                          : [...prev.religionF, o],
-                      }))
-                    }
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
+          <div className="member-filter-section member-filter-section--full">
+            <span id="browse-religion-label" className="member-filter-section-label">
+              Religion
+            </span>
+            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
+              {RELIGION_ALL.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  className={
+                    draftFilters.religionF.includes(o)
+                      ? 'member-filter-chip member-filter-chip--selected'
+                      : 'member-filter-chip'
+                  }
+                  aria-pressed={draftFilters.religionF.includes(o)}
+                  onClick={() =>
+                    setDraftFilters((prev) => ({
+                      ...prev,
+                      religionF: prev.religionF.includes(o)
+                        ? prev.religionF.filter((x) => x !== o)
+                        : [...prev.religionF, o],
+                    }))
+                  }
+                >
+                  {o}
+                </button>
+              ))}
             </div>
-            <div className="member-filter-section">
-              <span id="browse-community-label" className="member-filter-section-label">
-                Community
-              </span>
-              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-community-label">
-                {COMMUNITY_ALL.map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    className={
-                      draftFilters.communityF.includes(o)
-                        ? 'member-filter-chip member-filter-chip--selected'
-                        : 'member-filter-chip'
-                    }
-                    aria-pressed={draftFilters.communityF.includes(o)}
-                    onClick={() =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        communityF: prev.communityF.includes(o)
-                          ? prev.communityF.filter((x) => x !== o)
-                          : [...prev.communityF, o],
-                      }))
-                    }
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
+          </div>
+        </div>
+
+        <div
+          className="member-browse-filters-footer"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginTop: 16,
+            paddingTop: 14,
+            borderTop: '1px solid var(--color-border)',
+          }}
+        >
+          <button
+            type="button"
+            className="member-filter-clear"
+            disabled={!filtersActive}
+            onClick={clearFilters}
+          >
+            Reset
+          </button>
+          <div className="member-browse-filters-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', marginLeft: 'auto' }}>
+            <div className="member-browse-filters-sort-wrap">
+              <label htmlFor="browse-sort">Sort</label>
+              <select
+                id="browse-sort"
+                className="member-filter-select"
+                value={draftFilters.sort}
+                onChange={(e) =>
+                  setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
+                }
+              >
+                <option value="youngest">Youngest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest profiles</option>
+              </select>
             </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!pendingFilterChanges}
+              onClick={applyFilters}
+            >
+              Apply filters
+            </button>
           </div>
         </div>
       </div>
@@ -604,8 +581,8 @@ export default function MemberBrowse() {
               ) : (
                 <>
                   <p className="member-browse-empty-desc">
-                    Widen your age or height range, or turn diet / religion / community options back on (all
-                    selected shows everyone in those groups).
+                    Widen your age or height range, or turn diet / religion options back on (all selected shows
+                    everyone in those groups).
                   </p>
                   <div className="member-browse-empty-actions">
                     <button type="button" className="btn btn-primary" onClick={clearFilters}>
@@ -626,7 +603,6 @@ export default function MemberBrowse() {
                   style={{ padding: 0, position: 'relative', cursor: 'pointer', overflow: 'hidden' }}
                   onClick={() => setSelectedProfile(c)}
                 >
-                  <ProfileThumb profileId={c.id} firstName={c.first_name} anonymous />
                   <div style={{ padding: '12px 14px 14px' }}>
                     <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
                       {c.age ? `Age ${c.age}` : ''}
@@ -634,8 +610,15 @@ export default function MemberBrowse() {
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
                     </p>
+                    {c.place_of_birth ? (
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Location</span>
+                        {' · '}
+                        {c.place_of_birth}
+                      </p>
+                    ) : null}
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      {[c.religion, c.community, c.nationality].filter(Boolean).join(' · ')}
+                      {[c.religion, c.nationality].filter(Boolean).join(' · ')}
                     </p>
                     <div className="member-browse-card-actions" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                       <button
@@ -688,9 +671,6 @@ export default function MemberBrowse() {
                 const c = candidates.find((x) => x.id === id);
                 return (
                   <div key={id} className="member-tray-chip">
-                    <div className="member-tray-chip-photo">
-                      <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} anonymous />
-                    </div>
                     <div className="member-tray-chip-meta">
                       <span className="member-tray-chip-name">{c?.age ? `Age ${c.age}` : 'Selected'}</span>
                       <button
@@ -789,21 +769,11 @@ export default function MemberBrowse() {
                       <ProfileThumb profileId={c.profile_id} firstName={c.first_name} />
                     </div>
                     <div className="contact-success-card-body">
-                      <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                        {c.full_name}
-                        {c.reference_number ? (
-                          <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', fontSize: 14 }}>
-                            {' '}
-                            · Ref {c.reference_number}
-                          </span>
-                        ) : null}
-                      </h3>
+                      <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>{c.full_name}</h3>
                       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
                         <a href={telHref(c.mobile)} style={{ fontWeight: 600 }}>
                           {c.mobile}
                         </a>
-                        <br />
-                        <a href={`mailto:${encodeURIComponent(c.email)}`}>{c.email}</a>
                       </p>
                       <div className="contact-success-actions">
                         {wa ? (
@@ -819,9 +789,6 @@ export default function MemberBrowse() {
                         ) : null}
                         <a className="btn btn-secondary" href={telHref(c.mobile)}>
                           Call
-                        </a>
-                        <a className="btn btn-secondary" href={`mailto:${encodeURIComponent(c.email)}`}>
-                          Email
                         </a>
                       </div>
                     </div>

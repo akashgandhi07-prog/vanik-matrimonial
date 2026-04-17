@@ -9,6 +9,12 @@ export default function Privacy() {
           Last updated: 13 April 2026. Data controller: <strong>Vanik Council</strong> (
           <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>).
         </p>
+        <h2 id="terms">Terms of use</h2>
+        <p>
+          By registering for the Vanik Matrimonial Register you agree to use the service respectfully, to provide
+          accurate information, and to follow any instructions given by the register team. Misuse of contact details,
+          harassment, or misrepresentation may result in suspension or removal from the register.
+        </p>
         <h2>What we collect</h2>
         <p>
           We collect the information you provide during registration and profile updates, including

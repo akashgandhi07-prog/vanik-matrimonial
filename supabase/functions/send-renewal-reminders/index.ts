@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     const { data: profiles, error } = await admin
       .from('profiles')
       .select('id, membership_expires_at')
-      .eq('status', 'active')
+      .in('status', ['active', 'matched'])
       .gt('membership_expires_at', now.toISOString())
       .lte('membership_expires_at', in30);
 

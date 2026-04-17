@@ -277,7 +277,6 @@ export default function AdminMembers() {
               <th style={{ padding: 8 }}>Name</th>
               <th style={{ padding: 8 }}>Gender</th>
               <th style={{ padding: 8 }}>Age</th>
-              <th style={{ padding: 8 }}>Community</th>
               <th style={{ padding: 8 }}>Status</th>
               <th style={{ padding: 8 }}>Expires</th>
               <th style={{ padding: 8 }}>Last request</th>
@@ -289,7 +288,7 @@ export default function AdminMembers() {
             {loading && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 14 : 10}
+                  colSpan={filter === 'pending' ? 13 : 9}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   Loading…
@@ -299,7 +298,7 @@ export default function AdminMembers() {
             {!loading && filteredMembers.length === 0 && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 14 : 10}
+                  colSpan={filter === 'pending' ? 13 : 9}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   {loadError
@@ -377,7 +376,6 @@ export default function AdminMembers() {
                     <td style={{ padding: 8 }}>{m.first_name}</td>
                     <td style={{ padding: 8 }}>{m.gender}</td>
                     <td style={{ padding: 8 }}>{m.age}</td>
-                    <td style={{ padding: 8 }}>{m.community}</td>
                     <td style={{ padding: 8 }}>{m.status}</td>
                     <td style={{ padding: 8 }}>{fmtDate(m.membership_expires_at)}</td>
                     <td style={{ padding: 8 }}>{fmtDate(m.last_request_at)}</td>

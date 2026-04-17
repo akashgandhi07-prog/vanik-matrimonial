@@ -7,14 +7,12 @@ type Props = {
   candidate: ProfileRow;
   contactDetails?: {
     mobile?: string | null;
-    email?: string | null;
   };
-  /** When true the modal is opened from a browse/saved context (not from My Requests).
-   *  The real photo and the candidate's name are hidden; only anonymous silhouette + ref number shown. */
+  /** When true the modal is opened before contact details are shared (browse/saved). No photo is shown; title is anonymous. */
   anonymous?: boolean;
   inTray: boolean;
   trayFull: boolean;
-  /** Max profiles allowed in the tray (0–3). Used for clearer “full” tooltips when limits are below3. */
+  /** Max profiles allowed in the tray (0–3). Used for clearer “full” tooltips when limits are below 3. */
   trayCapacity?: number;
   /** When true, adding to the tray is blocked until outstanding feedback is submitted (server rule). */
   feedbackRequiredBeforeRequests?: boolean;
@@ -103,14 +101,16 @@ export function ProfileModal({
         style={{ padding: 0, maxWidth: 620 }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Photo header */}
-        <div style={{ position: 'relative' }}>
-          <ProfileThumb
-            profileId={c.id}
-            firstName={c.first_name}
-            className="profile-modal-photo"
-            anonymous={anonymous}
-          />
+        {/* Photo header (hidden when browsing anonymously — no placeholder) */}
+        <div style={{ position: 'relative', minHeight: anonymous ? 44 : undefined }}>
+          {!anonymous && (
+            <ProfileThumb
+              profileId={c.id}
+              firstName={c.first_name}
+              className="profile-modal-photo"
+              anonymous={false}
+            />
+          )}
           <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
             {'\u2715'}
           </button>
@@ -136,9 +136,8 @@ export function ProfileModal({
           )}
 
           <Row label="Religion" value={c.religion} />
-          <Row label="Community" value={c.community} />
           <Row label="Nationality" value={c.nationality} />
-          <Row label="Place of birth" value={c.place_of_birth} />
+          <Row label="Location" value={c.place_of_birth} />
           <Row label="Family origin" value={c.town_country_of_origin} />
           <Row label="Diet" value={c.diet} />
           <Row label="Height" value={heightDisplay} />
@@ -146,7 +145,6 @@ export function ProfileModal({
           <Row label="Settlement plans" value={c.future_settlement_plans} />
           {/* Contact details — only shown when the user has already received them (My Requests view) */}
           {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
-          {contactDetails?.email && <Row label="Email" value={contactDetails.email} />}
 
           {c.hobbies && (
             <div style={{ padding: '8px 0' }}>

@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
 import { MemberAuthGate, MemberDataProvider, useMemberArea } from '../member/memberContext';
 
 function daysBetween(a: Date, b: Date) {
@@ -6,7 +7,19 @@ function daysBetween(a: Date, b: Date) {
 }
 
 function MemberLayoutBody() {
-  const { profile } = useMemberArea();
+  const { profile, loadAll } = useMemberArea();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [renewalPaidNotice, setRenewalPaidNotice] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('checkout') !== 'success') return;
+    setRenewalPaidNotice(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('checkout');
+    next.delete('session_id');
+    setSearchParams(next, { replace: true });
+    void loadAll();
+  }, [searchParams, setSearchParams, loadAll]);
 
   if (!profile) return null;
 
@@ -51,6 +64,34 @@ function MemberLayoutBody() {
           </div>
         )}
       </header>
+
+      {renewalPaidNotice && (
+        <div className="layout-max" style={{ marginTop: 12 }}>
+          <div
+            className="card"
+            role="status"
+            style={{
+              padding: '10px 14px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 10,
+              justifyContent: 'space-between',
+              background: 'rgba(22, 163, 74, 0.08)',
+              border: '1px solid rgba(22, 163, 74, 0.35)',
+              fontSize: 14,
+            }}
+          >
+            <span>
+              Payment received. Your membership should update within a few moments — refresh if your expiry date
+              looks unchanged.
+            </span>
+            <button type="button" className="btn btn-secondary" onClick={() => setRenewalPaidNotice(false)}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="layout-max member-dashboard-main" style={{ marginTop: 20 }}>
         <nav className="member-dashboard-nav" aria-label="Member dashboard">

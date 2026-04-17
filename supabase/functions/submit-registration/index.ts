@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
     height_cm: Number(body.height_cm) || null,
     diet: body.diet as string,
     religion: body.religion as string,
-    community: body.community as string,
+    community: null,
     nationality: stripHtml(String(body.nationality ?? ''), 100),
     place_of_birth: stripHtml(String(body.place_of_birth ?? ''), 200),
     town_country_of_origin: stripHtml(String(body.town_country_of_origin ?? ''), 200),
@@ -327,10 +327,9 @@ Deno.serve(async (req) => {
     const html = letterHtml(
       isResubmit ? 'Resubmitted registration' : 'New registration',
       `${adminLead}
-       <p><strong>Reference:</strong> ${stripHtml(referenceNumber, 20)}<br/>
-       <strong>Name:</strong> ${firstName} ${surname}<br/>
+       <p><strong>Name:</strong> ${firstName} ${surname}<br/>
        <strong>Email:</strong> ${email}</p>
-       <p><a href="${Deno.env.get('PUBLIC_SITE_URL') ?? ''}/admin/members/${profileId}">Review in admin</a></p>`
+       <p><a href="${Deno.env.get('PUBLIC_SITE_URL') ?? ''}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
     );
     await sendResendEmail(resendKey, {
       to: notify,

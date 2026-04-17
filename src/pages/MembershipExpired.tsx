@@ -99,7 +99,7 @@ export default function MembershipExpired() {
       const res = (await invokeFunction('create-checkout-session', {
         purpose: 'renewal',
         client_origin: origin,
-        renewal_success_path: '/dashboard/browse',
+        renewal_success_path: '/renew-membership',
         renewal_cancel_path: path,
       })) as { url?: string };
       if (res.url) window.location.href = res.url;

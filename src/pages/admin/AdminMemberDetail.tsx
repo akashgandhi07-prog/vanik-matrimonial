@@ -58,7 +58,7 @@ const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
     text: 'We could not confirm that you meet the minimum age requirement for this register — please check your date of birth and ID, and resubmit.',
   },
   {
-    label: 'Eligibility / community',
+    label: 'Eligibility',
     text: 'Based on the information provided, we are not able to proceed with this application under our current register rules. If you believe this is a mistake, please reply with any further context.',
   },
 ];

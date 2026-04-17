@@ -117,7 +117,8 @@ Deno.serve(async (req) => {
     }
 
     const st = prof.status as string;
-    if (st !== 'active' && st !== 'expired' && st !== 'archived') {
+    const renewable = new Set(['active', 'matched', 'expired', 'archived']);
+    if (!renewable.has(st)) {
       return jsonResponse({ received: true, skipped: 'bad_status' }, req);
     }
 

@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     const { data: rows, error } = await admin
       .from('profiles')
       .select('id')
-      .eq('status', 'active')
+      .in('status', ['active', 'matched'])
       .lt('membership_expires_at', now);
 
     if (error) {

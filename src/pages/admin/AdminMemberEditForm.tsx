@@ -85,7 +85,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
   const [weightKg, setWeightKg] = useState<string>(profile.weight_kg != null ? String(profile.weight_kg) : '');
   const [diet, setDiet] = useState(profile.diet ?? 'Veg');
   const [religion, setReligion] = useState(profile.religion ?? '');
-  const [community, setCommunity] = useState(profile.community ?? '');
   const [nationality, setNationality] = useState(profile.nationality ?? '');
   const [placeOfBirth, setPlaceOfBirth] = useState(profile.place_of_birth ?? '');
   const [townOrigin, setTownOrigin] = useState(profile.town_country_of_origin ?? '');
@@ -123,7 +122,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     setWeightKg(profile.weight_kg != null ? String(profile.weight_kg) : '');
     setDiet(profile.diet ?? 'Veg');
     setReligion(profile.religion ?? '');
-    setCommunity(profile.community ?? '');
     setNationality(profile.nationality ?? '');
     setPlaceOfBirth(profile.place_of_birth ?? '');
     setTownOrigin(profile.town_country_of_origin ?? '');
@@ -177,7 +175,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           weight_kg: weightParsed,
           diet,
           religion,
-          community,
+          community: null,
           nationality,
           place_of_birth: placeOfBirth,
           town_country_of_origin: townOrigin,
@@ -357,23 +355,12 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           <input value={nationality} onChange={(e) => setNationality(e.target.value)} />
         </div>
         <div>
-          <label className="label">Place of birth</label>
+          <label className="label">Where they live</label>
           <input value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} />
         </div>
         <div>
           <label className="label">Town / country of origin</label>
           <input value={townOrigin} onChange={(e) => setTownOrigin(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Community</label>
-          <select value={community} onChange={(e) => setCommunity(e.target.value)}>
-            <option value="">—</option>
-            {['Vanik', 'Lohana', 'Brahmin', 'Other'].map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
         </div>
         <div>
           <label className="label">Religion</label>

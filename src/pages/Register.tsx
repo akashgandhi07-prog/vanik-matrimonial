@@ -37,7 +37,6 @@ type FormState = {
   nationality: string;
   place_of_birth: string;
   town_country_of_origin: string;
-  community: string;
   religion: string;
   father_name: string;
   mother_name: string;
@@ -72,7 +71,6 @@ const defaultState: FormState = {
   nationality: '',
   place_of_birth: '',
   town_country_of_origin: '',
-  community: '',
   religion: '',
   father_name: '',
   mother_name: '',
@@ -137,10 +135,9 @@ function validateStep2(form: FormState): Record<string, string> {
   if (!isValidPersonName(form.first_name)) e.first_name = 'Enter a valid first name (letters, spaces, hyphen or apostrophe).';
   if (!isValidPersonName(form.surname)) e.surname = 'Enter a valid surname.';
   if (!isValidPlaceField(form.nationality, 100)) e.nationality = 'Enter your nationality (at least 2 characters).';
-  if (!isValidPlaceField(form.place_of_birth, 200)) e.place_of_birth = 'Enter place of birth.';
+  if (!isValidPlaceField(form.place_of_birth, 200)) e.place_of_birth = 'Enter where you live.';
   if (!isValidPlaceField(form.town_country_of_origin, 200))
     e.town_country_of_origin = 'Enter town and country of family origin.';
-  if (!form.community) e.community = 'Please select a community.';
   if (!form.religion) e.religion = 'Please select a religion.';
   if (!isValidPersonName(form.father_name)) e.father_name = "Enter your father's name.";
   if (!isValidPersonName(form.mother_name)) e.mother_name = "Enter your mother's name.";
@@ -161,7 +158,7 @@ function validateStep3(form: FormState): Record<string, string> {
   if (!form.photo_path) e.photo_path = 'Please upload a profile photo.';
   if (!form.consent_contact) e.consent_contact = 'You must consent to share contact details for this service.';
   if (!form.consent_age) e.consent_age = 'You must confirm you are 18 or over.';
-  if (!form.consent_privacy) e.consent_privacy = 'You must accept the privacy policy.';
+  if (!form.consent_privacy) e.consent_privacy = 'You must accept the privacy policy and terms of use.';
   return e;
 }
 
@@ -180,7 +177,6 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   nationality: 'reg-nationality',
   place_of_birth: 'reg-pob',
   town_country_of_origin: 'reg-origin',
-  community: 'reg-community',
   religion: 'reg-religion',
   father_name: 'reg-father',
   mother_name: 'reg-mother',
@@ -366,7 +362,6 @@ export default function Register() {
         nationality: p.nationality ?? '',
         place_of_birth: p.place_of_birth ?? '',
         town_country_of_origin: p.town_country_of_origin ?? '',
-        community: p.community ?? '',
         religion: p.religion ?? '',
         father_name: m.father_name ?? '',
         mother_name: m.mother_name ?? '',
@@ -570,7 +565,6 @@ export default function Register() {
         nationality: sanitizeText(form.nationality, 100),
         place_of_birth: sanitizeText(form.place_of_birth, 200),
         town_country_of_origin: sanitizeText(form.town_country_of_origin, 200),
-        community: form.community,
         religion: form.religion,
         father_name: sanitizeText(form.father_name, 120),
         mother_name: sanitizeText(form.mother_name, 120),
@@ -1237,7 +1231,7 @@ export default function Register() {
               </div>
               <div>
                 <label className="label" htmlFor="reg-pob">
-                  Place of birth <span aria-hidden="true">*</span>
+                  Where do you live? <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id="reg-pob"
@@ -1275,30 +1269,6 @@ export default function Register() {
                 {fieldErrors.town_country_of_origin && (
                   <p className="field-error">{fieldErrors.town_country_of_origin}</p>
                 )}
-              </div>
-              <div>
-                <label className="label" htmlFor="reg-community">
-                  Community <span aria-hidden="true">*</span>
-                </label>
-                <select
-                  id="reg-community"
-                  name="community"
-                  autoComplete="off"
-                  value={form.community}
-                  onChange={(e) => {
-                    update({ community: e.target.value });
-                    clearFieldError('community');
-                  }}
-                  aria-invalid={fieldErrors.community ? true : undefined}
-                >
-                  <option value="">Select…</option>
-                  {['Vanik', 'Lohana', 'Brahmin', 'Other'].map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                {fieldErrors.community && <p className="field-error">{fieldErrors.community}</p>}
               </div>
               <div>
                 <label className="label" htmlFor="reg-religion">
@@ -1650,6 +1620,10 @@ export default function Register() {
                     I have read and agree to the{' '}
                     <a href="/privacy" target="_blank" rel="noreferrer">
                       Privacy Policy
+                    </a>{' '}
+                    and{' '}
+                    <a href="/privacy#terms" target="_blank" rel="noreferrer">
+                      Terms of use
                     </a>
                     .
                   </span>
@@ -1669,6 +1643,9 @@ export default function Register() {
                   className="btn btn-primary"
                   disabled={
                     submitting ||
+                    !form.consent_contact ||
+                    !form.consent_age ||
+                    !form.consent_privacy ||
                     (billingEnabled && form.coupon_hint !== 'valid' && !stripeCheckoutSessionId)
                   }
                 >

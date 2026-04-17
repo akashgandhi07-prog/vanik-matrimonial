@@ -83,8 +83,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'No profile found for this account.' }, req, 404);
     }
     const st = prof.status as string;
-    if (st !== 'active' && st !== 'expired' && st !== 'archived') {
-      return jsonResponse({ error: 'Membership renewal is only available for active, expired, or archived members.' }, req, 400);
+    const renewable = new Set(['active', 'matched', 'expired', 'archived']);
+    if (!renewable.has(st)) {
+      return jsonResponse({
+        error:
+          'Membership renewal is only available when your profile is active, matched, expired, or archived.',
+      }, req, 400);
     }
     profileId = prof.id as string;
   }

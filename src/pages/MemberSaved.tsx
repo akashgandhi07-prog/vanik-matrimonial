@@ -144,12 +144,9 @@ export default function MemberSaved() {
             onClick={() => setSelectedProfile(c)}
           >
             <div style={{ position: 'relative' }}>
-              {/* Show real photo only once contact details have been requested */}
-              <ProfileThumb
-                profileId={c.id}
-                firstName={c.first_name}
-                anonymous={!alreadyRequested}
-              />
+              {alreadyRequested ? (
+                <ProfileThumb profileId={c.id} firstName={c.first_name} />
+              ) : null}
               {alreadyRequested && (
                 <span
                   className="badge badge-success"
@@ -166,6 +163,13 @@ export default function MemberSaved() {
                   ? `${c.first_name}${c.age ? `, ${c.age}` : ''}`
                   : (c.age ? `Age ${c.age}` : '')}
               </h3>
+              {!alreadyRequested && c.place_of_birth ? (
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Location</span>
+                  {' · '}
+                  {c.place_of_birth}
+                </p>
+              ) : null}
               {alreadyRequested && (
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                   Contact details are available under My requests.

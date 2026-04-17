@@ -15,7 +15,6 @@ type ContactDetailRow = {
   full_name: string;
   reference_number: string;
   mobile: string;
-  email: string;
   father_name: string;
   mother_name: string;
 };
@@ -100,7 +99,6 @@ export default function MemberRequests() {
     profile: ProfileRow;
     contactDetails?: {
       mobile?: string | null;
-      email?: string | null;
     };
   } | null>(null);
 
@@ -135,7 +133,6 @@ export default function MemberRequests() {
               full_name: row.full_name ?? row.first_name,
               reference_number: row.reference_number ?? '',
               mobile: row.mobile ?? '',
-              email: row.email ?? '',
               father_name: row.father_name ?? '',
               mother_name: row.mother_name ?? '',
             };
@@ -331,7 +328,6 @@ export default function MemberRequests() {
                       const wa = details?.mobile ? whatsappUrlFromPhone(details.mobile) : null;
                       const hasContactDetails = !!(
                         details?.mobile ||
-                        details?.email ||
                         details?.father_name ||
                         details?.mother_name
                       );
@@ -342,7 +338,6 @@ export default function MemberRequests() {
                               contactDetails: details
                                 ? {
                                     mobile: details.mobile,
-                                    email: details.email,
                                   }
                                 : undefined,
                             })
@@ -393,16 +388,6 @@ export default function MemberRequests() {
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       {details.mobile}
-                                    </a>
-                                  </div>
-                                ) : null}
-                                {details.email ? (
-                                  <div style={{ marginTop: 2, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                    <a
-                                      href={`mailto:${encodeURIComponent(details.email)}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {details.email}
                                     </a>
                                   </div>
                                 ) : null}

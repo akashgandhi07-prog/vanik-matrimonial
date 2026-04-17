@@ -1,34 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchPhotoSignedUrl } from '../lib/supabase';
 
-function AnonymousPlaceholder({ className }: { className?: string }) {
-  return (
-    <div
-      className={className}
-      style={{
-        width: '100%',
-        aspectRatio: '1',
-        borderRadius: 8,
-        background: '#e5e7eb',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      aria-hidden
-    >
-      <svg
-        viewBox="0 0 64 64"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        style={{ width: '50%', height: '50%' }}
-      >
-        <circle cx="32" cy="22" r="12" fill="#9ca3af" />
-        <path d="M8 56c0-13.255 10.745-24 24-24s24 10.745 24 24" fill="#9ca3af" />
-      </svg>
-    </div>
-  );
-}
-
 export function ProfileThumb({
   profileId,
   firstName,
@@ -38,7 +10,7 @@ export function ProfileThumb({
   profileId: string;
   firstName: string;
   className?: string;
-  /** When true, shows a generic silhouette — no photo is fetched and no name-based avatar is shown. */
+  /** When true, no image is shown (browse-before-request flows — no placeholder). */
   anonymous?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -56,7 +28,7 @@ export function ProfileThumb({
   }, [profileId, anonymous]);
 
   if (anonymous) {
-    return <AnonymousPlaceholder className={className} />;
+    return null;
   }
 
   if (!src) {

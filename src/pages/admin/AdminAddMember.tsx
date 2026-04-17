@@ -17,7 +17,6 @@ type FormState = {
   mobile_phone: string;
   date_of_birth: string;
   gender: string;
-  community: string;
   religion: string;
   nationality: string;
   place_of_birth: string;
@@ -46,7 +45,6 @@ const INIT: FormState = {
   mobile_phone: '',
   date_of_birth: '',
   gender: 'Male',
-  community: '',
   religion: '',
   nationality: '',
   place_of_birth: '',
@@ -185,16 +183,13 @@ export default function AdminAddMember() {
           <h2 style={{ margin: 0, marginTop: 8 }}>Background</h2>
 
           <div className="responsive-form-row-2">
-            <Field label="Community">
-              <input value={form.community} onChange={(e) => set('community', e.target.value)} />
-            </Field>
             <Field label="Religion">
               <input value={form.religion} onChange={(e) => set('religion', e.target.value)} />
             </Field>
             <Field label="Nationality">
               <input value={form.nationality} onChange={(e) => set('nationality', e.target.value)} />
             </Field>
-            <Field label="Place of birth">
+            <Field label="Where they live">
               <input value={form.place_of_birth} onChange={(e) => set('place_of_birth', e.target.value)} />
             </Field>
             <Field label="Town / country of origin">
