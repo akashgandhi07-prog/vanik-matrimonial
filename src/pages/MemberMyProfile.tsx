@@ -184,7 +184,6 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         <p style={{ marginTop: 12 }}>
           {p.first_name}, {p.age}
         </p>
-        <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{p.reference_number}</p>
       </div>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Edit profile</h3>

@@ -34,7 +34,7 @@ export default function Landing() {
                   Member login
                 </Link>
                 <Link to="/demo" className="btn btn-secondary">
-                  View demo (no login)
+                  Browse Profiles
                 </Link>
               </div>
 

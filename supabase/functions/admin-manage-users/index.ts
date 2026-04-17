@@ -944,7 +944,6 @@ Deno.serve(async (req) => {
     const extra: Record<string, unknown> = {};
     if (template === 'registration_received') {
       extra.first_name = profT.first_name;
-      extra.reference_number = profT.reference_number;
       extra.resubmitted = body.resubmitted === true;
     }
     if (template === 'registration_rejected') {

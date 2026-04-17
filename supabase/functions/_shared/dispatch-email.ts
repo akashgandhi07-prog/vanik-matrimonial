@@ -85,7 +85,6 @@ export async function dispatchEmail(
     }
     case 'registration_received': {
       const first = stripHtml(String(extraData.first_name ?? ''), 80);
-      const ref = stripHtml(String(extraData.reference_number ?? ''), 20);
       const resubmitted = extraData.resubmitted === true;
       subject = resubmitted ? 'We have received your updated application' : 'Your registration has been received';
       inner = `<p>Dear ${first},</p>
@@ -94,7 +93,6 @@ export async function dispatchEmail(
             ? 'Thank you — we have received your <strong>updated</strong> application and will review it again within five working days.'
             : 'We have received your application to the Vanik Matrimonial Register and will review it within five working days.'
         }</p>
-        <p>Your reference: <strong>${ref}</strong></p>
         <p>If you have any questions, simply reply to this email.</p>`;
       break;
     }
@@ -108,17 +106,19 @@ export async function dispatchEmail(
             year: 'numeric',
           })
         : '';
-      subject = `Welcome to the Vanik Matrimonial Register, ${stripHtml(profile.first_name, 60)}`;
+      subject = `Your account is now active — Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your application has been approved. Your reference number is <strong>${stripHtml(profile.reference_number ?? '', 20)}</strong>.</p>
-        <p>Your membership is valid until <strong>${exp}</strong>.</p>
-        <p>You can sign in here: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
+        <p>Your account has now been created and your application has been approved. You can log in and start browsing profiles straight away.</p>
+        ${exp ? `<p>Your membership is valid until <strong>${exp}</strong>.</p>` : ''}
+        <p><a href="${siteUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Log in now</a></p>
         <p><strong>How it works</strong></p>
         <ul>
-          <li>Browse profiles of members of the opposite gender.</li>
-          <li>Save favourites and request contact details (up to weekly limits).</li>
-          <li>We will email you candidate details securely when requests are approved.</li>
+          <li>Browse profiles of members — photos and names are only revealed once you have requested their details.</li>
+          <li>You can request up to <strong>3</strong> profiles per 7-day window and up to <strong>6</strong> per calendar month.</li>
+          <li>Once a request is submitted we will send you their contact details by email.</li>
+          <li>We ask for a short piece of feedback after each introduction — this is for admin and safeguarding purposes only and is never shared with the other person.</li>
         </ul>
+        <p>If you have any questions, simply reply to this email.</p>
         <p>With good wishes,<br/>The register team<br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
@@ -237,11 +237,9 @@ export async function dispatchEmail(
     case 'admin_pending_reminder': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      const ref = stripHtml(String(profile.reference_number ?? ''), 20);
       subject = 'Reminder: your application is awaiting review';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
-        <p>Your reference: <strong>${ref}</strong></p>
         <p>We aim to review applications within five working days. If you need to add information or upload clearer documents, please sign in: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
         <p>If you have questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;

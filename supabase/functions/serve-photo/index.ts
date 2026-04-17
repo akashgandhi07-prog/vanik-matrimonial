@@ -46,12 +46,21 @@ Deno.serve(async (req) => {
     if (!requester) {
       return jsonResponse({ error: 'Profile required' }, req, 403);
     }
-    const activeMember =
-      requester.status === 'active' &&
-      requester.membership_expires_at &&
-      new Date(requester.membership_expires_at) > new Date();
-    if (!activeMember && requester.id !== profileId) {
-      return jsonResponse({ error: 'Membership not active' }, req, 403);
+
+    const ownsTarget = requester.id === profileId;
+
+    if (!ownsTarget) {
+      // Non-admin members may only view photos of profiles they have explicitly requested.
+      // Check requests: the viewer must have a request where profileId is in candidate_ids.
+      const { count } = await admin
+        .from('requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('requester_id', requester.id)
+        .contains('candidate_ids', [profileId]);
+
+      if (!count || count === 0) {
+        return jsonResponse({ error: 'Forbidden: photo only available after contact details have been requested' }, req, 403);
+      }
     }
   }
 
@@ -63,27 +72,6 @@ Deno.serve(async (req) => {
 
   if (!target?.photo_url) {
     return jsonResponse({ error: 'No photo' }, req, 404);
-  }
-
-  const ownsTarget = target.auth_user_id === userData.user.id;
-  const targetVisible =
-    target.status === 'active' &&
-    target.show_on_register === true &&
-    target.membership_expires_at &&
-    new Date(target.membership_expires_at) > new Date();
-
-  if (!isAdmin && !ownsTarget && !targetVisible) {
-    return jsonResponse({ error: 'Forbidden' }, req, 403);
-  }
-
-  if (!isAdmin && !ownsTarget && requester) {
-    const activeViewer =
-      requester.status === 'active' &&
-      requester.membership_expires_at &&
-      new Date(requester.membership_expires_at) > new Date();
-    if (!activeViewer) {
-      return jsonResponse({ error: 'Forbidden' }, req, 403);
-    }
   }
 
   const { data: signed, error: signErr } = await admin.storage

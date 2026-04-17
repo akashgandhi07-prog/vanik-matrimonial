@@ -54,6 +54,8 @@ export default function MemberSaved() {
       {bookmarks.map((id) => {
         const c = byId.get(id);
         const available = c && isProfileVisibleToMember(c);
+        const alreadyRequested = requestedIds.has(id);
+
         if (c && !available) {
           return (
             <div
@@ -63,7 +65,7 @@ export default function MemberSaved() {
             >
               <div
                 role="img"
-                aria-label={`${c.first_name}'s profile photo, no longer available`}
+                aria-label="Profile no longer available"
                 style={{
                   aspectRatio: '1',
                   background: '#e5e7eb',
@@ -79,7 +81,7 @@ export default function MemberSaved() {
               >
                 No longer available
               </div>
-              <p style={{ margin: '12px 0 4px', fontWeight: 600 }}>{c.first_name}</p>
+              <p style={{ margin: '12px 0 4px', fontWeight: 600 }}>Saved profile</p>
               <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: 0 }}>
                 This profile is no longer visible on the register (inactive, expired, or hidden).
               </p>
@@ -142,26 +144,31 @@ export default function MemberSaved() {
             onClick={() => setSelectedProfile(c)}
           >
             <div style={{ position: 'relative' }}>
-              <ProfileThumb profileId={c.id} firstName={c.first_name} />
-              {requestedIds.has(c.id) && (
+              {/* Show real photo only once contact details have been requested */}
+              <ProfileThumb
+                profileId={c.id}
+                firstName={c.first_name}
+                anonymous={!alreadyRequested}
+              />
+              {alreadyRequested && (
                 <span
                   className="badge badge-success"
                   style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(22,163,74,0.9)' }}
                 >
-                  Already requested
+                  Details requested
                 </span>
               )}
             </div>
             <div style={{ padding: '12px 14px 14px' }}>
               <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                {c.first_name}{c.age ? `, ${c.age}` : ''}
+                {/* Show name only once contact details have been requested */}
+                {alreadyRequested
+                  ? `${c.first_name}${c.age ? `, ${c.age}` : ''}`
+                  : (c.age ? `Age ${c.age}` : '')}
               </h3>
-              <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0 }}>
-                {c.reference_number}
-              </p>
-              {requestedIds.has(c.id) && (
+              {alreadyRequested && (
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                  You already have this profile&apos;s contact details in My requests.
+                  Contact details are available under My requests.
                 </p>
               )}
               <button
@@ -179,6 +186,7 @@ export default function MemberSaved() {
       {selectedProfile && (
         <ProfileModal
           candidate={selectedProfile}
+          anonymous={!requestedIds.has(selectedProfile.id)}
           inTray={false}
           trayFull={false}
           blocked={requestedIds.has(selectedProfile.id)}

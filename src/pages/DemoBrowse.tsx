@@ -154,16 +154,50 @@ export default function DemoBrowse() {
   return (
     <PublicLayout>
       <div className="layout-max">
-        <div style={{ marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Demo browse</h1>
-          <span className="badge badge-warning">No login required</span>
+        <div style={{ marginBottom: 14 }}>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Browse Profiles</h1>
+          <p style={{ marginTop: 0, color: 'var(--color-text-secondary)', maxWidth: 620 }}>
+            Browse the profiles currently on the register. Photos and contact details are only shared after you become a
+            member and make a request. Use the filters below to narrow your search.
+          </p>
         </div>
-        <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>
-          This is a temporary public demo view for testing. Contact request actions are disabled here.
-          <Link to="/login" style={{ marginLeft: 6 }}>
-            Member login
+
+        {/* CTA banner */}
+        <div
+          style={{
+            marginBottom: 24,
+            padding: '16px 20px',
+            borderRadius: 12,
+            background: 'var(--color-primary, #7c3aed)',
+            color: '#fff',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 16,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <strong style={{ fontSize: 16 }}>Ready to get in touch?</strong>
+            <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.9 }}>
+              Membership is £10. Once your application is approved you can request contact details directly from this register.
+            </p>
+          </div>
+          <Link
+            to="/register"
+            className="btn"
+            style={{
+              background: '#fff',
+              color: 'var(--color-primary, #7c3aed)',
+              fontWeight: 700,
+              padding: '10px 20px',
+              borderRadius: 8,
+              whiteSpace: 'nowrap',
+              textDecoration: 'none',
+            }}
+          >
+            Apply — £10
           </Link>
-        </p>
+        </div>
 
         <div className="member-browse-filters">
           <div className="member-browse-filters-head">
@@ -385,16 +419,16 @@ export default function DemoBrowse() {
             <span>
               {filtered.length === 0
                 ? profiles.length === 0
-                  ? 'No demo profiles to show yet.'
+                  ? 'No profiles to show yet.'
                   : 'No profiles match these filters.'
                 : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
             </span>
           </div>
 
-          {loading && <p>Loading demo profiles…</p>}
+          {loading && <p>Loading profiles…</p>}
           {error && (
             <div className="member-browse-empty">
-              <p className="member-browse-empty-title">Could not load demo profiles</p>
+              <p className="member-browse-empty-title">Could not load profiles</p>
               <p className="member-browse-empty-desc">{error}</p>
             </div>
           )}
@@ -403,19 +437,10 @@ export default function DemoBrowse() {
             <div className="member-browse-cards">
               {filtered.map((c) => (
                 <article key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div style={{ position: 'relative' }}>
-                    <span
-                      className="badge badge-muted"
-                      style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(255,255,255,0.9)' }}
-                    >
-                      {c.reference_number}
-                    </span>
-                    <ProfileThumb profileId={c.id} firstName={c.first_name} />
-                  </div>
+                  <ProfileThumb profileId={c.id} firstName={c.first_name} anonymous />
                   <div style={{ padding: '12px 14px 14px' }}>
                     <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {c.first_name}
-                      {c.age ? `, ${c.age}` : ''}
+                      {c.age ? `Age ${c.age}` : ''}
                     </h3>
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}

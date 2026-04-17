@@ -1,8 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ProfileThumb } from '../member/ProfileThumb';
 import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
+import {
+  computeMonthlyWindow,
+  computeTrayCapacity,
+  computeWeeklyWindow,
+  hasOutstandingFeedbackBlock,
+} from '../member/requestQuota';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 import { invokeFunction, supabase } from '../lib/supabase';
@@ -87,7 +94,7 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
 }
 
 export default function MemberBrowse() {
-  const { profile, candidates, bookmarks, toggleBookmark, requests, loadAll } =
+  const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll } =
     useMemberArea();
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
@@ -98,7 +105,7 @@ export default function MemberBrowse() {
   );
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
   const [submitError, setSubmitError] = useState<{
-    type: 'weekly_limit' | 'feedback_required' | 'already_requested' | 'generic';
+    type: 'weekly_limit' | 'monthly_limit' | 'feedback_required' | 'already_requested' | 'generic';
     message: string;
     requestIds?: string[];
   } | null>(null);
@@ -169,7 +176,22 @@ export default function MemberBrowse() {
     return ids;
   }, [requests]);
 
-  const trayFull = tray.length >= 3;
+  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
+  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
+  const trayMax = useMemo(
+    () => computeTrayCapacity(weeklyWindow.remaining, monthlyWindow.remaining),
+    [weeklyWindow.remaining, monthlyWindow.remaining]
+  );
+  const feedbackBlocking = useMemo(
+    () => hasOutstandingFeedbackBlock(requests, feedbackKeys),
+    [requests, feedbackKeys]
+  );
+
+  const atTrayCapacity = tray.length >= trayMax;
+
+  useEffect(() => {
+    if (tray.length > trayMax) setTray((t) => t.slice(0, trayMax));
+  }, [trayMax, tray.length]);
 
   if (!profile) return null;
 
@@ -178,12 +200,12 @@ export default function MemberBrowse() {
       setTray((t) => t.filter((x) => x !== id));
       return;
     }
-    if (trayFull) return;
+    if (feedbackBlocking || tray.length >= trayMax) return;
     setTray((t) => [...t, id]);
   }
 
   async function submitTray() {
-    if (!profile || tray.length === 0) return;
+    if (!profile || tray.length === 0 || feedbackBlocking) return;
     setSubmitError(null);
     try {
       const res = (await invokeFunction('submit-contact-request', {
@@ -206,7 +228,9 @@ export default function MemberBrowse() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Request failed';
       // Parse structured errors from the edge function
-      if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
+      if (msg.includes('monthly_limit') || msg.includes('Monthly limit')) {
+        setSubmitError({ type: 'monthly_limit', message: msg });
+      } else if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
         setSubmitError({ type: 'weekly_limit', message: msg });
       } else if (msg.includes('feedback_required') || msg.includes('Outstanding feedback')) {
         setSubmitError({ type: 'feedback_required', message: msg });
@@ -475,6 +499,72 @@ export default function MemberBrowse() {
         </div>
       </div>
 
+      {feedbackBlocking && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(217,119,6,0.35)',
+            background: 'rgba(217,119,6,0.08)',
+            fontSize: 14,
+            color: 'var(--color-warning)',
+          }}
+        >
+          <strong>Feedback required before new requests.</strong> You have introductions older than 21 days without
+          admin-only feedback.{' '}
+          <Link to="/dashboard/requests" style={{ color: 'inherit', fontWeight: 600 }}>
+            Open My requests
+          </Link>{' '}
+          to submit outstanding feedback, then you can request contact details again.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        <div
+          style={{
+            flex: '1 1 200px',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: `1px solid ${weeklyWindow.locked ? 'rgba(217,119,6,0.3)' : 'var(--color-border)'}`,
+            background: weeklyWindow.locked ? 'rgba(217,119,6,0.08)' : 'var(--color-surface)',
+            fontSize: 13,
+            color: weeklyWindow.locked ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+          }}
+        >
+          {weeklyWindow.locked ? (
+            <>All 3 weekly slots used. Resets {weeklyWindow.resetAt ?? 'soon'}.</>
+          ) : (
+            <>This week: {weeklyWindow.used}/3 distinct profiles used · {weeklyWindow.remaining} remaining</>
+          )}
+        </div>
+        <div
+          style={{
+            flex: '1 1 200px',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: `1px solid ${monthlyWindow.locked ? 'rgba(217,119,6,0.3)' : 'var(--color-border)'}`,
+            background: monthlyWindow.locked ? 'rgba(217,119,6,0.08)' : 'var(--color-surface)',
+            fontSize: 13,
+            color: monthlyWindow.locked ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+          }}
+        >
+          {monthlyWindow.locked ? (
+            <>All 6 monthly slots used. Resets {monthlyWindow.resetAt}.</>
+          ) : (
+            <>
+              This month: {monthlyWindow.used}/6 distinct profiles used · {monthlyWindow.remaining} remaining
+            </>
+          )}
+        </div>
+      </div>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+        Your tray can hold up to <strong>{trayMax}</strong> profile{trayMax === 1 ? '' : 's'} right now (the lower of
+        weekly and monthly slots, and at most 3). Re-requesting the same person after the 7-day cooldown does not use an
+        extra monthly slot if you already counted them this month.
+      </p>
+
       <section className="member-browse-grid">
         <div className="member-browse-result-line">
           <span>
@@ -484,9 +574,14 @@ export default function MemberBrowse() {
                 : 'No profiles match these filters.'
               : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
           </span>
-          {trayFull && (
+          {atTrayCapacity && trayMax > 0 && (
             <span className="member-browse-result-line-warn">
-              Tray full (3/3). Submit or remove one before adding another.
+              Tray full ({tray.length}/{trayMax}). Submit or remove one before adding another.
+            </span>
+          )}
+          {trayMax === 0 && !feedbackBlocking && (
+            <span className="member-browse-result-line-warn">
+              No request slots available until your weekly or monthly limit resets.
             </span>
           )}
         </div>
@@ -531,16 +626,10 @@ export default function MemberBrowse() {
                   style={{ padding: 0, position: 'relative', cursor: 'pointer', overflow: 'hidden' }}
                   onClick={() => setSelectedProfile(c)}
                 >
-                  <span
-                    className="badge badge-muted"
-                    style={{ position: 'absolute', top: 10, left: 10, zIndex: 1, background: 'rgba(255,255,255,0.9)', fontSize: 11 }}
-                  >
-                    {c.reference_number}
-                  </span>
-                  <ProfileThumb profileId={c.id} firstName={c.first_name} />
+                  <ProfileThumb profileId={c.id} firstName={c.first_name} anonymous />
                   <div style={{ padding: '12px 14px 14px' }}>
                     <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {c.first_name}{c.age ? `, ${c.age}` : ''}
+                      {c.age ? `Age ${c.age}` : ''}
                     </h3>
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
@@ -561,7 +650,7 @@ export default function MemberBrowse() {
                         type="button"
                         className="btn btn-primary"
                         style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
-                        disabled={blocked || (!inTray && trayFull)}
+                        disabled={blocked || (!inTray && (atTrayCapacity || feedbackBlocking))}
                         onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
                       >
                         {blocked ? '✓ Details available' : inTray ? '✕ Remove' : '+ Request'}
@@ -588,7 +677,7 @@ export default function MemberBrowse() {
             aria-controls="member-tray-panel"
             onClick={() => setTrayDrawerOpen((o) => !o)}
           >
-            {tray.length}/3 selected{trayDrawerOpen ? ' - hide' : ' - show'}
+            {tray.length}/{trayMax} selected{trayDrawerOpen ? ' - hide' : ' - show'}
           </button>
           <div
             id="member-tray-panel"
@@ -600,14 +689,14 @@ export default function MemberBrowse() {
                 return (
                   <div key={id} className="member-tray-chip">
                     <div className="member-tray-chip-photo">
-                      <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} />
+                      <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} anonymous />
                     </div>
                     <div className="member-tray-chip-meta">
-                      <span className="member-tray-chip-name">{c?.first_name ?? 'Member'}</span>
+                      <span className="member-tray-chip-name">{c?.age ? `Age ${c.age}` : 'Selected'}</span>
                       <button
                         type="button"
                         className="member-tray-chip-remove"
-                        title={`Remove ${c?.first_name ?? 'this candidate'}`}
+                        title="Remove from request"
                         onClick={() => addTray(id)}
                       >
                         Remove
@@ -617,9 +706,23 @@ export default function MemberBrowse() {
                 );
               })}
             </div>
-            <button type="button" className="btn btn-primary" onClick={() => void submitTray()}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={feedbackBlocking || trayMax === 0}
+              onClick={() => void submitTray()}
+            >
               Request contact details ({tray.length})
             </button>
+            {feedbackBlocking && (
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-warning)' }}>
+                Complete outstanding feedback on{' '}
+                <Link to="/dashboard/requests" style={{ fontWeight: 600, color: 'inherit' }}>
+                  My requests
+                </Link>{' '}
+                before submitting.
+              </p>
+            )}
             {submitError && (
               <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13,
                 background: submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.08)',
@@ -633,7 +736,10 @@ export default function MemberBrowse() {
                   <><strong>Already requested.</strong> {submitError.message}</>
                 )}
                 {submitError.type === 'weekly_limit' && (
-                  <><strong>Weekly limit reached.</strong> {submitError.message.replace('Weekly limit reached (3 candidates). ', '')}</>
+                  <><strong>Weekly limit reached.</strong> You can request up to 3 profiles per 7-day window. Check My requests to see when your slots reset.</>
+                )}
+                {submitError.type === 'monthly_limit' && (
+                  <><strong>Monthly limit reached.</strong> You can request up to 6 profiles per calendar month. Your slots reset on the 1st of next month.</>
                 )}
                 {submitError.type === 'generic' && submitError.message}
               </div>
@@ -645,8 +751,11 @@ export default function MemberBrowse() {
       {selectedProfile && (
         <ProfileModal
           candidate={selectedProfile}
+          anonymous
           inTray={tray.includes(selectedProfile.id)}
-          trayFull={trayFull}
+          trayFull={atTrayCapacity}
+          trayCapacity={trayMax}
+          feedbackRequiredBeforeRequests={feedbackBlocking}
           blocked={requestedCandidateIds.has(selectedProfile.id)}
           bookmarked={bookmarks.includes(selectedProfile.id)}
           onClose={() => setSelectedProfile(null)}
@@ -696,24 +805,6 @@ export default function MemberBrowse() {
                         <br />
                         <a href={`mailto:${encodeURIComponent(c.email)}`}>{c.email}</a>
                       </p>
-                      {(c.father_name || c.mother_name) && (
-                        <p
-                          style={{
-                            margin: '10px 0 0',
-                            fontSize: 13,
-                            color: 'var(--color-text-secondary)',
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {c.father_name ? (
-                            <>
-                              Father: {c.father_name}
-                              <br />
-                            </>
-                          ) : null}
-                          {c.mother_name ? <>Mother: {c.mother_name}</> : null}
-                        </p>
-                      )}
                       <div className="contact-success-actions">
                         {wa ? (
                           <a

@@ -8,11 +8,16 @@ type Props = {
   contactDetails?: {
     mobile?: string | null;
     email?: string | null;
-    father_name?: string | null;
-    mother_name?: string | null;
   };
+  /** When true the modal is opened from a browse/saved context (not from My Requests).
+   *  The real photo and the candidate's name are hidden; only anonymous silhouette + ref number shown. */
+  anonymous?: boolean;
   inTray: boolean;
   trayFull: boolean;
+  /** Max profiles allowed in the tray (0–3). Used for clearer “full” tooltips when limits are below3. */
+  trayCapacity?: number;
+  /** When true, adding to the tray is blocked until outstanding feedback is submitted (server rule). */
+  feedbackRequiredBeforeRequests?: boolean;
   blocked: boolean;
   bookmarked: boolean;
   allowRequestAction?: boolean;
@@ -34,8 +39,11 @@ function Row({ label, value }: { label: string; value: string | null | undefined
 export function ProfileModal({
   candidate: c,
   contactDetails,
+  anonymous = false,
   inTray,
   trayFull,
+  trayCapacity,
+  feedbackRequiredBeforeRequests = false,
   blocked,
   bookmarked,
   allowRequestAction = true,
@@ -65,6 +73,23 @@ export function ProfileModal({
     ? `${c.height_cm} cm (${cmToFeetInches(c.height_cm)})`
     : null;
 
+  const displayTitle = anonymous
+    ? (c.age ? `Age ${c.age}` : 'Profile')
+    : `${c.first_name}${c.age ? `, ${c.age}` : ''}`;
+
+  const requestTrayTitle =
+    blocked
+      ? "You already have this member's details in My requests"
+      : !inTray && feedbackRequiredBeforeRequests
+        ? 'Submit outstanding feedback under My requests (introductions older than 21 days) before adding new requests.'
+        : !inTray && trayFull
+          ? trayCapacity === 0
+            ? 'No request slots left this week or month. Open My requests to see when limits reset.'
+            : trayCapacity != null && trayCapacity < 3
+              ? `You can only add up to ${trayCapacity} profile${trayCapacity === 1 ? '' : 's'} right now (weekly and monthly limits). Remove someone from the tray or wait for a reset.`
+              : 'Tray is full. Submit or remove a candidate first.'
+          : undefined;
+
   return (
     <div
       role="dialog"
@@ -84,11 +109,11 @@ export function ProfileModal({
             profileId={c.id}
             firstName={c.first_name}
             className="profile-modal-photo"
+            anonymous={anonymous}
           />
           <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
             {'\u2715'}
           </button>
-          <span className="badge badge-muted profile-modal-ref-badge">{c.reference_number}</span>
         </div>
 
         {/* Content */}
@@ -97,9 +122,14 @@ export function ProfileModal({
             id="profile-modal-title"
             style={{ margin: '0 0 4px', fontSize: 22 }}
           >
-            {c.first_name}{c.age ? `, ${c.age}` : ''}
+            {displayTitle}
           </h2>
-          {c.job_title && (
+          {!anonymous && c.job_title && (
+            <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
+              {c.job_title}
+            </p>
+          )}
+          {anonymous && c.job_title && (
             <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
               {c.job_title}
             </p>
@@ -114,10 +144,9 @@ export function ProfileModal({
           <Row label="Height" value={heightDisplay} />
           <Row label="Education" value={c.education} />
           <Row label="Settlement plans" value={c.future_settlement_plans} />
-          <Row label="Father's name" value={contactDetails?.father_name} />
-          <Row label="Mother's name" value={contactDetails?.mother_name} />
-          <Row label="Phone" value={contactDetails?.mobile} />
-          <Row label="Email" value={contactDetails?.email} />
+          {/* Contact details — only shown when the user has already received them (My Requests view) */}
+          {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
+          {contactDetails?.email && <Row label="Email" value={contactDetails.email} />}
 
           {c.hobbies && (
             <div style={{ padding: '8px 0' }}>
@@ -137,14 +166,8 @@ export function ProfileModal({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={blocked || (!inTray && trayFull)}
-                title={
-                  blocked
-                    ? 'You already have this member\'s details in My requests'
-                    : !inTray && trayFull
-                    ? 'Tray is full. Submit or remove a candidate first.'
-                    : undefined
-                }
+                disabled={blocked || (!inTray && (trayFull || feedbackRequiredBeforeRequests))}
+                title={requestTrayTitle}
                 onClick={onToggleTray}
               >
                 {blocked

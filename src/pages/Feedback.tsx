@@ -173,10 +173,11 @@ export default function Feedback() {
             margin: 0,
           }}
         >
-          <strong>Admin-only:</strong> your feedback is reviewed only by the register team and is never sent to the
-          candidate. <strong>Anonymous to candidates:</strong> they do not see your feedback or your name.{' '}
-          <strong>Service improvement:</strong> the register committee uses these answers to improve quality and safety
-          of the service. Optional notes should avoid sharing another person&apos;s private information unless necessary.
+          <strong>Admin &amp; safeguarding purposes only:</strong> your feedback goes directly to the register team and
+          is never shared with the candidate — they will not see your name or your answers. We ask for feedback to
+          ensure everyone has had a positive experience and to flag any concerns for the committee&apos;s review.
+          It also helps us maintain the quality and safety of the register.{' '}
+          <strong>Please give it a go</strong> — even a brief response is really helpful.
         </p>
         <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 14 }}>
           <div>

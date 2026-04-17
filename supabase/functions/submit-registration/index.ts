@@ -315,7 +315,6 @@ Deno.serve(async (req) => {
       recipientProfileId: profileId,
       extra_data: {
         first_name: firstName,
-        reference_number: referenceNumber,
         resubmitted: isResubmit,
       },
     });

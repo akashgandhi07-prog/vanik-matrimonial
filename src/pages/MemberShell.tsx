@@ -24,15 +24,12 @@ function MemberLayoutBody() {
         <div className="layout-max member-dashboard-header-inner">
           <div className="member-dashboard-header-meta">
             <strong className="member-dashboard-header-title">Member area</strong>
-            {(profile.reference_number || exp) && (
+            {exp && (
               <div className="member-dashboard-header-sub">
-                {profile.reference_number && <span>Ref: {profile.reference_number}</span>}
-                {exp && (
-                  <span>
-                    Membership expires{' '}
-                    {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </span>
-                )}
+                <span>
+                  Membership expires{' '}
+                  {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
               </div>
             )}
           </div>

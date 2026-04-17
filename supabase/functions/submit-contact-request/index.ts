@@ -103,27 +103,37 @@ Deno.serve(async (req) => {
       .eq('requester_id', requester.id)
       .lt('created_at', cutoff);
 
-    const outstandingIds: string[] = [];
-    for (const r of staleRequests ?? []) {
-      const cids = (r.candidate_ids as string[]) ?? [];
-      for (const cid of cids) {
-        const { count } = await admin
-          .from('feedback')
-          .select('id', { count: 'exact', head: true })
-          .eq('request_id', r.id)
-          .eq('candidate_id', cid);
-        if ((count ?? 0) === 0) {
-          outstandingIds.push(r.id as string);
+    const staleList = staleRequests ?? [];
+    if (staleList.length > 0) {
+      const staleIds = staleList.map((r) => r.id as string);
+      const { data: feedbackRows } = await admin
+        .from('feedback')
+        .select('request_id, candidate_id')
+        .eq('requester_id', requester.id)
+        .in('request_id', staleIds);
+
+      const fed = new Set(
+        (feedbackRows ?? []).map(
+          (row) => `${row.request_id as string}:${row.candidate_id as string}`
+        )
+      );
+
+      const outstandingRequestIds = new Set<string>();
+      for (const r of staleList) {
+        const cids = (r.candidate_ids as string[]) ?? [];
+        for (const cid of cids) {
+          if (!fed.has(`${r.id}:${cid}`)) outstandingRequestIds.add(r.id as string);
         }
       }
-    }
-    if (outstandingIds.length) {
-      return jsonResponse({
-        error: 'feedback_required',
-        message:
-          'Outstanding feedback required before new requests. Please complete feedback for introductions older than 21 days.',
-        request_ids: [...new Set(outstandingIds)],
-      }, req, 409);
+
+      if (outstandingRequestIds.size > 0) {
+        return jsonResponse({
+          error: 'feedback_required',
+          message:
+            'Outstanding feedback required before new requests. Please complete feedback for introductions older than 21 days.',
+          request_ids: [...outstandingRequestIds],
+        }, req, 409);
+      }
     }
 
     const now = new Date();
@@ -241,6 +251,14 @@ Deno.serve(async (req) => {
         return jsonResponse({
           error: 'weekly_limit',
           message: insertRow.error_message ?? 'Weekly limit reached.',
+          slots_remaining: insertRow.slots_remaining ?? 0,
+          reset_at: insertRow.reset_at ?? null,
+        }, req, 409);
+      }
+      if (insertRow.error_code === 'monthly_limit') {
+        return jsonResponse({
+          error: 'monthly_limit',
+          message: insertRow.error_message ?? 'Monthly limit reached.',
           slots_remaining: insertRow.slots_remaining ?? 0,
           reset_at: insertRow.reset_at ?? null,
         }, req, 409);

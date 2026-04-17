@@ -1,4 +1,6 @@
 -- Returns requested candidates' profile + contact details for the current member.
+-- Apply this migration to production (e.g. `supabase db push` or run the file in the SQL editor)
+-- so My Requests can call `member_request_profiles` instead of relying on the edge-function fallback.
 -- SECURITY DEFINER is used to read candidate private data, but access is strictly
 -- limited to rows where requester_id = current_profile_id().
 DROP FUNCTION IF EXISTS public.member_request_profiles(uuid[]);

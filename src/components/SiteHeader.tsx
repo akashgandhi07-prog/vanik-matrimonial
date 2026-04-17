@@ -36,7 +36,7 @@ export function SiteHeader() {
           ) : !user ? (
             <>
               <Link to="/demo" className="public-nav-link">
-                Demo
+                Browse Profiles
               </Link>
               <Link to="/login" className="public-nav-link">
                 Member login
