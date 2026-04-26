@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
       admin_user_id: userData.user.id,
       target_profile_id: profile_id,
       action_type: 'reinstated',
-      notes: 'Manually reinstated by admin — membership extended 1 year',
+      notes: 'Manually reinstated by admin - membership extended 1 year',
     });
     return jsonResponse({ ok: true }, req);
   }

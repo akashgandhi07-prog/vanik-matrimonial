@@ -12,7 +12,7 @@ type Props = {
   anonymous?: boolean;
   inTray: boolean;
   trayFull: boolean;
-  /** Max profiles allowed in the tray (0–3). Used for clearer “full” tooltips when limits are below 3. */
+  /** Max profiles allowed in the tray (0-3). Used for clearer “full” tooltips when limits are below 3. */
   trayCapacity?: number;
   /** When true, adding to the tray is blocked until outstanding feedback is submitted (server rule). */
   feedbackRequiredBeforeRequests?: boolean;
@@ -72,7 +72,7 @@ export function ProfileModal({
     : null;
 
   const displayTitle = anonymous
-    ? (c.age ? `Age ${c.age}` : 'Profile')
+    ? ([c.gender, c.age ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile')
     : `${c.first_name}${c.age ? `, ${c.age}` : ''}`;
 
   const requestTrayTitle =
@@ -101,7 +101,7 @@ export function ProfileModal({
         style={{ padding: 0, maxWidth: 620 }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Photo header (hidden when browsing anonymously — no placeholder) */}
+        {/* Photo header (hidden when browsing anonymously - no placeholder) */}
         <div style={{ position: 'relative', minHeight: anonymous ? 44 : undefined }}>
           {!anonymous && (
             <ProfileThumb
@@ -143,7 +143,7 @@ export function ProfileModal({
           <Row label="Height" value={heightDisplay} />
           <Row label="Education" value={c.education} />
           <Row label="Settlement plans" value={c.future_settlement_plans} />
-          {/* Contact details — only shown when the user has already received them (My Requests view) */}
+          {/* Contact details - only shown when the user has already received them (My Requests view) */}
           {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
 
           {c.hobbies && (

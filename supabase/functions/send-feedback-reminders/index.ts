@@ -3,10 +3,7 @@ import { stripHtml } from '../_shared/sanitize.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
-
-function siteUrl(): string {
-  return Deno.env.get('PUBLIC_SITE_URL') ?? 'https://vanikmatrimonial.co.uk';
-}
+import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 
 function daysSince(iso: string): number {
   const t = new Date(iso).getTime();
@@ -118,7 +115,7 @@ Deno.serve(async (req) => {
           .single();
         const ref = stripHtml(String(cand?.reference_number ?? cid), 20);
         const nm = stripHtml(String(cand?.first_name ?? ''), 60);
-        const url = `${siteUrl()}/feedback/${rid}/${cid}?token=${token}`;
+        const url = `${publicSiteBaseUrl()}/feedback/${rid}/${cid}?token=${token}`;
         linkParts.push(
           `<p style="margin:12px 0;"><a href="${url}">Feedback for ${nm} (${ref})</a></p>`
         );

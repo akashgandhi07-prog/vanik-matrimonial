@@ -210,7 +210,7 @@ def normalise_diet(raw: Any, ref: str, log: logging.Logger) -> str | None:
         return "Veg"
     if "non" in key and "veg" in key:
         return "Non-veg"
-    log.warning("Unknown diet %r for ref %s — left unset", raw, ref)
+    log.warning("Unknown diet %r for ref %s - left unset", raw, ref)
     return None
 
 
@@ -266,7 +266,7 @@ def parse_height_cm(raw: Any) -> tuple[int | None, str | None]:
         inch = int(inch_s) if inch_s else 0
         return inches_to_cm(ft, inch), None
 
-    # 5,11 or 5.11 as feet, inches (second part 0–11)
+    # 5,11 or 5.11 as feet, inches (second part 0-11)
     m = re.match(r"(?i)^\s*(\d+)\s*[,]\s*(\d{1,2})\s*$", s)
     if m:
         ft, inch = int(m.group(1)), int(m.group(2))
@@ -283,7 +283,7 @@ def parse_height_cm(raw: Any) -> tuple[int | None, str | None]:
 
 
 def two_digit_year(yy: int) -> int:
-    """Heuristic: matrimonial ages → 1930s–2010s."""
+    """Heuristic: matrimonial ages → 1930s-2010s."""
     if yy >= 30:
         return 1900 + yy
     return 2000 + yy
@@ -444,7 +444,7 @@ font-size:13px;">{reset_link}</span></p>
         "background:#f9fafb;font-family:system-ui,sans-serif;font-size:15px;line-height:1.6;color:#111827;\">"
         f"<div style=\"max-width:560px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;"
         f"border-radius:12px;padding:28px 32px;\">{inner}"
-        '<p style="margin:24px 0 0;font-size:13px;color:#6b7280;">Vanik Council UK — Vanik Matrimonial Register</p>'
+        '<p style="margin:24px 0 0;font-size:13px;color:#6b7280;">Vanik Council UK - Vanik Matrimonial Register</p>'
         "</div></body></html>"
     )
 
@@ -521,7 +521,7 @@ def inspect_headers(path: str) -> None:
         except KeyError as e:
             print(e)
             continue
-        print(f"\n=== {title} sheet: row 1 headers (A–AZ) ===")
+        print(f"\n=== {title} sheet: row 1 headers (A-AZ) ===")
         for i in range(1, 52):
             letter = get_column_letter(i)
             val = ws.cell(row=1, column=i).value
@@ -602,7 +602,7 @@ def process_sheet(
         height_cm, height_orig_fail = parse_height_cm(cell(ws, row, cols["height"]))
         if height_orig_fail:
             report.height_fail_refs.append(ref)
-            log.warning("Height unrecognised %r for ref %s — storing null", height_orig_fail, ref)
+            log.warning("Height unrecognised %r for ref %s - storing null", height_orig_fail, ref)
 
         diet_raw = cell(ws, row, cols["diet"])
         diet = normalise_diet(diet_raw, ref, log)
@@ -822,7 +822,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         if not url or not key:
             if args.dry_run:
                 log.warning(
-                    "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — dry-run cannot check duplicates by ref."
+                    "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY - dry-run cannot check duplicates by ref."
                 )
             else:
                 log.error("Set SUPABASE_URL (or VITE_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY in .env")

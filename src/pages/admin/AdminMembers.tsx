@@ -58,7 +58,7 @@ function filterLabel(f: (typeof FILTERS)[number]): string {
   if (f === 'rejected30') return 'Rejected (30d)';
   if (f === 'photo_pending') return 'Photo pending';
   if (f === 'expires60') return 'Expires ≤60d';
-  if (f === 'lapsed90') return 'lapsed 90+';
+  if (f === 'lapsed90') return 'Long-lapsed (365+ days past expiry)';
   return f;
 }
 
@@ -329,7 +329,7 @@ export default function AdminMembers() {
                           {prev?.photo ? (
                             <img src={prev.photo} alt="" style={thumbStyle} />
                           ) : (
-                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
                           )}
                         </td>
                         <td style={{ padding: 8, verticalAlign: 'middle' }}>
@@ -340,7 +340,7 @@ export default function AdminMembers() {
                               PDF
                             </a>
                           ) : (
-                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
                           )}
                         </td>
                         <td style={{ padding: 8, verticalAlign: 'middle', fontSize: 13 }}>
@@ -354,7 +354,7 @@ export default function AdminMembers() {
                               )}
                             </>
                           ) : (
-                            '—'
+                            '-'
                           )}
                         </td>
                         <td style={{ padding: 8, verticalAlign: 'middle' }}>
@@ -368,7 +368,7 @@ export default function AdminMembers() {
                               aria-label={`Select ${m.first_name}`}
                             />
                           ) : (
-                            <span style={{ color: 'var(--color-text-secondary)' }}>—</span>
+                            <span style={{ color: 'var(--color-text-secondary)' }}>-</span>
                           )}
                         </td>
                       </>

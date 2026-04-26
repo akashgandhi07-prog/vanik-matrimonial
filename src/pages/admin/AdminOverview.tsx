@@ -125,7 +125,7 @@ export default function AdminOverview() {
             ['Requests this week', metrics.requestsWeek, '/admin/requests', null],
             ['Expiring (30d)', metrics.expiring, '/admin/members', 'active'],
             ['Flagged feedback', metrics.flagged, '/admin/feedback', null],
-            ['Lapsed 90+ days', metrics.lapsed90, '/admin/members', 'lapsed90'],
+            ['Long-lapsed (365+ days)', metrics.lapsed90, '/admin/members', 'lapsed90'],
           ] as const
         ).map(([label, n, path, filter]) => (
           <button

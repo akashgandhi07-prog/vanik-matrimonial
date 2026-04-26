@@ -1,4 +1,4 @@
--- Browse / RLS verification — run in Supabase SQL Editor on the SAME project as VITE_SUPABASE_URL.
+-- Browse / RLS verification - run in Supabase SQL Editor on the SAME project as VITE_SUPABASE_URL.
 --
 -- Browser (JWT / PostgREST): open DevTools → Network → filter "profiles" or "rpc" while loading
 -- Member → Browse. Expect 200; response body is a JSON array (length 0 = RLS or no eligible rows).
@@ -55,7 +55,7 @@ WHERE gender = 'Male'
   AND membership_expires_at > now();
 
 -- 3b) List eligible *candidates* for someone who seeks men (same rules as app RLS for “male” listings).
---    IMPORTANT: filter on profiles.gender = 'Male'. Do NOT filter on seeking_gender here — that column is
+--    IMPORTANT: filter on profiles.gender = 'Male'. Do NOT filter on seeking_gender here - that column is
 --    “who this row’s member wants to browse”, e.g. many men have seeking_gender = 'Female'.
 SELECT id, reference_number, gender, seeking_gender, status, show_on_register, membership_expires_at
 FROM public.profiles
@@ -83,7 +83,7 @@ FROM public.profiles
 WHERE reference_number ~ '^M '
   AND gender <> 'Male';
 
--- 4) Viewer row: edit reference_number. This ALWAYS returns at most ONE row — the member you filter by.
+-- 4) Viewer row: edit reference_number. This ALWAYS returns at most ONE row - the member you filter by.
 SELECT id,
        reference_number,
        gender,
@@ -95,7 +95,7 @@ SELECT id,
 FROM public.profiles
 WHERE reference_number = 'F 2519';
 
--- 5) Auth link: edit email to the member’s login — auth_id must equal profiles.auth_user_id
+-- 5) Auth link: edit email to the member’s login - auth_id must equal profiles.auth_user_id
 SELECT u.id AS auth_id,
        p.id AS profile_id,
        p.reference_number,

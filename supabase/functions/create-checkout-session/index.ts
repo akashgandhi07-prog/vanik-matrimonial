@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
+import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 
 type Purpose = 'registration' | 'renewal';
 
@@ -12,12 +13,12 @@ function safeInternalPath(p: unknown, fallback: string): string {
   return p;
 }
 
-function siteBase(req: Request, body: { client_origin?: string }): string | null {
+function siteBase(req: Request, body: { client_origin?: string }): string {
   const env = Deno.env.get('PUBLIC_SITE_URL')?.replace(/\/$/, '').trim();
   if (env) return env;
   const origin = (body.client_origin ?? req.headers.get('origin') ?? '').replace(/\/$/, '').trim();
   if (origin.startsWith('http://') || origin.startsWith('https://')) return origin;
-  return null;
+  return publicSiteBaseUrl();
 }
 
 Deno.serve(async (req) => {
@@ -59,9 +60,6 @@ Deno.serve(async (req) => {
 
   const purpose = body.purpose === 'renewal' ? 'renewal' : 'registration';
   const base = siteBase(req, body);
-  if (!base) {
-    return jsonResponse({ error: 'Set PUBLIC_SITE_URL in Edge Function secrets, or send client_origin from the browser.' }, req, 400);
-  }
 
   const admin = getAdminClient();
   const uid = userData.user.id;

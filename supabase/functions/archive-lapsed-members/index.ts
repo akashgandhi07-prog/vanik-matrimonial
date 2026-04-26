@@ -12,7 +12,8 @@ Deno.serve(async (req) => {
 
   const admin = getAdminClient();
   const resendKey = Deno.env.get('RESEND_API_KEY');
-  const cutoff = new Date(Date.now() - 90 * 864e5).toISOString();
+  /** Expired members whose `membership_expires_at` is more than this many days in the past are archived. */
+  const cutoff = new Date(Date.now() - 365 * 864e5).toISOString();
 
   const { data: rows, error } = await admin
     .from('profiles')

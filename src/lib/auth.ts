@@ -1,6 +1,5 @@
 import type { User } from '@supabase/supabase-js';
-
-const DEFAULT_PUBLIC_SITE_URL = 'https://vanik-matrimonial.vercel.app';
+import { CANONICAL_PUBLIC_SITE_URL } from './siteUrl';
 
 /**
  * Build absolute URLs for auth emails. We intentionally prefer a stable public URL
@@ -8,7 +7,7 @@ const DEFAULT_PUBLIC_SITE_URL = 'https://vanik-matrimonial.vercel.app';
  */
 export function publicAuthUrl(path: string): string {
   const raw = (import.meta.env.VITE_PUBLIC_SITE_URL as string | undefined)?.trim();
-  const base = (raw || DEFAULT_PUBLIC_SITE_URL).replace(/\/+$/, '');
+  const base = (raw || CANONICAL_PUBLIC_SITE_URL).replace(/\/+$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${base}${normalizedPath}`;
 }
@@ -24,7 +23,7 @@ export type AuthErrorContext = 'sign_in' | 'reauth_current_password';
 
 /**
  * Turns Supabase Auth errors into clear copy. Note: sign-in uses one message for both
- * "no such user" and "wrong password" (enumeration protection) — we explain both possibilities.
+ * "no such user" and "wrong password" (enumeration protection) - we explain both possibilities.
  */
 export function userFacingAuthError(
   error: AuthLikeError,
@@ -120,7 +119,7 @@ function metaIsAdmin(v: unknown): boolean {
   return false;
 }
 
-/** Admin flag is stored in app_metadata only (not user_metadata — clients can edit that). */
+/** Admin flag is stored in app_metadata only (not user_metadata - clients can edit that). */
 export function isAdminUser(user: User | null | undefined): boolean {
   if (!user) return false;
   const am = user.app_metadata as { is_admin?: unknown } | undefined;

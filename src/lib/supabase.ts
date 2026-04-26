@@ -41,6 +41,39 @@ function parseMaybeJson(text: string): unknown {
   }
 }
 
+/** Thrown when an Edge Function returns a non-2xx JSON body with optional `code` / `request_ids`. */
+export class EdgeFunctionHttpError extends Error {
+  readonly code?: string;
+  readonly requestIds?: string[];
+
+  constructor(message: string, opts?: { code?: string; requestIds?: string[] }) {
+    super(message);
+    this.name = 'EdgeFunctionHttpError';
+    this.code = opts?.code;
+    this.requestIds = opts?.requestIds;
+  }
+}
+
+function edgeHttpErrorFromPayload(json: unknown, fallbackMessage: string): EdgeFunctionHttpError {
+  const o =
+    json && typeof json === 'object' && !Array.isArray(json)
+      ? (json as Record<string, unknown>)
+      : {};
+  const code =
+    (typeof o.code === 'string' && o.code) ||
+    (typeof o.error === 'string' && o.error) ||
+    undefined;
+  const message =
+    (typeof o.message === 'string' && o.message) ||
+    (typeof o.error === 'string' && o.error) ||
+    fallbackMessage;
+  const rawIds = o.request_ids;
+  const requestIds = Array.isArray(rawIds)
+    ? rawIds.filter((x): x is string => typeof x === 'string')
+    : undefined;
+  return new EdgeFunctionHttpError(message, { code, requestIds });
+}
+
 function responseMessage(res: Response, text: string, json: unknown): string {
   const payload = json as { error?: string; message?: string } | null;
   return (
@@ -102,7 +135,7 @@ async function invokeFunctionDirectFetch(
     networkErrorPrefix: 'Could not reach Edge Function. Deploy functions and check network / ad blockers',
   });
   if (!res.ok) {
-    throw new Error(responseMessage(res, text, json));
+    throw edgeHttpErrorFromPayload(json, responseMessage(res, text, json));
   }
   if (json != null && typeof json === 'object' && !Array.isArray(json)) {
     return json as Record<string, unknown>;
@@ -118,13 +151,13 @@ async function invokeFunctionDirectFetch(
 export async function invokeFunction(name: string, body?: object) {
   if (!url || !anon) {
     throw new Error(
-      'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env — add them with the VITE_ prefix and restart npm run dev.'
+      'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env - add them with the VITE_ prefix and restart npm run dev.'
     );
   }
 
   const { data: sessionData } = await supabase.auth.getSession();
   if (!sessionData.session?.access_token) {
-    throw new Error('Not authenticated — please log in again.');
+    throw new Error('Not authenticated - please log in again.');
   }
 
   const networkErrorPrefix =
@@ -133,7 +166,7 @@ export async function invokeFunction(name: string, body?: object) {
   for (let attempt = 0; attempt < 2; attempt++) {
     const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
     if (!tokenNow) {
-      throw new Error('Not authenticated — please log in again.');
+      throw new Error('Not authenticated - please log in again.');
     }
 
     const { data, error } = await supabase.functions.invoke(name, { body: body ?? {} });
@@ -173,16 +206,16 @@ export async function invokeFunction(name: string, body?: object) {
       const msg = responseMessage(res, text, json);
       if (res.status === 401 && jwtHint401(msg)) {
         throw new Error(
-          `${msg || 'Unauthorized'} — Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed (redeploy after changing env vars).`
+          `${msg || 'Unauthorized'} - Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed (redeploy after changing env vars).`
         );
       }
-      throw new Error(msg);
+      throw edgeHttpErrorFromPayload(json, msg);
     }
 
     throw new Error(error instanceof Error ? error.message : 'Edge Function error');
   }
 
-  throw new Error('Unauthorized — please sign in again.');
+  throw new Error('Unauthorized - please sign in again.');
 }
 
 /** Edge Function callable without a user session (uses anon key). */

@@ -52,7 +52,7 @@ export default function VerifyEmailSuccess() {
         }
         if (status === 'pending_approval') navigate('/registration-pending', { replace: true });
         else if (status === 'rejected') navigate('/registration-rejected', { replace: true });
-        else if (status === 'expired') navigate('/membership-expired', { replace: true });
+        else if (status === 'expired' || status === 'archived') navigate('/membership-expired', { replace: true });
         else if (status === 'active' || status === 'matched') {
           navigate('/dashboard/browse', { replace: true });
         } else navigate('/register', { replace: true });

@@ -6,6 +6,17 @@ import { stripHtml } from '../_shared/sanitize.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Stable `code` for clients; `error` duplicates `code` for older callers. */
+function jsonErr(
+  req: Request,
+  status: number,
+  code: string,
+  message: string,
+  extra?: Record<string, unknown>
+) {
+  return jsonResponse({ error: code, code, message, ...extra }, req, status);
+}
+
 type ProfileCandidate = {
   id: string;
   first_name: string;
@@ -22,12 +33,12 @@ Deno.serve(async (req) => {
       return new Response('ok', { headers: corsHeadersFor(req) });
     }
     if (req.method !== 'POST') {
-      return jsonResponse({ error: 'Method not allowed' }, req, 405);
+      return jsonErr(req, 405, 'method_not_allowed', 'Method not allowed');
     }
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Unauthorized' }, req, 401);
+      return jsonErr(req, 401, 'unauthorized', 'Unauthorized');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -38,43 +49,40 @@ Deno.serve(async (req) => {
 
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
-      return jsonResponse({ error: 'Unauthorized' }, req, 401);
+      return jsonErr(req, 401, 'unauthorized', 'Unauthorized');
     }
 
     let rawBody: unknown;
     try {
       rawBody = await req.json();
     } catch {
-      return jsonResponse({ error: 'Invalid JSON' }, req, 400);
+      return jsonErr(req, 400, 'invalid_json', 'Invalid JSON');
     }
     if (!rawBody || typeof rawBody !== 'object') {
-      return jsonResponse({ error: 'Invalid JSON body' }, req, 400);
+      return jsonErr(req, 400, 'invalid_json_body', 'Invalid JSON body');
     }
     const candidateInput = (rawBody as { candidate_ids?: unknown }).candidate_ids;
     if (!Array.isArray(candidateInput)) {
-      return jsonResponse({ error: 'candidate_ids must be an array' }, req, 400);
+      return jsonErr(req, 400, 'candidate_ids_not_array', 'candidate_ids must be an array');
     }
     const parsedIds: string[] = [];
     for (const rawId of candidateInput) {
       if (typeof rawId !== 'string') {
-        return jsonResponse({ error: 'candidate_ids must contain only strings' }, req, 400);
+        return jsonErr(req, 400, 'candidate_ids_invalid_type', 'candidate_ids must contain only strings');
       }
       const id = rawId.trim();
       if (!id || !UUID_RE.test(id)) {
-        return jsonResponse({ error: 'candidate_ids contains an invalid profile id' }, req, 400);
+        return jsonErr(req, 400, 'candidate_ids_invalid_uuid', 'candidate_ids contains an invalid profile id');
       }
       parsedIds.push(id);
     }
 
     const ids = [...new Set(parsedIds)];
     if (ids.length === 0) {
-      return jsonResponse({ error: 'candidates required' }, req, 400);
+      return jsonErr(req, 400, 'candidates_required', 'candidates required');
     }
     if (ids.length > 3) {
-      return jsonResponse({
-        error: 'weekly_limit',
-        message: 'You can request up to 3 candidates at a time.',
-      }, req, 400);
+      return jsonErr(req, 400, 'max_candidates_per_request', 'You can request up to 3 candidates at a time.');
     }
 
     const admin = getAdminClient();
@@ -85,7 +93,7 @@ Deno.serve(async (req) => {
       .eq('auth_user_id', userData.user.id)
       .single();
     if (reErr || !requester) {
-      return jsonResponse({ error: 'Profile not found' }, req, 404);
+      return jsonErr(req, 404, 'profile_not_found', 'Profile not found');
     }
 
     if (
@@ -93,7 +101,7 @@ Deno.serve(async (req) => {
       !requester.membership_expires_at ||
       new Date(requester.membership_expires_at) <= new Date()
     ) {
-      return jsonResponse({ error: 'Membership not active' }, req, 403);
+      return jsonErr(req, 403, 'membership_not_active', 'Membership not active');
     }
 
     const cutoff = new Date(Date.now() - 21 * 864e5).toISOString();
@@ -127,12 +135,13 @@ Deno.serve(async (req) => {
       }
 
       if (outstandingRequestIds.size > 0) {
-        return jsonResponse({
-          error: 'feedback_required',
-          message:
-            'Outstanding feedback required before new requests. Please complete feedback for introductions older than 21 days.',
-          request_ids: [...outstandingRequestIds],
-        }, req, 409);
+        return jsonErr(
+          req,
+          409,
+          'feedback_required',
+          'Outstanding feedback required before new requests. Please complete feedback for introductions older than 21 days.',
+          { request_ids: [...outstandingRequestIds] }
+        );
       }
     }
 
@@ -142,53 +151,39 @@ Deno.serve(async (req) => {
       .select('id, first_name, gender, reference_number, status, show_on_register, membership_expires_at')
       .in('id', ids);
     if (cpErr) {
-      return jsonResponse({ error: cpErr.message }, req, 500);
+      return jsonErr(req, 500, 'candidate_query_failed', cpErr.message);
     }
     const byId = new Map((candProfiles ?? []).map((p) => [(p as ProfileCandidate).id, p as ProfileCandidate]));
 
     for (const cid of ids) {
       const p = byId.get(cid);
       if (!p) {
-        return jsonResponse(
-          { error: 'invalid_candidate', message: 'One or more profiles could not be found.' },
-          req,
-          400
-        );
+        return jsonErr(req, 400, 'invalid_candidate', 'One or more profiles could not be found.');
       }
       const seek =
         (requester as { seeking_gender?: string }).seeking_gender ??
         (requester.gender === 'Female' ? 'Male' : 'Female');
       if (seek !== 'Both' && seek !== p.gender) {
-        return jsonResponse(
-          {
-            error: 'invalid_candidate',
-            message:
-              'This profile does not match who you are looking for. Change it under Browse or My profile, then try again.',
-          },
+        return jsonErr(
           req,
-          400
+          400,
+          'invalid_candidate',
+          'This profile does not match who you are looking for. Change it under Browse or My profile, then try again.'
         );
       }
       if (p.status !== 'active') {
-        return jsonResponse(
-          { error: 'invalid_candidate', message: 'This profile is not available for contact requests.' },
+        return jsonErr(
           req,
-          400
+          400,
+          'invalid_candidate',
+          'This profile is not available for contact requests.'
         );
       }
       if (!p.show_on_register) {
-        return jsonResponse(
-          { error: 'invalid_candidate', message: 'This profile is not listed on the register.' },
-          req,
-          400
-        );
+        return jsonErr(req, 400, 'invalid_candidate', 'This profile is not listed on the register.');
       }
       if (!p.membership_expires_at || new Date(p.membership_expires_at) <= now) {
-        return jsonResponse(
-          { error: 'invalid_candidate', message: 'This member’s membership is not active.' },
-          req,
-          400
-        );
+        return jsonErr(req, 400, 'invalid_candidate', 'This member’s membership is not active.');
       }
     }
 
@@ -197,7 +192,7 @@ Deno.serve(async (req) => {
       .select('*')
       .in('profile_id', ids);
     if (mpErr) {
-      return jsonResponse({ error: mpErr.message }, req, 500);
+      return jsonErr(req, 500, 'candidate_private_query_failed', mpErr.message);
     }
     const privateById = new Map(
       (candPrivate ?? []).map((m) => [m.profile_id as string, m as Record<string, unknown>])
@@ -206,13 +201,11 @@ Deno.serve(async (req) => {
     for (const cid of ids) {
       const m = privateById.get(cid);
       if (!m) {
-        return jsonResponse(
-          {
-            error: 'candidate_data_incomplete',
-            message: 'We could not load full details for one profile. Please try again or contact support.',
-          },
+        return jsonErr(
           req,
-          500
+          500,
+          'candidate_data_incomplete',
+          'We could not load full details for one profile. Please try again or contact support.'
         );
       }
     }
@@ -223,7 +216,7 @@ Deno.serve(async (req) => {
     });
     if (requestInsertErr) {
       console.error('create_contact_request_atomic failed', requestInsertErr);
-      return jsonResponse({ error: requestInsertErr.message }, req, 500);
+      return jsonErr(req, 500, 'create_request_failed', requestInsertErr.message);
     }
     const insertRow = Array.isArray(requestInsert)
       ? (requestInsert[0] as {
@@ -236,40 +229,51 @@ Deno.serve(async (req) => {
       : undefined;
 
     if (!insertRow) {
-      return jsonResponse({ error: 'Insert failed' }, req, 500);
+      return jsonErr(req, 500, 'insert_failed', 'Insert failed');
     }
     if (insertRow.error_code) {
       if (insertRow.error_code === 'already_requested_this_week') {
-        return jsonResponse({
-          error: 'already_requested_this_week',
-          message:
-            insertRow.error_message ??
-            'You already requested this profile within the last 7 days. You can ask again after that window, subject to weekly limits.',
-        }, req, 409);
+        return jsonErr(
+          req,
+          409,
+          'already_requested_this_week',
+          insertRow.error_message ??
+            'You already requested this profile within the last 7 days. You can ask again after that window, subject to weekly limits.'
+        );
       }
       if (insertRow.error_code === 'weekly_limit') {
-        return jsonResponse({
-          error: 'weekly_limit',
-          message: insertRow.error_message ?? 'Weekly limit reached.',
-          slots_remaining: insertRow.slots_remaining ?? 0,
-          reset_at: insertRow.reset_at ?? null,
-        }, req, 409);
+        return jsonErr(
+          req,
+          409,
+          'weekly_limit',
+          insertRow.error_message ?? 'Weekly limit reached.',
+          {
+            slots_remaining: insertRow.slots_remaining ?? 0,
+            reset_at: insertRow.reset_at ?? null,
+          }
+        );
       }
       if (insertRow.error_code === 'monthly_limit') {
-        return jsonResponse({
-          error: 'monthly_limit',
-          message: insertRow.error_message ?? 'Monthly limit reached.',
-          slots_remaining: insertRow.slots_remaining ?? 0,
-          reset_at: insertRow.reset_at ?? null,
-        }, req, 409);
+        return jsonErr(
+          req,
+          409,
+          'monthly_limit',
+          insertRow.error_message ?? 'Monthly limit reached.',
+          {
+            slots_remaining: insertRow.slots_remaining ?? 0,
+            reset_at: insertRow.reset_at ?? null,
+          }
+        );
       }
-      return jsonResponse({
-        error: insertRow.error_code,
-        message: insertRow.error_message ?? 'Request could not be created.',
-      }, req, 409);
+      return jsonErr(
+        req,
+        409,
+        insertRow.error_code,
+        insertRow.error_message ?? 'Request could not be created.'
+      );
     }
     if (!insertRow.request_id) {
-      return jsonResponse({ error: 'Insert failed' }, req, 500);
+      return jsonErr(req, 500, 'insert_failed', 'Insert failed');
     }
 
     const requestId = insertRow.request_id;
@@ -328,6 +332,6 @@ Deno.serve(async (req) => {
     }, req);
   } catch (err) {
     console.error('submit-contact-request unhandled error', err);
-    return jsonResponse({ error: 'Internal server error' }, req, 500);
+    return jsonErr(req, 500, 'internal_error', 'Internal server error');
   }
 });

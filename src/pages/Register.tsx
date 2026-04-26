@@ -112,7 +112,7 @@ function validateStep1(form: FormState, age: number | null): Record<string, stri
     e.mobile_phone = 'For UK addresses, enter a UK mobile (e.g. 07123 456789 or +44 7123 456789).';
   } else if (!isUk && !isValidInternationalPhone(form.mobile_phone)) {
     e.mobile_phone =
-      'Enter a valid phone number (8–15 digits; include country code, e.g. +1 415 555 0100).';
+      'Enter a valid phone number (8-15 digits; include country code, e.g. +1 415 555 0100).';
   }
   if (!form.home_address_line1.trim()) e.home_address_line1 = 'Address line 1 is required.';
   else if (form.home_address_line1.trim().length < 3)
@@ -123,7 +123,7 @@ function validateStep1(form: FormState, age: number | null): Record<string, stri
   } else if (isUk && !isValidUkPostcode(form.home_address_postcode)) {
     e.home_address_postcode = 'Enter a valid UK postcode (e.g. SW1A 1AA).';
   } else if (!isUk && !isValidLoosePostcode(form.home_address_postcode)) {
-    e.home_address_postcode = 'Enter your postal code (2–20 characters).';
+    e.home_address_postcode = 'Enter your postal code (2-20 characters).';
   }
   if (!form.home_address_country.trim()) e.home_address_country = 'Country is required.';
   if (!form.id_document_path) e.id_document_path = 'Please upload proof of identity.';
@@ -939,7 +939,7 @@ export default function Register() {
                 </label>
                 <p className="field-hint" style={{ marginTop: 0 }}>
                   If your country is <strong>UK</strong> or <strong>United Kingdom</strong>, use a UK mobile.
-                  Otherwise include your country code (8–15 digits total).
+                  Otherwise include your country code (8-15 digits total).
                 </p>
                 <input
                   id="reg-tel"

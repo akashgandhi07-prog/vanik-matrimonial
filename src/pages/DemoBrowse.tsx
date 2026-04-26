@@ -16,6 +16,7 @@ type DemoProfile = {
   religion: string | null;
   nationality: string | null;
   place_of_birth: string | null;
+  gender: string | null;
 };
 
 const DEFAULT_AGE: [number, number] = [18, 60];
@@ -56,6 +57,15 @@ function inFilterSet(value: string, allowed: readonly string[]): boolean {
   return allowed.some((a) => a.toLowerCase() === v);
 }
 
+function profileMatchesSeeking(
+  gender: string | null | undefined,
+  seeking: 'Male' | 'Female' | 'Both'
+): boolean {
+  if (seeking === 'Both') return true;
+  if (gender == null || !String(gender).trim()) return false;
+  return gender.trim().toLowerCase() === seeking.toLowerCase();
+}
+
 function sameStringArray(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
@@ -76,6 +86,7 @@ export default function DemoBrowse() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<DemoProfile[]>([]);
+  const [browseSeeking, setBrowseSeeking] = useState<'Male' | 'Female' | 'Both'>('Both');
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
 
@@ -107,6 +118,7 @@ export default function DemoBrowse() {
   const filtered = useMemo(() => {
     const { ageRange, dietF, religionF, heightRange, sort } = appliedFilters;
     let rows = profiles.filter((c) => {
+      if (!profileMatchesSeeking(c.gender, browseSeeking)) return false;
       if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
       if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
       if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
@@ -124,15 +136,15 @@ export default function DemoBrowse() {
       rows = [...rows].sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
     }
     return rows;
-  }, [profiles, appliedFilters]);
+  }, [profiles, appliedFilters, browseSeeking]);
 
   const pendingFilterChanges = useMemo(() => {
     return !filtersEqual(draftFilters, appliedFilters);
   }, [draftFilters, appliedFilters]);
 
   const filtersActive = useMemo(() => {
-    return !filtersEqual(appliedFilters, defaultFilters());
-  }, [appliedFilters]);
+    return !filtersEqual(appliedFilters, defaultFilters()) || browseSeeking !== 'Both';
+  }, [appliedFilters, browseSeeking]);
 
   function applyFilters() {
     setAppliedFilters(cloneFilters(draftFilters));
@@ -142,6 +154,7 @@ export default function DemoBrowse() {
     const defaults = defaultFilters();
     setDraftFilters(defaults);
     setAppliedFilters(cloneFilters(defaults));
+    setBrowseSeeking('Both');
   }
 
   return (
@@ -188,7 +201,7 @@ export default function DemoBrowse() {
               textDecoration: 'none',
             }}
           >
-            Apply — £10
+            Apply - £10
           </Link>
         </div>
 
@@ -198,175 +211,191 @@ export default function DemoBrowse() {
           </div>
 
           <div className="member-browse-filters-grid">
-            <div className="member-filter-section">
-              <span id="demo-age-label" className="member-filter-section-label">
-                Age range
-              </span>
-              <div className="member-filter-range-row" role="group" aria-labelledby="demo-age-label">
-                <input
-                  type="number"
-                  className="member-filter-num-input"
-                  min={18}
-                  max={80}
-                  inputMode="numeric"
-                  value={draftFilters.ageRange[0]}
-                  onChange={(e) =>
-                    setDraftFilters((prev) => ({
-                      ...prev,
-                      ageRange: [Number(e.target.value), prev.ageRange[1]],
-                    }))
-                  }
-                  aria-label="Minimum age"
-                />
-                <span className="member-filter-range-to" aria-hidden>
-                  to
-                </span>
-                <input
-                  type="number"
-                  className="member-filter-num-input"
-                  min={18}
-                  max={80}
-                  inputMode="numeric"
-                  value={draftFilters.ageRange[1]}
-                  onChange={(e) =>
-                    setDraftFilters((prev) => ({
-                      ...prev,
-                      ageRange: [prev.ageRange[0], Number(e.target.value)],
-                    }))
-                  }
-                  aria-label="Maximum age"
-                />
-              </div>
-            </div>
-
-            <div className="member-filter-section">
-              <span id="demo-height-label" className="member-filter-section-label">
-                Height range
-              </span>
-              <div className="member-filter-range-row" role="group" aria-labelledby="demo-height-label">
-                <div className="member-filter-range-field">
-                  <select
-                    className="member-filter-select"
-                    value={draftFilters.heightRange[0]}
-                    onChange={(e) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        heightRange: [Number(e.target.value), prev.heightRange[1]],
-                      }))
-                    }
-                    aria-label="Minimum height"
-                  >
-                    {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
-                      <option key={o.cm} value={o.cm}>
-                        {cmToFeetInches(o.cm)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <span className="member-filter-range-to" aria-hidden>
-                  to
-                </span>
-                <div className="member-filter-range-field">
-                  <select
-                    className="member-filter-select"
-                    value={draftFilters.heightRange[1]}
-                    onChange={(e) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        heightRange: [prev.heightRange[0], Number(e.target.value)],
-                      }))
-                    }
-                    aria-label="Maximum height"
-                  >
-                    {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
-                      <option key={o.cm} value={o.cm}>
-                        {cmToFeetInches(o.cm)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
             <div className="member-filter-section member-filter-section--full">
-              <span id="demo-diet-label" className="member-filter-section-label">
-                Diet
+              <span id="demo-seeking-label" className="member-filter-section-label">
+                Show profiles of
               </span>
-              <div className="member-filter-chip-group" role="group" aria-labelledby="demo-diet-label">
-                {DIET_ALL.map((o) => (
+              <div
+                className="member-filter-chip-row"
+                role="group"
+                aria-labelledby="demo-seeking-label"
+                style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}
+              >
+                {(['Male', 'Female', 'Both'] as const).map((g) => (
                   <button
-                    key={o}
+                    key={g}
                     type="button"
-                    className={
-                      draftFilters.dietF.includes(o)
-                        ? 'member-filter-chip member-filter-chip--selected'
-                        : 'member-filter-chip'
-                    }
-                    aria-pressed={draftFilters.dietF.includes(o)}
-                    onClick={() =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        dietF: prev.dietF.includes(o) ? prev.dietF.filter((x) => x !== o) : [...prev.dietF, o],
-                      }))
-                    }
+                    className={browseSeeking === g ? 'btn btn-primary' : 'btn btn-secondary'}
+                    style={{ padding: '6px 12px', fontSize: 13 }}
+                    onClick={() => setBrowseSeeking(g)}
                   >
-                    {o}
+                    {g === 'Both' ? 'Everyone' : `${g}s`}
                   </button>
                 ))}
               </div>
+              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+                Same choices as members see after login. Here it only affects this page for now.
+              </p>
             </div>
 
-            <div className="member-filter-section member-filter-section--full">
-              <span id="demo-religion-label" className="member-filter-section-label">
-                Religion
-              </span>
-              <div className="member-filter-chip-group" role="group" aria-labelledby="demo-religion-label">
-                {RELIGION_ALL.map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    className={
-                      draftFilters.religionF.includes(o)
-                        ? 'member-filter-chip member-filter-chip--selected'
-                        : 'member-filter-chip'
-                    }
-                    aria-pressed={draftFilters.religionF.includes(o)}
-                    onClick={() =>
+            <div className="member-browse-filters-ranges" aria-label="Range filters">
+              <div className="member-filter-section">
+                <span id="demo-age-label" className="member-filter-section-label">
+                  Age range
+                </span>
+                <div className="member-filter-range-row" role="group" aria-labelledby="demo-age-label">
+                  <input
+                    type="number"
+                    className="member-filter-num-input"
+                    min={18}
+                    max={80}
+                    inputMode="numeric"
+                    value={draftFilters.ageRange[0]}
+                    onChange={(e) =>
                       setDraftFilters((prev) => ({
                         ...prev,
-                        religionF: prev.religionF.includes(o)
-                          ? prev.religionF.filter((x) => x !== o)
-                          : [...prev.religionF, o],
+                        ageRange: [Number(e.target.value), prev.ageRange[1]],
                       }))
                     }
-                  >
-                    {o}
-                  </button>
-                ))}
+                    aria-label="Minimum age"
+                  />
+                  <span className="member-filter-range-to" aria-hidden>
+                    to
+                  </span>
+                  <input
+                    type="number"
+                    className="member-filter-num-input"
+                    min={18}
+                    max={80}
+                    inputMode="numeric"
+                    value={draftFilters.ageRange[1]}
+                    onChange={(e) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        ageRange: [prev.ageRange[0], Number(e.target.value)],
+                      }))
+                    }
+                    aria-label="Maximum age"
+                  />
+                </div>
+              </div>
+
+              <div className="member-filter-section">
+                <span id="demo-height-label" className="member-filter-section-label">
+                  Height range
+                </span>
+                <div className="member-filter-range-row" role="group" aria-labelledby="demo-height-label">
+                  <div className="member-filter-range-field">
+                    <select
+                      className="member-filter-select"
+                      value={draftFilters.heightRange[0]}
+                      onChange={(e) =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          heightRange: [Number(e.target.value), prev.heightRange[1]],
+                        }))
+                      }
+                      aria-label="Minimum height"
+                    >
+                      {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
+                        <option key={o.cm} value={o.cm}>
+                          {cmToFeetInches(o.cm)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="member-filter-range-to" aria-hidden>
+                    to
+                  </span>
+                  <div className="member-filter-range-field">
+                    <select
+                      className="member-filter-select"
+                      value={draftFilters.heightRange[1]}
+                      onChange={(e) =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          heightRange: [prev.heightRange[0], Number(e.target.value)],
+                        }))
+                      }
+                      aria-label="Maximum height"
+                    >
+                      {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
+                        <option key={o.cm} value={o.cm}>
+                          {cmToFeetInches(o.cm)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="member-browse-filters-chips-row" aria-label="Preference filters">
+              <div className="member-filter-section">
+                <span id="demo-diet-label" className="member-filter-section-label">
+                  Diet
+                </span>
+                <div className="member-filter-chip-group" role="group" aria-labelledby="demo-diet-label">
+                  {DIET_ALL.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      className={
+                        draftFilters.dietF.includes(o)
+                          ? 'member-filter-chip member-filter-chip--selected'
+                          : 'member-filter-chip'
+                      }
+                      aria-pressed={draftFilters.dietF.includes(o)}
+                      onClick={() =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          dietF: prev.dietF.includes(o) ? prev.dietF.filter((x) => x !== o) : [...prev.dietF, o],
+                        }))
+                      }
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="member-filter-section">
+                <span id="demo-religion-label" className="member-filter-section-label">
+                  Religion
+                </span>
+                <div className="member-filter-chip-group" role="group" aria-labelledby="demo-religion-label">
+                  {RELIGION_ALL.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      className={
+                        draftFilters.religionF.includes(o)
+                          ? 'member-filter-chip member-filter-chip--selected'
+                          : 'member-filter-chip'
+                      }
+                      aria-pressed={draftFilters.religionF.includes(o)}
+                      onClick={() =>
+                        setDraftFilters((prev) => ({
+                          ...prev,
+                          religionF: prev.religionF.includes(o)
+                            ? prev.religionF.filter((x) => x !== o)
+                            : [...prev.religionF, o],
+                        }))
+                      }
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          <div
-            className="member-browse-filters-footer"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'flex-end',
-              justifyContent: 'space-between',
-              gap: 12,
-              marginTop: 16,
-              paddingTop: 14,
-              borderTop: '1px solid var(--color-border)',
-            }}
-          >
+          <div className="member-browse-filters-footer">
             <button type="button" className="member-filter-clear" disabled={!filtersActive} onClick={clearFilters}>
               Reset
             </button>
-            <div
-              className="member-browse-filters-actions"
-              style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', marginLeft: 'auto' }}
-            >
+            <div className="member-browse-filters-footer-primary">
               <div className="member-browse-filters-sort-wrap">
                 <label htmlFor="demo-sort">Sort</label>
                 <select
@@ -419,7 +448,7 @@ export default function DemoBrowse() {
                 <article key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '12px 14px 14px' }}>
                     <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {c.age ? `Age ${c.age}` : ''}
+                      {[c.gender, c.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile'}
                     </h3>
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}

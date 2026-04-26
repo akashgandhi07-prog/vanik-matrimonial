@@ -3,11 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { adminPowerRole, isSupportAdmin, metaIsAdminFlag, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, type EmailType } from '../_shared/dispatch-email.ts';
+import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
-
-function siteUrlFromEnv(): string {
-  return Deno.env.get('PUBLIC_SITE_URL') ?? 'https://vanikmatrimonial.co.uk';
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -48,7 +45,7 @@ Deno.serve(async (req) => {
 
   if (action === 'list_profiles') {
     const f = typeof body.filter === 'string' ? body.filter : 'all';
-    const lapseCutoff = new Date(Date.now() - 90 * 864e5).toISOString();
+    const lapseCutoff = new Date(Date.now() - 365 * 864e5).toISOString();
     const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
     const nowIso = new Date().toISOString();
     const expires60Until = new Date(Date.now() + 60 * 864e5).toISOString();
@@ -166,7 +163,7 @@ Deno.serve(async (req) => {
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     const monthEnd = new Date();
     monthEnd.setDate(monthEnd.getDate() + 30);
-    const lapseCutoff = new Date(Date.now() - 90 * 864e5).toISOString();
+    const lapseCutoff = new Date(Date.now() - 365 * 864e5).toISOString();
     const nowIso = new Date().toISOString();
 
     const [
@@ -799,7 +796,7 @@ Deno.serve(async (req) => {
     if (type === 'discount_percent') {
       const n = Number(body.discount_percent);
       if (!Number.isFinite(n) || n < 1 || n > 100) {
-        return jsonResponse({ error: 'discount_percent must be 1–100' }, req, 400);
+        return jsonResponse({ error: 'discount_percent must be 1-100' }, req, 400);
       }
       discountPercent = n;
     }
@@ -1011,7 +1008,7 @@ Deno.serve(async (req) => {
     const { data: memE } = await admin.from('member_private').select('email').eq('profile_id', profileId).single();
     const email = memE?.email as string | undefined;
     if (!email) return jsonResponse({ error: 'No email for profile' }, req, 400);
-    const redirectTo = `${siteUrlFromEnv()}/dashboard/browse`;
+    const redirectTo = `${publicSiteBaseUrl()}/dashboard/browse`;
     const { data: linkData, error: le } = await admin.auth.admin.generateLink({
       type: 'magiclink',
       email,
@@ -1061,7 +1058,7 @@ Deno.serve(async (req) => {
     const { data: memE } = await admin.from('member_private').select('email').eq('profile_id', profileId).single();
     const email = memE?.email as string | undefined;
     if (!email) return jsonResponse({ error: 'No email for profile' }, req, 400);
-    const redirectTo = `${siteUrlFromEnv()}/login`;
+    const redirectTo = `${publicSiteBaseUrl()}/login`;
     const { error: re } = await admin.auth.admin.generateLink({
       type: 'recovery',
       email,

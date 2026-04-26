@@ -174,10 +174,10 @@ export default function Feedback() {
           }}
         >
           <strong>Admin &amp; safeguarding purposes only:</strong> your feedback goes directly to the register team and
-          is never shared with the candidate — they will not see your name or your answers. We ask for feedback to
+          is never shared with the candidate - they will not see your name or your answers. We ask for feedback to
           ensure everyone has had a positive experience and to flag any concerns for the committee&apos;s review.
           It also helps us maintain the quality and safety of the register.{' '}
-          <strong>Please give it a go</strong> — even a brief response is really helpful.
+          <strong>Please give it a go</strong> - even a brief response is really helpful.
         </p>
         <form onSubmit={(e) => void submit(e)} style={{ display: 'grid', gap: 14 }}>
           <div>

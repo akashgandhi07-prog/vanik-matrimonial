@@ -83,7 +83,7 @@ function MemberLayoutBody() {
             }}
           >
             <span>
-              Payment received. Your membership should update within a few moments — refresh if your expiry date
+              Payment received. Your membership should update within a few moments - refresh if your expiry date
               looks unchanged.
             </span>
             <button type="button" className="btn btn-secondary" onClick={() => setRenewalPaidNotice(false)}>

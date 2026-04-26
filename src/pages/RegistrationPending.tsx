@@ -65,13 +65,13 @@ export default function RegistrationPending() {
     <PublicLayout>
       <div className="layout-max register-page" style={{ maxWidth: 560, marginTop: 40 }}>
         <div className="register-card prose-safe">
-          <h1>Thanks — we&apos;ve got everything</h1>
+          <h1>Thanks - we&apos;ve got everything</h1>
           <p className="register-lead" style={{ marginBottom: '1rem' }}>
             You&apos;ve submitted your full profile and we&apos;re reviewing your application. We aim to get back
             to you within <strong>five working days</strong> at <strong>{displayEmail}</strong>.
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: 1.5 }}>
-            There&apos;s nothing else you need to do for now — we&apos;ll email you once your membership has been
+            There&apos;s nothing else you need to do for now - we&apos;ll email you once your membership has been
             approved (or if we need anything further).
           </p>
           {ref && (
@@ -80,7 +80,7 @@ export default function RegistrationPending() {
             </p>
           )}
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: '1.25rem' }}>
-            If you were approved recently, this page updates when you return to the tab or within about a minute —
+            If you were approved recently, this page updates when you return to the tab or within about a minute  - 
             or use <strong>Check status</strong> below.
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>

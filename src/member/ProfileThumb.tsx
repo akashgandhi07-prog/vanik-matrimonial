@@ -10,7 +10,7 @@ export function ProfileThumb({
   profileId: string;
   firstName: string;
   className?: string;
-  /** When true, no image is shown (browse-before-request flows — no placeholder). */
+  /** When true, no image is shown (browse-before-request flows - no placeholder). */
   anonymous?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);

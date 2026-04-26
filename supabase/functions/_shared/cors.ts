@@ -1,7 +1,9 @@
+import { CANONICAL_PUBLIC_SITE_URL, LEGACY_VERCEL_DEPLOYMENT_URL } from './site-url.ts';
+
 const DEFAULT_DEV_ORIGINS = ['http://localhost:3000', 'http://localhost:5173'] as const;
 
-/** Production web app(s) calling Edge Functions from the browser (must match Vercel deployment). */
-const DEFAULT_PUBLIC_SITE_ORIGINS = ['https://vanik-matrimonial.vercel.app'] as const;
+/** Production origins allowed if PUBLIC_SITE_URL is unset (custom domain + legacy Vercel). */
+const DEFAULT_PUBLIC_SITE_ORIGINS = [LEGACY_VERCEL_DEPLOYMENT_URL, CANONICAL_PUBLIC_SITE_URL] as const;
 
 const ALLOW_HEADERS =
   'authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature, stripe-signature, x-cron-secret';

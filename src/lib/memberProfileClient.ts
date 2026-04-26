@@ -20,7 +20,7 @@ export function pathForMemberStatus(status: string | null): string | null {
     case 'matched':
       return '/dashboard/browse';
     case 'archived':
-      return '/';
+      return '/membership-expired';
     default:
       return null;
   }

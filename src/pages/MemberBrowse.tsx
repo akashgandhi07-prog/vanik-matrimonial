@@ -12,7 +12,7 @@ import {
 } from '../member/requestQuota';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
-import { invokeFunction, supabase } from '../lib/supabase';
+import { EdgeFunctionHttpError, invokeFunction, supabase } from '../lib/supabase';
 
 type ContactDetailRow = {
   profile_id: string;
@@ -104,13 +104,16 @@ export default function MemberBrowse() {
     requestIds?: string[];
   } | null>(null);
   const [seekUpdating, setSeekUpdating] = useState(false);
+  const [seekError, setSeekError] = useState<string | null>(null);
+  const [traySubmitting, setTraySubmitting] = useState(false);
 
   async function persistSeeking(g: 'Male' | 'Female' | 'Both') {
     if (!profile || effectiveSeeking(profile) === g || seekUpdating) return;
+    setSeekError(null);
     setSeekUpdating(true);
     try {
       const { error } = await supabase.from('profiles').update({ seeking_gender: g }).eq('id', profile.id);
-      if (error) alert(error.message);
+      if (error) setSeekError(error.message);
       else void loadAll();
     } finally {
       setSeekUpdating(false);
@@ -198,8 +201,9 @@ export default function MemberBrowse() {
   }
 
   async function submitTray() {
-    if (!profile || tray.length === 0 || feedbackBlocking) return;
+    if (!profile || tray.length === 0 || feedbackBlocking || traySubmitting) return;
     setSubmitError(null);
+    setTraySubmitting(true);
     try {
       const res = (await invokeFunction('submit-contact-request', {
         candidate_ids: tray,
@@ -210,7 +214,12 @@ export default function MemberBrowse() {
         request_ids?: string[];
       };
       if (res.error) {
-        throw new Error(res.message || res.error);
+        throw new EdgeFunctionHttpError(res.message || String(res.error), {
+          code: typeof res.error === 'string' ? res.error : undefined,
+          requestIds: Array.isArray(res.request_ids)
+            ? (res.request_ids as string[]).filter((x): x is string => typeof x === 'string')
+            : undefined,
+        });
       }
       setTray([]);
       setTrayDrawerOpen(false);
@@ -219,8 +228,27 @@ export default function MemberBrowse() {
       });
       void loadAll();
     } catch (e) {
+      if (e instanceof EdgeFunctionHttpError) {
+        const msg = e.message;
+        switch (e.code) {
+          case 'monthly_limit':
+            setSubmitError({ type: 'monthly_limit', message: msg, requestIds: e.requestIds });
+            return;
+          case 'weekly_limit':
+            setSubmitError({ type: 'weekly_limit', message: msg, requestIds: e.requestIds });
+            return;
+          case 'feedback_required':
+            setSubmitError({ type: 'feedback_required', message: msg, requestIds: e.requestIds });
+            return;
+          case 'already_requested_this_week':
+            setSubmitError({ type: 'already_requested', message: msg });
+            return;
+          default:
+            setSubmitError({ type: 'generic', message: msg });
+            return;
+        }
+      }
       const msg = e instanceof Error ? e.message : 'Request failed';
-      // Parse structured errors from the edge function
       if (msg.includes('monthly_limit') || msg.includes('Monthly limit')) {
         setSubmitError({ type: 'monthly_limit', message: msg });
       } else if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
@@ -232,6 +260,8 @@ export default function MemberBrowse() {
       } else {
         setSubmitError({ type: 'generic', message: msg });
       }
+    } finally {
+      setTraySubmitting(false);
     }
   }
 
@@ -271,175 +301,173 @@ export default function MemberBrowse() {
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
               Saved on your account. You can also change this under My profile.
             </p>
-          </div>
-          <div className="member-filter-section">
-            <span id="browse-age-label" className="member-filter-section-label">
-              Age range
-            </span>
-            <div className="member-filter-range-row" role="group" aria-labelledby="browse-age-label">
-              <input
-                type="number"
-                className="member-filter-num-input"
-                min={18}
-                max={80}
-                inputMode="numeric"
-                value={draftFilters.ageRange[0]}
-                onChange={(e) =>
-                  setDraftFilters((prev) => ({
-                    ...prev,
-                    ageRange: [Number(e.target.value), prev.ageRange[1]],
-                  }))
-                }
-                aria-label="Minimum age"
-              />
-              <span className="member-filter-range-to" aria-hidden>
-                to
-              </span>
-              <input
-                type="number"
-                className="member-filter-num-input"
-                min={18}
-                max={80}
-                inputMode="numeric"
-                value={draftFilters.ageRange[1]}
-                onChange={(e) =>
-                  setDraftFilters((prev) => ({
-                    ...prev,
-                    ageRange: [prev.ageRange[0], Number(e.target.value)],
-                  }))
-                }
-                aria-label="Maximum age"
-              />
-            </div>
+            {seekError && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger)' }} role="alert">
+                {seekError}
+              </p>
+            )}
           </div>
 
-          <div className="member-filter-section">
-            <span id="browse-height-label" className="member-filter-section-label">
-              Height range
-            </span>
-            <div className="member-filter-range-row" role="group" aria-labelledby="browse-height-label">
-              <div className="member-filter-range-field">
-                <select
-                  className="member-filter-select"
-                  value={draftFilters.heightRange[0]}
+          <div className="member-browse-filters-ranges" aria-label="Range filters">
+            <div className="member-filter-section">
+              <span id="browse-age-label" className="member-filter-section-label">
+                Age range
+              </span>
+              <div className="member-filter-range-row" role="group" aria-labelledby="browse-age-label">
+                <input
+                  type="number"
+                  className="member-filter-num-input"
+                  min={18}
+                  max={80}
+                  inputMode="numeric"
+                  value={draftFilters.ageRange[0]}
                   onChange={(e) =>
                     setDraftFilters((prev) => ({
                       ...prev,
-                      heightRange: [Number(e.target.value), prev.heightRange[1]],
+                      ageRange: [Number(e.target.value), prev.ageRange[1]],
                     }))
                   }
-                  aria-label="Minimum height"
-                >
-                  {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
-                    <option key={o.cm} value={o.cm}>
-                      {cmToFeetInches(o.cm)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <span className="member-filter-range-to" aria-hidden>
-                to
-              </span>
-              <div className="member-filter-range-field">
-                <select
-                  className="member-filter-select"
-                  value={draftFilters.heightRange[1]}
+                  aria-label="Minimum age"
+                />
+                <span className="member-filter-range-to" aria-hidden>
+                  to
+                </span>
+                <input
+                  type="number"
+                  className="member-filter-num-input"
+                  min={18}
+                  max={80}
+                  inputMode="numeric"
+                  value={draftFilters.ageRange[1]}
                   onChange={(e) =>
                     setDraftFilters((prev) => ({
                       ...prev,
-                      heightRange: [prev.heightRange[0], Number(e.target.value)],
+                      ageRange: [prev.ageRange[0], Number(e.target.value)],
                     }))
                   }
-                  aria-label="Maximum height"
-                >
-                  {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
-                    <option key={o.cm} value={o.cm}>
-                      {cmToFeetInches(o.cm)}
-                    </option>
-                  ))}
-                </select>
+                  aria-label="Maximum age"
+                />
+              </div>
+            </div>
+
+            <div className="member-filter-section">
+              <span id="browse-height-label" className="member-filter-section-label">
+                Height range
+              </span>
+              <div className="member-filter-range-row" role="group" aria-labelledby="browse-height-label">
+                <div className="member-filter-range-field">
+                  <select
+                    className="member-filter-select"
+                    value={draftFilters.heightRange[0]}
+                    onChange={(e) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        heightRange: [Number(e.target.value), prev.heightRange[1]],
+                      }))
+                    }
+                    aria-label="Minimum height"
+                  >
+                    {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
+                      <option key={o.cm} value={o.cm}>
+                        {cmToFeetInches(o.cm)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <span className="member-filter-range-to" aria-hidden>
+                  to
+                </span>
+                <div className="member-filter-range-field">
+                  <select
+                    className="member-filter-select"
+                    value={draftFilters.heightRange[1]}
+                    onChange={(e) =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        heightRange: [prev.heightRange[0], Number(e.target.value)],
+                      }))
+                    }
+                    aria-label="Maximum height"
+                  >
+                    {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
+                      <option key={o.cm} value={o.cm}>
+                        {cmToFeetInches(o.cm)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="member-filter-section member-filter-section--full">
-            <span
-              id="browse-diet-label"
-              className="member-filter-section-label"
-              title="Turn a tag off to hide people in that group"
-            >
-              Diet
-            </span>
-            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-diet-label">
-              {DIET_ALL.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  className={
-                    draftFilters.dietF.includes(o)
-                      ? 'member-filter-chip member-filter-chip--selected'
-                      : 'member-filter-chip'
-                  }
-                  aria-pressed={draftFilters.dietF.includes(o)}
-                  onClick={() =>
-                    setDraftFilters((prev) => ({
-                      ...prev,
-                      dietF: prev.dietF.includes(o)
-                        ? prev.dietF.filter((x) => x !== o)
-                        : [...prev.dietF, o],
-                    }))
-                  }
-                >
-                  {o}
-                </button>
-              ))}
+          <div className="member-browse-filters-chips-row" aria-label="Preference filters">
+            <div className="member-filter-section">
+              <span
+                id="browse-diet-label"
+                className="member-filter-section-label"
+                title="Turn a tag off to hide people in that group"
+              >
+                Diet
+              </span>
+              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-diet-label">
+                {DIET_ALL.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={
+                      draftFilters.dietF.includes(o)
+                        ? 'member-filter-chip member-filter-chip--selected'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={draftFilters.dietF.includes(o)}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        dietF: prev.dietF.includes(o)
+                          ? prev.dietF.filter((x) => x !== o)
+                          : [...prev.dietF, o],
+                      }))
+                    }
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="member-filter-section member-filter-section--full">
-            <span id="browse-religion-label" className="member-filter-section-label">
-              Religion
-            </span>
-            <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
-              {RELIGION_ALL.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  className={
-                    draftFilters.religionF.includes(o)
-                      ? 'member-filter-chip member-filter-chip--selected'
-                      : 'member-filter-chip'
-                  }
-                  aria-pressed={draftFilters.religionF.includes(o)}
-                  onClick={() =>
-                    setDraftFilters((prev) => ({
-                      ...prev,
-                      religionF: prev.religionF.includes(o)
-                        ? prev.religionF.filter((x) => x !== o)
-                        : [...prev.religionF, o],
-                    }))
-                  }
-                >
-                  {o}
-                </button>
-              ))}
+            <div className="member-filter-section">
+              <span id="browse-religion-label" className="member-filter-section-label">
+                Religion
+              </span>
+              <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
+                {RELIGION_ALL.map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    className={
+                      draftFilters.religionF.includes(o)
+                        ? 'member-filter-chip member-filter-chip--selected'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={draftFilters.religionF.includes(o)}
+                    onClick={() =>
+                      setDraftFilters((prev) => ({
+                        ...prev,
+                        religionF: prev.religionF.includes(o)
+                          ? prev.religionF.filter((x) => x !== o)
+                          : [...prev.religionF, o],
+                      }))
+                    }
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        <div
-          className="member-browse-filters-footer"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginTop: 16,
-            paddingTop: 14,
-            borderTop: '1px solid var(--color-border)',
-          }}
-        >
+        <div className="member-browse-filters-footer">
           <button
             type="button"
             className="member-filter-clear"
@@ -448,7 +476,7 @@ export default function MemberBrowse() {
           >
             Reset
           </button>
-          <div className="member-browse-filters-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', marginLeft: 'auto' }}>
+          <div className="member-browse-filters-footer-primary">
             <div className="member-browse-filters-sort-wrap">
               <label htmlFor="browse-sort">Sort</label>
               <select
@@ -569,15 +597,22 @@ export default function MemberBrowse() {
                 {candidates.length === 0 ? 'Nothing to browse yet' : 'No matching profiles'}
               </p>
               {candidates.length === 0 ? (
-                <p className="member-browse-empty-desc">
-                  Nothing loaded to show. The database only returns profiles that match your{' '}
-                  <strong>Show profiles of</strong> setting (stored as <strong>seeking_gender</strong>), are{' '}
-                  <strong>active</strong>, visible for browsing, and have <strong>membership_expires_at</strong> in the
-                  future. Other people must also have <strong>auth_user_id</strong> linked to their login. Run{' '}
-                  <code style={{ fontSize: 13 }}>supabase/verify_browse_setup.sql</code> in the Supabase SQL editor (same
-                  project as the app) to verify migration and data. Need help?{' '}
-                  <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
-                </p>
+                <>
+                  <p className="member-browse-empty-desc">
+                    There are no profiles to show right now. Try changing <strong>Show profiles of</strong> above, widen
+                    your filters, or check back later as new members join. If you think this is wrong, contact{' '}
+                    <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
+                  </p>
+                  <details style={{ marginTop: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Site administrators</summary>
+                    <p style={{ lineHeight: 1.55, marginTop: 8 }}>
+                      See <strong>Browse: no profiles troubleshooting</strong> in{' '}
+                      <code style={{ fontSize: 12 }}>docs/SETUP.md</code> in the project repository, and run{' '}
+                      <code style={{ fontSize: 12 }}>supabase/verify_browse_setup.sql</code> in the Supabase SQL editor
+                      for this project.
+                    </p>
+                  </details>
+                </>
               ) : (
                 <>
                   <p className="member-browse-empty-desc">
@@ -605,7 +640,7 @@ export default function MemberBrowse() {
                 >
                   <div style={{ padding: '12px 14px 14px' }}>
                     <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {c.age ? `Age ${c.age}` : ''}
+                      {[c.gender, c.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile'}
                     </h3>
                     <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                       {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
@@ -672,7 +707,9 @@ export default function MemberBrowse() {
                 return (
                   <div key={id} className="member-tray-chip">
                     <div className="member-tray-chip-meta">
-                      <span className="member-tray-chip-name">{c?.age ? `Age ${c.age}` : 'Selected'}</span>
+                      <span className="member-tray-chip-name">
+                        {[c?.gender, c?.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Selected'}
+                      </span>
                       <button
                         type="button"
                         className="member-tray-chip-remove"
@@ -689,10 +726,10 @@ export default function MemberBrowse() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={feedbackBlocking || trayMax === 0}
+              disabled={feedbackBlocking || trayMax === 0 || traySubmitting}
               onClick={() => void submitTray()}
             >
-              Request contact details ({tray.length})
+              {traySubmitting ? 'Submitting…' : `Request contact details (${tray.length})`}
             </button>
             {feedbackBlocking && (
               <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-warning)' }}>

@@ -1,12 +1,15 @@
 # Pre-launch RLS checks (manual)
 
-Run these in a **staging** project before production migration. Use a normal **member** account (not admin) in an incognito window.
+Run these in a **staging** Supabase project (or a production dry-run) before go-live. Use a normal **member** account (not admin) in an incognito window.
+
+Record results in the table at the end; keep the log with your release notes.
 
 ## Preconditions
 
-1. Create **Member A** (test member) — complete registration and approval if required.  
-2. Create **Member B** — another account so there is another row in `member_private` / `profiles`.  
-3. In the browser where **Member A** is signed in, open DevTools → **Console**.
+1. Note **staging project ref / URL** (for the results log): ____________________  
+2. Create **Member A** (test member) - complete registration and approval if required.  
+3. Create **Member B** - another account so there is another row in `member_private` / `profiles`.  
+4. In the browser where **Member A** is signed in, open DevTools → **Console**.
 
 ## Tests (Supabase JS in the browser)
 
@@ -26,7 +29,7 @@ const { data, error } = await supabase.from('member_private').select('*');
 const { data, error } = await supabase.from('coupons').select('*');
 ```
 
-**Expected:** Empty array `[]` or a permission error — **not** a full list of coupon codes.
+**Expected:** Empty array `[]` or a permission error - **not** a full list of coupon codes.
 
 ### 3. Admin routes blocked for members
 
@@ -42,4 +45,18 @@ While signed in as Member A (non-admin), open `/admin` in the same browser.
 | coupons blocked | | | | |
 | /admin blocked | | | | |
 
+**Pass** = behaviour matches “Expected” for every test. **Fail** = stop release: fix RLS (or related policies), re-run the full checklist, then update this table.
+
 If any check **fails**, fix RLS policies or policies on related tables before migrating production data.
+
+### Optional: quick SQL sanity (staging, service role or SQL editor)
+
+These do not replace the browser tests above; they help confirm tables exist and RLS is enabled:
+
+```sql
+-- member_private and coupons should have RLS enabled (true) in production-like projects
+SELECT relname, relrowsecurity
+FROM pg_class
+WHERE relname IN ('member_private', 'coupons')
+  AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public');
+```

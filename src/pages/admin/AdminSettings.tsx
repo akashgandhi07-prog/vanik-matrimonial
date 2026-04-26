@@ -185,7 +185,7 @@ export default function AdminSettings() {
               <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td style={{ padding: 8 }}>{u.email ?? u.id}</td>
                 <td style={{ padding: 8 }}>{u.is_admin ? 'Yes' : 'No'}</td>
-                <td style={{ padding: 8 }}>{u.is_admin ? (u.admin_role ?? 'super') : '—'}</td>
+                <td style={{ padding: 8 }}>{u.is_admin ? (u.admin_role ?? 'super') : '-'}</td>
                 <td style={{ padding: 8 }}>
                   {myPowerRole !== 'support' && !u.is_admin ? (
                     <button type="button" className="btn btn-secondary" onClick={() => void promote(u.id)}>
@@ -216,7 +216,7 @@ export default function AdminSettings() {
                       )}
                     </div>
                   ) : (
-                    <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>—</span>
+                    <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
                   )}
                 </td>
               </tr>

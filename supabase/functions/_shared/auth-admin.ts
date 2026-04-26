@@ -1,4 +1,4 @@
-/** JWT app_metadata.is_admin only — never trust user_metadata (clients can edit it). */
+/** JWT app_metadata.is_admin only - never trust user_metadata (clients can edit it). */
 
 export function metaIsAdminFlag(v: unknown): boolean {
   if (v === true || v === 1) return true;

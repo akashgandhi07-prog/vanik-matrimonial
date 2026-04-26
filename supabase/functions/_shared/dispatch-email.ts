@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { letterHtml, sendResendEmail } from './resend.ts';
+import { publicSiteBaseUrl } from './site-url.ts';
 import { stripHtml } from './sanitize.ts';
 
 export type EmailType =
@@ -26,10 +27,6 @@ export type DispatchParams = {
   /** Alias used by some callers */
   extra_data?: Record<string, unknown>;
 };
-
-function siteUrl(): string {
-  return Deno.env.get('PUBLIC_SITE_URL') ?? 'https://vanikmatrimonial.co.uk';
-}
 
 async function logEmail(
   admin: SupabaseClient,
@@ -79,8 +76,9 @@ export async function dispatchEmail(
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
       subject = 'Your account has been archived';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>As requested, your profile has been archived and hidden from the register. Our team will retain minimal records for 30 days in line with our retention policy.</p>
-        <p>If this was a mistake, please contact <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
+        <p>Your profile has been archived and is no longer visible on the register. This may follow a long period without renewal, or a request to close your account.</p>
+        <p>To return, sign in and renew online if card payments are enabled: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
+        <p>Or contact <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
       break;
     }
     case 'registration_received': {
@@ -90,7 +88,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${first},</p>
         <p>${
           resubmitted
-            ? 'Thank you — we have received your <strong>updated</strong> application and will review it again within five working days.'
+            ? 'Thank you - we have received your <strong>updated</strong> application and will review it again within five working days.'
             : 'We have received your application to the Vanik Matrimonial Register and will review it within five working days.'
         }</p>
         <p>If you have any questions, simply reply to this email.</p>`;
@@ -106,17 +104,17 @@ export async function dispatchEmail(
             year: 'numeric',
           })
         : '';
-      subject = `Your account is now active — Vanik Matrimonial Register`;
+      subject = `Your account is now active - Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your account has now been created and your application has been approved. You can log in and start browsing profiles straight away.</p>
         ${exp ? `<p>Your membership is valid until <strong>${exp}</strong>.</p>` : ''}
-        <p><a href="${siteUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Log in now</a></p>
+        <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Log in now</a></p>
         <p><strong>How it works</strong></p>
         <ul>
-          <li>Browse profiles of members — photos and names are only revealed once you have requested their details.</li>
+          <li>Browse profiles of members - photos and names are only revealed once you have requested their details.</li>
           <li>You can request up to <strong>3</strong> profiles per 7-day window and up to <strong>6</strong> per calendar month.</li>
           <li>Once a request is submitted we will send you their contact details by email.</li>
-          <li>We ask for a short piece of feedback after each introduction — this is for admin and safeguarding purposes only and is never shared with the other person.</li>
+          <li>We ask for a short piece of feedback after each introduction - this is for admin and safeguarding purposes only and is never shared with the other person.</li>
         </ul>
         <p>If you have any questions, simply reply to this email.</p>
         <p>With good wishes,<br/>The register team<br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
@@ -126,7 +124,7 @@ export async function dispatchEmail(
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
       const reason = stripHtml(String(extraData.reason ?? ''), 2000);
-      const registerUrl = `${siteUrl()}/register`;
+      const registerUrl = `${publicSiteBaseUrl()}/register`;
       subject = 'Regarding your Vanik Matrimonial Register application';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Unfortunately we are unable to approve your application at this time.</p>
@@ -187,7 +185,7 @@ export async function dispatchEmail(
       subject = `Your membership expires in ${n} days`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
-        <p>You can renew online here: <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>You can renew online here: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
         <p>Alternatively, email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
@@ -197,7 +195,7 @@ export async function dispatchEmail(
       subject = 'Your membership has expired';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership has now expired and your profile is hidden from the register.</p>
-        <p>To renew online (£10/year): <a href="${siteUrl()}/renew-membership">${siteUrl()}/renew-membership</a></p>
+        <p>To renew online (£10/year): <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
         <p>Or email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
@@ -210,7 +208,7 @@ export async function dispatchEmail(
           <li>Expiring this month: <strong>${extraData.expiring ?? 0}</strong></li>
           <li>Flagged feedback: <strong>${extraData.flagged ?? 0}</strong></li>
         </ul>
-        <p><a href="${siteUrl()}/admin">Open admin dashboard</a></p>`;
+        <p><a href="${publicSiteBaseUrl()}/admin">Open admin dashboard</a></p>`;
       break;
     }
     case 'matched_congratulations': {
@@ -230,7 +228,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>We were unable to accept the new profile photo you submitted. Your previous approved photo will continue to be shown.</p>
         <p>If you would like to try again with a different image, please sign in and upload a new photo from your profile.</p>
-        <p><a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
+        <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>With thanks,<br/>The register team</p>`;
       break;
     }
@@ -240,7 +238,7 @@ export async function dispatchEmail(
       subject = 'Reminder: your application is awaiting review';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
-        <p>We aim to review applications within five working days. If you need to add information or upload clearer documents, please sign in: <a href="${siteUrl()}/login">${siteUrl()}/login</a></p>
+        <p>We aim to review applications within five working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;
       break;

@@ -82,7 +82,11 @@ export default function MembershipExpired() {
 
   const isRenewable =
     profile != null &&
-    (profile.status === 'expired' || profileNeedsMembershipExpiredRoute(profile));
+    (profile.status === 'expired' ||
+      profile.status === 'archived' ||
+      profileNeedsMembershipExpiredRoute(profile));
+
+  const isArchivedRenewal = profile != null && profile.status === 'archived';
 
   const isEarlyRenewal =
     profile != null &&
@@ -169,11 +173,18 @@ export default function MembershipExpired() {
     <PublicLayout>
       <div className="layout-max" style={{ maxWidth: 560, marginTop: 48 }}>
         <div className="card">
-          <h1>{isEarlyRenewal ? 'Renew membership' : 'Membership expired'}</h1>
+          <h1>
+            {isEarlyRenewal ? 'Renew membership' : isArchivedRenewal ? 'Account archived' : 'Membership expired'}
+          </h1>
           {isEarlyRenewal ? (
             <p>
               Your membership is valid until <strong>{dateLabel}</strong>. You can pay now to add another year
               from that date.
+            </p>
+          ) : isArchivedRenewal ? (
+            <p>
+              Your profile was archived after an extended period without renewal. Pay below to reactivate your
+              membership (your last paid-through date was <strong>{dateLabel}</strong>).
             </p>
           ) : (
             <p>

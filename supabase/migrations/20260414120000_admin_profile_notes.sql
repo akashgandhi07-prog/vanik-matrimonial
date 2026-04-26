@@ -1,4 +1,4 @@
--- Staff-only notes per profile (not on profiles row — avoids accidental exposure via RLS SELECT own).
+-- Staff-only notes per profile (not on profiles row - avoids accidental exposure via RLS SELECT own).
 
 CREATE TABLE IF NOT EXISTS public.admin_profile_notes (
   profile_id uuid PRIMARY KEY REFERENCES public.profiles (id) ON DELETE CASCADE,

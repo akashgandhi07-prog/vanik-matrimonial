@@ -241,13 +241,13 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     <div className="card" style={{ marginTop: 24 }}>
       <h3 style={{ marginTop: 0 }}>Edit member record</h3>
       <p className="field-hint" style={{ marginTop: -6 }}>
-        Full manual control — use carefully. Changing <strong>email</strong> updates their login address too.
+        Full manual control - use carefully. Changing <strong>email</strong> updates their login address too.
         Storage paths (<code>photo_url</code>, ID) must match objects in Supabase Storage if you edit them
         manually.
       </p>
       {profile.status === 'rejected' && (
         <p className="badge badge-warning" style={{ display: 'block', marginBottom: 12 }}>
-          Rejected — use <strong>Return to review queue</strong> below for a one-step unreject, or change fields and
+          Rejected - use <strong>Return to review queue</strong> below for a one-step unreject, or change fields and
           use <strong>Save changes</strong>.
         </p>
       )}
@@ -266,7 +266,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Reference (read-only)</label>
-          <input value={profile.reference_number ?? '—'} readOnly style={{ opacity: 0.85 }} />
+          <input value={profile.reference_number ?? '-'} readOnly style={{ opacity: 0.85 }} />
         </div>
 
         <div>
@@ -365,7 +365,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
         <div>
           <label className="label">Religion</label>
           <select value={religion} onChange={(e) => setReligion(e.target.value)}>
-            <option value="">—</option>
+            <option value="">-</option>
             {['Jain', 'Hindu', 'Other'].map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -405,7 +405,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
             placeholder="e.g. 172"
           />
           <p className="field-hint" style={{ marginBottom: 0 }}>
-            Common: {HEIGHT_OPTIONS.find((h) => h.cm === Number(heightCm))?.label ?? '—'}
+            Common: {HEIGHT_OPTIONS.find((h) => h.cm === Number(heightCm))?.label ?? '-'}
           </p>
         </div>
         <div>

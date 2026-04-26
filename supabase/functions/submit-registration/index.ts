@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { sendResendEmail, letterHtml } from '../_shared/resend.ts';
+import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
 
@@ -329,7 +330,7 @@ Deno.serve(async (req) => {
       `${adminLead}
        <p><strong>Name:</strong> ${firstName} ${surname}<br/>
        <strong>Email:</strong> ${email}</p>
-       <p><a href="${Deno.env.get('PUBLIC_SITE_URL') ?? ''}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
+       <p><a href="${publicSiteBaseUrl()}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
     );
     await sendResendEmail(resendKey, {
       to: notify,

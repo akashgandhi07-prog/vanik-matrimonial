@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.registration_rate_limits (
 
 ALTER TABLE public.registration_rate_limits ENABLE ROW LEVEL SECURITY;
 
--- No client access — Edge Function uses service role only
+-- No client access - Edge Function uses service role only
 CREATE POLICY registration_rate_deny_all ON public.registration_rate_limits
   FOR ALL TO authenticated
   USING (false)

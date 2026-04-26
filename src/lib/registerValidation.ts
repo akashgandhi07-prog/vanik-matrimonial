@@ -11,7 +11,7 @@ export function isValidUkMobile(raw: string): boolean {
   return false;
 }
 
-/** Non-UK: 8–15 digits after stripping non-digits (international numbers). */
+/** Non-UK: 8-15 digits after stripping non-digits (international numbers). */
 export function isValidInternationalPhone(raw: string): boolean {
   const digits = raw.replace(/\D/g, '');
   return digits.length >= 8 && digits.length <= 15;
@@ -26,7 +26,7 @@ export function isValidUkPostcode(raw: string): boolean {
   return /^([A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}|GIR0A{2})$/.test(compact);
 }
 
-/** Outside UK: postal code / ZIP — permissive for international applicants. */
+/** Outside UK: postal code / ZIP - permissive for international applicants. */
 export function isValidLoosePostcode(raw: string): boolean {
   const t = raw.trim();
   return t.length >= 2 && t.length <= 20 && /^[\p{L}0-9\s,''()./-]+$/u.test(t);
@@ -40,7 +40,7 @@ export function isValidPersonName(s: string): boolean {
   return t.length >= 1 && NAME_PATTERN.test(t);
 }
 
-/** Town, country, nationality — allows digits and comma for “City, Country”. */
+/** Town, country, nationality - allows digits and comma for “City, Country”. */
 const PLACE_PATTERN = /^[\p{L}0-9\s,.'()/-]{2,200}$/u;
 
 export function isValidPlaceField(s: string, maxLen: number): boolean {

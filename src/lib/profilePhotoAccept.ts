@@ -5,7 +5,7 @@ function extIsJpgOrPng(name: string): boolean {
   return e === 'jpg' || e === 'jpeg' || e === 'png';
 }
 
-/** Reject non–JPG/PNG uploads. Returns a user-facing message or null if OK. */
+/** Reject non-JPG/PNG uploads. Returns a user-facing message or null if OK. */
 export function rejectReasonIfNotJpegOrPng(file: File): string | null {
   const t = (file.type || '').toLowerCase().trim();
   if (ALLOWED_TYPES.has(t)) return null;

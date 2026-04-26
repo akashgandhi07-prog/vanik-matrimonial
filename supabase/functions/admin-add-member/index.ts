@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
   });
 
   if (privateErr) {
-    // Fatal — roll back profile and auth user
+    // Fatal - roll back profile and auth user
     await admin.from('profiles').delete().eq('id', profileId);
     await admin.auth.admin.deleteUser(userId);
     return jsonResponse({ error: `Failed to save private details: ${privateErr.message}` }, req, 500);

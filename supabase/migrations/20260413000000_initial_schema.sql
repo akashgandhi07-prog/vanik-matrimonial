@@ -1,4 +1,4 @@
--- Vanik Matrimonial Register — Phase 1 schema + RLS
+-- Vanik Matrimonial Register - Phase 1 schema + RLS
 -- Note: age is maintained by trigger from member_private.date_of_birth (spec had cross-table generated column).
 
 -- Extensions
@@ -135,7 +135,7 @@ CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Helpers (JWT: user_metadata.is_admin) — defined before triggers that call is_admin()
+-- Helpers (JWT: user_metadata.is_admin) - defined before triggers that call is_admin()
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql

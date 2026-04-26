@@ -60,7 +60,8 @@ COMMENT ON TABLE public.feedback_tokens IS 'Magic links for anonymous feedback; 
 -- pg_cron: configure in Supabase Dashboard (Database > Cron) or vault + cron.schedule:
 -- https://supabase.com/docs/guides/functions/schedule-functions
 -- Suggested UTC (Authorization: Bearer anon key; verify_jwt=false on each function):
---   expire-memberships — 0 0 * * *
---   send-feedback-reminders, send-renewal-reminders, send-admin-digest — 0 9 * * *
---   cleanup-unverified-accounts — 0 2 * * *
---   archive-lapsed-members — 0 9 * * 1
+--   expire-memberships - 0 0 * * *
+--   send-feedback-reminders, send-renewal-reminders, send-admin-digest - 0 9 * * *
+--   cleanup-unverified-accounts - 0 2 * * *
+--   archive-lapsed-members - 0 9 * * 1 (expired 365+ days past membership_expires_at → archived)
+--   purge-archived-accounts - 0 10 * * * (archived 90+ days since profiles.updated_at → delete auth user; profile cascades)

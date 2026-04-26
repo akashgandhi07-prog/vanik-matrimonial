@@ -43,19 +43,19 @@ function humanizeAction(type: string) {
 const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
   {
     label: 'Profile photo',
-    text: 'Your profile photo does not meet our guidelines — please upload a clear, recent head-and-shoulders picture with your face visible and well lit (similar to a passport-style photo, without filters or heavy editing).',
+    text: 'Your profile photo does not meet our guidelines - please upload a clear, recent head-and-shoulders picture with your face visible and well lit (similar to a passport-style photo, without filters or heavy editing).',
   },
   {
     label: 'Proof of identity',
-    text: 'Your proof of identity was unclear or incomplete — please upload a sharp, colour image of your passport photo page or driving licence (full page, all corners visible, no glare).',
+    text: 'Your proof of identity was unclear or incomplete - please upload a sharp, colour image of your passport photo page or driving licence (full page, all corners visible, no glare).',
   },
   {
     label: 'Name / DOB mismatch',
-    text: 'The name or date of birth on your ID does not match the details you provided — please check your registration and upload matching ID, or contact us if you need to correct your details.',
+    text: 'The name or date of birth on your ID does not match the details you provided - please check your registration and upload matching ID, or contact us if you need to correct your details.',
   },
   {
     label: 'Age requirement',
-    text: 'We could not confirm that you meet the minimum age requirement for this register — please check your date of birth and ID, and resubmit.',
+    text: 'We could not confirm that you meet the minimum age requirement for this register - please check your date of birth and ID, and resubmit.',
   },
   {
     label: 'Eligibility',
@@ -479,7 +479,7 @@ export default function AdminMemberDetail() {
               {recentEmails.map((r) => (
                 <li key={r.id} style={{ marginBottom: 6 }}>
                   <strong>{r.email_type}</strong> · {r.status} · {new Date(r.sent_at).toLocaleString('en-GB')}
-                  {r.subject && <span style={{ color: 'var(--color-text-secondary)' }}> — {r.subject}</span>}
+                  {r.subject && <span style={{ color: 'var(--color-text-secondary)' }}> - {r.subject}</span>}
                 </li>
               ))}
             </ul>
@@ -576,7 +576,7 @@ export default function AdminMemberDetail() {
                   onChange={() => setAdminPhotoMode('direct')}
                 />
                 <span>
-                  <strong>Publish now</strong> — replace main photo and mark approved (use when you trust this image).
+                  <strong>Publish now</strong> - replace main photo and mark approved (use when you trust this image).
                 </span>
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
@@ -587,7 +587,7 @@ export default function AdminMemberDetail() {
                   onChange={() => setAdminPhotoMode('pending_review')}
                 />
                 <span>
-                  <strong>Pending review</strong> — same as a member upload; use &quot;Pending photo review&quot; below
+                  <strong>Pending review</strong> - same as a member upload; use &quot;Pending photo review&quot; below
                   to approve or reject.
                 </span>
               </label>
@@ -631,7 +631,7 @@ export default function AdminMemberDetail() {
                       alert(
                         adminPhotoMode === 'direct'
                           ? 'Photo published as their main profile image.'
-                          : 'Photo saved as pending — approve or reject in the section below when ready.'
+                          : 'Photo saved as pending - approve or reject in the section below when ready.'
                       );
                     } catch (err) {
                       alert(err instanceof Error ? err.message : 'Upload failed');
@@ -706,7 +706,7 @@ export default function AdminMemberDetail() {
             <div style={{ marginTop: 24 }}>
               <label className="label">Reject reason</label>
               <p className="field-hint" style={{ marginTop: 0 }}>
-                Quick templates (click to add — you can edit the text below):
+                Quick templates (click to add - you can edit the text below):
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
                 {REJECTION_REASON_TEMPLATES.map((t) => (
@@ -812,7 +812,7 @@ export default function AdminMemberDetail() {
               <br />
               DOB: {priv.date_of_birth}
               <br />
-              Coupon used: {priv.coupon_used ?? '—'}
+              Coupon used: {priv.coupon_used ?? '-'}
             </p>
           </div>
         )}

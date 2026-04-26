@@ -71,17 +71,46 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: upPriv.message }, req, 500);
   }
 
-  const expires = new Date();
-  expires.setFullYear(expires.getFullYear() + 1);
+  function addOneYear(from: Date): Date {
+    const d = new Date(from);
+    d.setFullYear(d.getFullYear() + 1);
+    return d;
+  }
 
-  const { data: prof } = await admin
+  const { data: prof, error: profFetchErr } = await admin
     .from('profiles')
-    .select('reference_number, gender')
+    .select('reference_number, gender, auth_user_id')
     .eq('id', profileId)
     .single();
+  if (profFetchErr || !prof) {
+    return jsonResponse({ error: 'Member profile not found' }, req, 404);
+  }
 
-  let ref = prof?.reference_number as string | null;
-  if (!ref && prof?.gender) {
+  const { data: paidReg } = await admin
+    .from('stripe_checkout_sessions')
+    .select('updated_at, created_at')
+    .eq('auth_user_id', prof.auth_user_id as string)
+    .eq('purpose', 'registration')
+    .eq('payment_status', 'paid')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let expires: Date;
+  if (paidReg) {
+    const raw = (paidReg.updated_at ?? paidReg.created_at) as string;
+    const paidAt = new Date(raw);
+    expires = addOneYear(paidAt);
+    const now = new Date();
+    if (expires <= now) {
+      expires = addOneYear(now);
+    }
+  } else {
+    expires = addOneYear(new Date());
+  }
+
+  let ref = prof.reference_number as string | null;
+  if (!ref && prof.gender) {
     const { data: r, error: re } = await admin.rpc('assign_next_reference_number', {
       p_profile_id: profileId,
       p_gender: prof.gender,

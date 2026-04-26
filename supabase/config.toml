@@ -5,16 +5,17 @@ project_id = "vanik-matrimonial"
 enabled = true
 
 [auth]
-# Match Vite dev server (see vite.config.ts port). Hosted project: set the same in Dashboard → Auth → URL.
+# Local CLI only. Hosted project: Dashboard → Authentication → URL Configuration — set Site URL to your
+# canonical origin (e.g. https://vanikmatrimonial.co.uk) and add Redirect URLs for that host, previews, and local dev.
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app"]
+additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app", "https://vanikmatrimonial.co.uk/**"]
 
 [auth.email]
 enable_confirmations = true
 
 # Gateway JWT check (verify_jwt): when true, Supabase may return 401 "Invalid JWT" before your code runs
 # (e.g. legacy vs publishable keys, JWT signing changes). These handlers already validate Bearer tokens via
-# auth.getUser() (or magic-link tokens) inside the function — same security, reliable behavior.
+# auth.getUser() (or magic-link tokens) inside the function - same security, reliable behavior.
 # Keep verify_jwt = false for webhooks/cron too (no user JWT).
 [functions.serve-photo]
 verify_jwt = false
@@ -56,6 +57,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.archive-lapsed-members]
+verify_jwt = false
+
+[functions.purge-archived-accounts]
 verify_jwt = false
 
 [functions.feedback-flow]

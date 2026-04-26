@@ -1,4 +1,4 @@
-/** Strip HTML / script — server-side text sanitisation for free-text fields.
+/** Strip HTML / script - server-side text sanitisation for free-text fields.
  *
  * Removes HTML tags then collapses any residual angle brackets.
  * Apostrophes, quotes and ampersands are intentionally preserved because:

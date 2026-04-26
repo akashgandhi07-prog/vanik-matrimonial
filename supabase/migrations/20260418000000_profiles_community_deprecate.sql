@@ -3,4 +3,4 @@
 UPDATE public.profiles SET community = NULL;
 
 COMMENT ON COLUMN public.profiles.community IS
-  'Deprecated — no longer collected in the app. Historical rows were cleared in this migration.';
+  'Deprecated - no longer collected in the app. Historical rows were cleared in this migration.';

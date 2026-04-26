@@ -155,7 +155,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Both limits satisfied — insert the request.
+  -- Both limits satisfied - insert the request.
   remaining := LEAST(remaining_week, remaining_month);
 
   INSERT INTO public.requests (requester_id, candidate_ids, email_status)

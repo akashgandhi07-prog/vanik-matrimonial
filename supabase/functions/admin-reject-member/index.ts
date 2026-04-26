@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
   const admin = getAdminClient();
 
-  // Delete ID document on rejection (GDPR — passport scans must not be retained)
+  // Delete ID document on rejection (GDPR - passport scans must not be retained)
   const { data: priv } = await admin
     .from('member_private')
     .select('id_document_url')

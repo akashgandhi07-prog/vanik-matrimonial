@@ -1,9 +1,9 @@
 -- =============================================================================
--- Vanik Matrimonial Register — COMPLETE DDL (migrations 00000 → 00006)
+-- Vanik Matrimonial Register - COMPLETE DDL (migrations 00000 → 00006)
 --
 -- Idempotent: safe to re-run in SQL Editor. Existing tables are skipped;
 -- policies, triggers, and functions are dropped and recreated so definitions stay
--- in sync. (Does not remove columns you added manually — use migrations for that.)
+-- in sync. (Does not remove columns you added manually - use migrations for that.)
 --
 -- This file is the concatenation of:
 --   20260413000000_initial_schema.sql
@@ -15,7 +15,7 @@
 --   20260413000006_admin_actions_timeline.sql
 -- =============================================================================
 
--- Vanik Matrimonial Register — Phase 1 schema + RLS
+-- Vanik Matrimonial Register - Phase 1 schema + RLS
 -- Note: age is maintained by trigger from member_private.date_of_birth (spec had cross-table generated column).
 
 -- Extensions
@@ -154,7 +154,7 @@ CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Helpers (JWT: user_metadata.is_admin) — defined before triggers that call is_admin()
+-- Helpers (JWT: user_metadata.is_admin) - defined before triggers that call is_admin()
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql
@@ -853,8 +853,9 @@ GRANT ALL ON TABLE public.stripe_checkout_sessions TO postgres, service_role;
 
 -- =============================================================================
 -- Optional: pg_cron (configure in Dashboard → Database → Cron), not SQL-only:
---   expire-memberships — 0 0 * * *
---   send-feedback-reminders, send-renewal-reminders, send-admin-digest — 0 9 * * *
---   cleanup-unverified-accounts — 0 2 * * *
---   archive-lapsed-members — 0 9 * * 1
+--   expire-memberships - 0 0 * * *
+--   send-feedback-reminders, send-renewal-reminders, send-admin-digest - 0 9 * * *
+--   cleanup-unverified-accounts - 0 2 * * *
+--   archive-lapsed-members - 0 9 * * 1 (expired 365+ days past membership_expires_at)
+--   purge-archived-accounts - 0 10 * * * (archived 90+ days → delete auth user)
 -- =============================================================================

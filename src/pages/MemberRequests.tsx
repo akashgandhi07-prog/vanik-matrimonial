@@ -447,7 +447,7 @@ export default function MemberRequests() {
                 </td>
                 <td style={{ padding: 8, fontSize: 13 }}>
                   <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    For admin &amp; safeguarding purposes only — never seen by candidates.
+                    For admin &amp; safeguarding purposes only - never seen by candidates.
                   </p>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {candidateIds.map((cid) => {

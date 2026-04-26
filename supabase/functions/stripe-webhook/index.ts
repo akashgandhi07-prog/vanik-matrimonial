@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       const registeredEmail = privRow?.email as string | null | undefined;
       if (registeredEmail && registeredEmail.toLowerCase() !== customerEmail.toLowerCase()) {
         console.warn(
-          `stripe-webhook renewal: customer_email ${customerEmail} does not match registered email ${registeredEmail} for profile ${profileId} — proceeding (authUserId check passed)`
+          `stripe-webhook renewal: customer_email ${customerEmail} does not match registered email ${registeredEmail} for profile ${profileId} - proceeding (authUserId check passed)`
         );
       }
     }
@@ -159,11 +159,11 @@ Deno.serve(async (req) => {
       .eq('id', profileId);
 
     if (upErr) {
-      // Do NOT delete the session record — deleting causes Stripe to retry, which re-inserts,
+      // Do NOT delete the session record - deleting causes Stripe to retry, which re-inserts,
       // fails again, deletes again, creating an infinite retry loop.
       // Leaving the record in place means Stripe's next retry hits the 23505 idempotency check
       // and receives a 200, stopping retries. The payment record is preserved for manual recovery.
-      console.error('profile renewal update failed — payment recorded, membership NOT extended', upErr);
+      console.error('profile renewal update failed - payment recorded, membership NOT extended', upErr);
       return jsonResponse({ error: upErr.message }, req, 500);
     }
 
