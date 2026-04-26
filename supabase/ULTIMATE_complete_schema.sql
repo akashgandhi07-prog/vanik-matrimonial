@@ -319,7 +319,7 @@ SET search_path = public
 AS $$
 DECLARE
   normalized_ids uuid[];
-  week_start timestamptz := now() - interval '7 days';
+  v_week_start timestamptz := now() - interval '7 days';
   oldest_recent timestamptz;
   used_count integer := 0;
   dup_exists boolean := false;
@@ -359,14 +359,14 @@ BEGIN
   INTO oldest_recent
   FROM public.requests
   WHERE requester_id = p_requester_id
-    AND created_at >= week_start;
+    AND created_at >= v_week_start;
 
   SELECT EXISTS (
     SELECT 1
     FROM public.requests r
     CROSS JOIN LATERAL unnest(r.candidate_ids) AS cid(candidate_id)
     WHERE r.requester_id = p_requester_id
-      AND r.created_at >= week_start
+      AND r.created_at >= v_week_start
       AND cid.candidate_id = ANY(normalized_ids)
   )
   INTO dup_exists;
@@ -390,7 +390,7 @@ BEGIN
   FROM public.requests r
   CROSS JOIN LATERAL unnest(r.candidate_ids) AS cid(candidate_id)
   WHERE r.requester_id = p_requester_id
-    AND r.created_at >= week_start;
+    AND r.created_at >= v_week_start;
 
   remaining := GREATEST(0, 3 - COALESCE(used_count, 0));
 

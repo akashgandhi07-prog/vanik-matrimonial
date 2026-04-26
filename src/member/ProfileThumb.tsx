@@ -1,23 +1,53 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchPhotoSignedUrl } from '../lib/supabase';
+
+function fallbackAvatarUrl(firstName: string) {
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}&size=300&background=e8d5c4&color=7c4a2d&font-size=0.38&bold=true&format=svg`;
+}
+
+/** Single fetch for profile modal header + full-screen lightbox (avoids duplicate signed-URL requests). */
+export function useProfilePhotoDisplayUrl(profileId: string, firstName: string, enabled: boolean): string | null {
+  const fallback = useMemo(() => fallbackAvatarUrl(firstName), [firstName]);
+  const [signed, setSigned] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fetchPhotoSignedUrl(profileId).then((u) => {
+      if (alive && u) setSigned(u);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profileId, enabled]);
+
+  if (!enabled) return null;
+  return signed ?? fallback;
+}
 
 export function ProfileThumb({
   profileId,
   firstName,
   className,
   anonymous = false,
+  /** When set, skips fetch; parent should use {@link useProfilePhotoDisplayUrl}. */
+  controlledSrc,
+  /** `contain` fits the full image (e.g. modal header); `cover` fills a square crop. */
+  imageFit = 'cover',
 }: {
   profileId: string;
   firstName: string;
   className?: string;
-  /** When true, no image is shown (browse-before-request flows - no placeholder). */
   anonymous?: boolean;
+  controlledSrc?: string;
+  imageFit?: 'cover' | 'contain';
 }) {
   const [src, setSrc] = useState<string | null>(null);
+  const isControlled = controlledSrc !== undefined;
   const alt = `${firstName}'s profile photo`;
 
   useEffect(() => {
-    if (anonymous) return;
+    if (anonymous || isControlled) return;
     let alive = true;
     fetchPhotoSignedUrl(profileId).then((u) => {
       if (alive && u) setSrc(u);
@@ -25,29 +55,19 @@ export function ProfileThumb({
     return () => {
       alive = false;
     };
-  }, [profileId, anonymous]);
+  }, [profileId, anonymous, isControlled]);
 
   if (anonymous) {
     return null;
   }
 
-  if (!src) {
-    const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}&size=300&background=e8d5c4&color=7c4a2d&font-size=0.38&bold=true&format=svg`;
-    return (
-      <img
-        src={avatarUrl}
-        alt={alt}
-        className={className}
-        style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8 }}
-      />
-    );
-  }
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 8 }}
-    />
-  );
+  const fallback = fallbackAvatarUrl(firstName);
+  const displaySrc = isControlled ? controlledSrc! : src ?? fallback;
+
+  const style =
+    imageFit === 'cover'
+      ? { width: '100%', aspectRatio: '1', objectFit: 'cover' as const, borderRadius: 8 }
+      : { width: '100%', height: 'auto', maxHeight: '100%', objectFit: 'contain' as const, borderRadius: 0 };
+
+  return <img src={displaySrc} alt={alt} className={className} style={style} />;
 }

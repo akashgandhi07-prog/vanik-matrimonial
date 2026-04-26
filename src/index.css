@@ -1871,12 +1871,108 @@ textarea:focus-visible {
 }
 
 /* Profile modal photo */
+.profile-modal-photo-wrap {
+  flex-shrink: 0;
+  background: #0f172a;
+}
+
+.profile-modal-photo-trigger {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  cursor: zoom-in;
+  background: transparent;
+  line-height: 0;
+}
+
+.profile-modal-photo-trigger:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
 .profile-modal-photo {
   width: 100%;
-  max-height: 320px;
-  object-fit: cover;
+  max-height: min(42vh, 360px);
+  object-fit: contain;
   border-radius: 0;
   display: block;
+}
+
+.profile-photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  padding: 0;
+}
+
+.profile-photo-lightbox-close {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.profile-photo-lightbox-close:hover {
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.profile-photo-lightbox-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-photo-lightbox-img {
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  object-fit: contain;
+}
+
+.profile-photo-lightbox-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 16.666%;
+  min-height: 56px;
+  display: flex;
+  align-items: flex-end;
+  padding: 16px 20px max(16px, env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
+  pointer-events: none;
+}
+
+.profile-photo-lightbox-name {
+  font-size: clamp(1.125rem, 3.5vw, 1.5rem);
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
 .profile-modal-panel {

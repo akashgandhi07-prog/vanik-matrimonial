@@ -75,7 +75,11 @@ export default function Landing() {
               <ol className="landing-steps-list">
                 <li>Register and upload proof of identity. We review your application within five working days.</li>
                 <li>Once approved, browse verified profiles and save anyone you'd like to know more about.</li>
-                <li>Request contact details and view them directly in your My requests page.</li>
+                <li>
+                  Request contact details and view them directly in your My requests page. You can line up
+                  to three profiles at a time; modest weekly and monthly limits keep introductions fair for
+                  everyone.
+                </li>
               </ol>
             </div>
 

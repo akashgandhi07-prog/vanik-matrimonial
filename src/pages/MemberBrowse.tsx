@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ProfileThumb } from '../member/ProfileThumb';
+import { Link, useNavigate } from 'react-router-dom';
 import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
@@ -11,23 +10,7 @@ import {
   hasOutstandingFeedbackBlock,
 } from '../member/requestQuota';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
-import { whatsappUrlFromPhone } from '../lib/whatsapp';
 import { EdgeFunctionHttpError, invokeFunction, supabase } from '../lib/supabase';
-
-type ContactDetailRow = {
-  profile_id: string;
-  first_name: string;
-  full_name: string;
-  reference_number: string;
-  mobile: string;
-  father_name: string;
-  mother_name: string;
-};
-
-function telHref(phone: string): string {
-  const cleaned = phone.replace(/[^\d+]/g, '');
-  return cleaned ? `tel:${cleaned}` : `tel:${encodeURIComponent(phone)}`;
-}
 
 const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
@@ -88,15 +71,13 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
 }
 
 export default function MemberBrowse() {
+  const navigate = useNavigate();
   const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll } =
     useMemberArea();
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [tray, setTray] = useState<string[]>([]);
   const [trayDrawerOpen, setTrayDrawerOpen] = useState(false);
-  const [contactsOpen, setContactsOpen] = useState<null | { contacts: ContactDetailRow[] }>(
-    null
-  );
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
   const [submitError, setSubmitError] = useState<{
     type: 'weekly_limit' | 'monthly_limit' | 'feedback_required' | 'already_requested' | 'generic';
@@ -120,6 +101,14 @@ export default function MemberBrowse() {
     }
   }
 
+  const requestedCandidateIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of requests) {
+      for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
+    }
+    return ids;
+  }, [requests]);
+
   const filtered = useMemo(() => {
     if (!profile) return [];
     const { ageRange, dietF, religionF, heightRange, sort } = appliedFilters;
@@ -131,17 +120,20 @@ export default function MemberBrowse() {
       if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
       return true;
     });
-    if (sort === 'newest') {
-      rows = [...rows].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-    } else if (sort === 'youngest') {
-      rows = [...rows].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
-    } else {
-      rows = [...rows].sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
-    }
+    const requestedRank = (id: string) => (requestedCandidateIds.has(id) ? 1 : 0);
+    rows = [...rows].sort((a, b) => {
+      const byRequested = requestedRank(a.id) - requestedRank(b.id);
+      if (byRequested !== 0) return byRequested;
+      if (sort === 'newest') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      if (sort === 'youngest') {
+        return (a.age ?? 999) - (b.age ?? 999);
+      }
+      return (b.age ?? 0) - (a.age ?? 0);
+    });
     return rows;
-  }, [profile, candidates, appliedFilters]);
+  }, [profile, candidates, appliedFilters, requestedCandidateIds]);
 
   const filtersActive = useMemo(() => {
     const defaults = defaultFilters();
@@ -163,14 +155,6 @@ export default function MemberBrowse() {
   function applyFilters() {
     setAppliedFilters(cloneFilters(draftFilters));
   }
-
-  const requestedCandidateIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const r of requests) {
-      for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
-    }
-    return ids;
-  }, [requests]);
 
   const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
   const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
@@ -208,7 +192,6 @@ export default function MemberBrowse() {
       const res = (await invokeFunction('submit-contact-request', {
         candidate_ids: tray,
       })) as {
-        contacts?: Array<Record<string, string>>;
         error?: string;
         message?: string;
         request_ids?: string[];
@@ -223,10 +206,8 @@ export default function MemberBrowse() {
       }
       setTray([]);
       setTrayDrawerOpen(false);
-      setContactsOpen({
-        contacts: (res.contacts ?? []) as ContactDetailRow[],
-      });
       void loadAll();
+      navigate('/dashboard/requests');
     } catch (e) {
       if (e instanceof EdgeFunctionHttpError) {
         const msg = e.message;
@@ -781,67 +762,6 @@ export default function MemberBrowse() {
         />
       )}
 
-      {contactsOpen && (
-        <div
-          role="dialog"
-          aria-modal
-          aria-labelledby="contacts-dialog-title"
-          className="modal-backdrop"
-          onClick={() => setContactsOpen(null)}
-        >
-          <div className="card modal-panel modal-panel--wide" onClick={(e) => e.stopPropagation()}>
-            <h2 id="contacts-dialog-title" style={{ marginTop: 0 }}>
-              Here are their contact details
-            </h2>
-            <p style={{ margin: '0 0 4px', fontSize: 14, color: 'var(--color-text-secondary)' }}>
-              You requested {contactsOpen.contacts.length} profile{contactsOpen.contacts.length === 1 ? '' : 's'}.
-              Respect their privacy and the society&apos;s guidelines when you get in touch.
-            </p>
-            <div className="contacts-success-grid">
-              {contactsOpen.contacts.map((c) => {
-                const wa = whatsappUrlFromPhone(c.mobile);
-                return (
-                  <article key={c.profile_id} className="contact-success-card">
-                    <div className="contact-success-card-photo">
-                      <ProfileThumb profileId={c.profile_id} firstName={c.first_name} />
-                    </div>
-                    <div className="contact-success-card-body">
-                      <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>{c.full_name}</h3>
-                      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-                        <a href={telHref(c.mobile)} style={{ fontWeight: 600 }}>
-                          {c.mobile}
-                        </a>
-                      </p>
-                      <div className="contact-success-actions">
-                        {wa ? (
-                          <a
-                            className="btn-whatsapp"
-                            href={wa}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`WhatsApp ${c.first_name}`}
-                          >
-                            WhatsApp
-                          </a>
-                        ) : null}
-                        <a className="btn btn-secondary" href={telHref(c.mobile)}>
-                          Call
-                        </a>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-            <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', marginTop: 8 }}>
-              These details are also available any time under <strong>My requests</strong>.
-            </p>
-            <button type="button" className="btn btn-primary" onClick={() => setContactsOpen(null)}>
-              Done
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

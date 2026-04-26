@@ -126,6 +126,101 @@ Deno.serve(async (req) => {
     return jsonResponse({ profiles: rows, emails, pending_previews: pendingPreviews }, req);
   }
 
+  if (action === 'export_emails') {
+    const rawStatuses = Array.isArray(body.statuses) ? body.statuses : [];
+    const allowed = new Set([
+      'active',
+      'pending',
+      'expires60',
+      'expired',
+      'lapsed90',
+      'rejected30',
+      'archived',
+      'matched',
+    ]);
+    const statuses = [...new Set(rawStatuses.filter((x): x is string => typeof x === 'string' && allowed.has(x)))];
+    if (statuses.length === 0) {
+      return jsonResponse(
+        { error: 'statuses required: non-empty array of active|pending|expires60|expired|lapsed90|rejected30|archived|matched' },
+        req,
+        400
+      );
+    }
+
+    const lapseCutoff = new Date(Date.now() - 365 * 864e5).toISOString();
+    const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
+    const nowIso = new Date().toISOString();
+    const expires60Until = new Date(Date.now() + 60 * 864e5).toISOString();
+
+    const profileIdSet = new Set<string>();
+    const counts: Record<string, number> = {};
+
+    for (const f of statuses) {
+      let q = admin.from('profiles').select('id');
+      if (f === 'pending') q = q.eq('status', 'pending_approval');
+      else if (f === 'active') q = q.eq('status', 'active');
+      else if (f === 'expired') q = q.eq('status', 'expired');
+      else if (f === 'rejected30') q = q.eq('status', 'rejected').gte('updated_at', since30);
+      else if (f === 'archived') q = q.eq('status', 'archived');
+      else if (f === 'matched') q = q.eq('status', 'matched');
+      else if (f === 'lapsed90') {
+        q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
+      } else if (f === 'expires60') {
+        q = q
+          .eq('status', 'active')
+          .not('membership_expires_at', 'is', null)
+          .gte('membership_expires_at', nowIso)
+          .lte('membership_expires_at', expires60Until);
+      } else {
+        return jsonResponse({ error: 'Invalid filter in statuses' }, req, 400);
+      }
+
+      const { data: profRows, error: pErr } = await q;
+      if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
+      const ids = (profRows ?? []).map((row: { id: string }) => row.id);
+      counts[f] = ids.length;
+      for (const id of ids) profileIdSet.add(id);
+    }
+
+    const allIds = [...profileIdSet];
+    const seenLower = new Map<string, string>();
+    const chunkSize = 500;
+    for (let i = 0; i < allIds.length; i += chunkSize) {
+      const chunk = allIds.slice(i, i + chunkSize);
+      const { data: priv, error: mErr } = await admin
+        .from('member_private')
+        .select('email')
+        .in('profile_id', chunk);
+      if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+      for (const r of priv ?? []) {
+        const row = r as { email: string | null };
+        const raw = (row.email ?? '').trim();
+        if (!raw) continue;
+        const key = raw.toLowerCase();
+        if (!seenLower.has(key)) seenLower.set(key, raw);
+      }
+    }
+
+    const emails = [...seenLower.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: null,
+      action_type: 'email_export',
+      notes: `groups=${statuses.join(',')} unique_emails=${emails.length} profiles_union=${profileIdSet.size}`.slice(0, 30000),
+    });
+
+    return jsonResponse(
+      {
+        emails,
+        counts,
+        total: emails.length,
+        profiles_union: profileIdSet.size,
+      },
+      req
+    );
+  }
+
   if (action === 'list') {
     const users: Array<{
       id: string;

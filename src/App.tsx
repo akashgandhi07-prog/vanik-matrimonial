@@ -4,6 +4,7 @@ import { SessionProvider } from './components/SessionContext';
 import { SiteHeader } from './components/SiteHeader';
 import AdminAddMember from './pages/admin/AdminAddMember';
 import AdminCoupons from './pages/admin/AdminCoupons';
+import AdminEmailExport from './pages/admin/AdminEmailExport';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
 import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminLayout from './pages/admin/AdminLayout';
@@ -92,6 +93,7 @@ export default function App() {
               <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
               <Route path="coupons" element={<AdminCoupons />} />
               <Route path="email-log" element={<AdminEmailLog />} />
+              <Route path="email-export" element={<AdminEmailExport />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

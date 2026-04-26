@@ -1,8 +1,5 @@
--- Add a calendar-month cap (6 distinct candidates) on top of the existing rolling-7-day cap (3).
--- Members can request at most 3 distinct candidates in any rolling 7-day window AND
--- at most 6 distinct candidates in the current calendar month (00:00 UTC on the 1st to now()).
-
-DROP FUNCTION IF EXISTS public.create_contact_request_atomic(uuid, uuid[]);
+-- `requests` has a generated column `week_start`. The PL/pgSQL variable with the same name
+-- made `... >= week_start` ambiguous inside SQL subqueries. Rename the variable to v_week_start.
 
 CREATE OR REPLACE FUNCTION public.create_contact_request_atomic(
   p_requester_id uuid,

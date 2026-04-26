@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { ProfileThumb } from './ProfileThumb';
+import { useEffect, useState } from 'react';
+import { ProfileThumb, useProfilePhotoDisplayUrl } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
 import type { ProfileRow } from './memberContext';
 
@@ -49,14 +49,22 @@ export function ProfileModal({
   onToggleBookmark,
   onToggleTray,
 }: Props) {
-  // Close on Escape
+  const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
+  const photoDisplayUrl = useProfilePhotoDisplayUrl(c.id, c.first_name, !anonymous);
+
+  // Close on Escape (lightbox first, then modal)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      if (photoLightboxOpen) {
+        setPhotoLightboxOpen(false);
+        return;
+      }
+      onClose();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, photoLightboxOpen]);
 
   // Lock body scroll
   useEffect(() => {
@@ -102,14 +110,26 @@ export function ProfileModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Photo header (hidden when browsing anonymously - no placeholder) */}
-        <div style={{ position: 'relative', minHeight: anonymous ? 44 : undefined }}>
-          {!anonymous && (
-            <ProfileThumb
-              profileId={c.id}
-              firstName={c.first_name}
-              className="profile-modal-photo"
-              anonymous={false}
-            />
+        <div
+          className={anonymous ? undefined : 'profile-modal-photo-wrap'}
+          style={{ position: 'relative', minHeight: anonymous ? 44 : undefined }}
+        >
+          {!anonymous && photoDisplayUrl && (
+            <button
+              type="button"
+              className="profile-modal-photo-trigger"
+              aria-label="View full-size photo"
+              onClick={() => setPhotoLightboxOpen(true)}
+            >
+              <ProfileThumb
+                profileId={c.id}
+                firstName={c.first_name}
+                className="profile-modal-photo"
+                anonymous={false}
+                controlledSrc={photoDisplayUrl}
+                imageFit="contain"
+              />
+            </button>
           )}
           <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
             {'\u2715'}
@@ -188,6 +208,31 @@ export function ProfileModal({
           )}
         </div>
       </div>
+
+      {!anonymous && photoLightboxOpen && photoDisplayUrl && (
+        <div
+          className="profile-photo-lightbox"
+          role="dialog"
+          aria-modal
+          aria-label="Full-size profile photo"
+          onClick={() => setPhotoLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            className="profile-photo-lightbox-close"
+            aria-label="Close full-size photo"
+            onClick={() => setPhotoLightboxOpen(false)}
+          >
+            {'\u2715'}
+          </button>
+          <div className="profile-photo-lightbox-frame" onClick={(e) => e.stopPropagation()}>
+            <img src={photoDisplayUrl} alt="" className="profile-photo-lightbox-img" />
+            <div className="profile-photo-lightbox-overlay" aria-hidden>
+              <span className="profile-photo-lightbox-name">{displayTitle}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -95,6 +95,9 @@ export default function AdminLayout() {
         <NavLink to="/admin/email-log" className={navCls} onClick={() => setSidebarOpen(false)}>
           Email log
         </NavLink>
+        <NavLink to="/admin/email-export" className={navCls} onClick={() => setSidebarOpen(false)}>
+          Export emails
+        </NavLink>
         <NavLink to="/admin/settings" className={navCls} onClick={() => setSidebarOpen(false)}>
           Settings
         </NavLink>
