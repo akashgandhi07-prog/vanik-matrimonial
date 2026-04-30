@@ -36,7 +36,7 @@ async function checkRateLimit(
     return true;
   }
 
-  if (row.attempt_count >= 3) return false;
+  if (row.attempt_count >= 20) return false;
 
   await admin
     .from('registration_rate_limits')
