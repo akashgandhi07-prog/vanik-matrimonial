@@ -51,7 +51,7 @@ const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
   },
   {
     label: 'Name / DOB mismatch',
-    text: 'The name or date of birth on your ID does not match the details you provided - please check your registration and upload matching ID, or contact us if you need to correct your details.',
+    text: 'The name or date of birth on your ID does not match the details you provided - please correct your details in your application and upload matching ID, then submit again.',
   },
   {
     label: 'Age requirement',
@@ -59,7 +59,7 @@ const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
   },
   {
     label: 'Eligibility',
-    text: 'Based on the information provided, we are not able to proceed with this application under our current register rules. If you believe this is a mistake, please reply with any further context.',
+    text: 'Your application is missing required eligibility information. Please review and complete all mandatory fields, upload clear documents/photos, and submit again.',
   },
 ];
 

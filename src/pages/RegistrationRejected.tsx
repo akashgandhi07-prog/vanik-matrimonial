@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { fetchMyProfileStatusLite, pathForMemberStatus } from '../lib/memberProfileClient';
+import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { supabase } from '../lib/supabase';
 
 const POLL_MS = 60_000;
@@ -12,6 +13,7 @@ export default function RegistrationRejected() {
   const [noSession, setNoSession] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +44,7 @@ export default function RegistrationRejected() {
         }
 
         setReason(lite.rejection_reason?.trim() || 'No reason provided.');
+        setStatusNote(`Still rejected as of ${new Date().toLocaleTimeString()}.`);
       } catch {
         if (!cancelled) setSyncError('Could not refresh your status right now.');
       }
@@ -61,17 +64,9 @@ export default function RegistrationRejected() {
     };
   }, [navigate]);
 
-  const reasonLower = (reason ?? '').toLowerCase();
-  const suggestions = [
-    reasonLower.includes('photo') ? 'Upload a clear, recent head-and-shoulders photo in JPG/PNG format.' : null,
-    reasonLower.includes('id') || reasonLower.includes('identity')
-      ? 'Upload a readable ID image (passport photo page or driving licence).'
-      : null,
-    reasonLower.includes('name') ? 'Make sure first name, surname, and parent names match your official records.' : null,
-    reasonLower.includes('address') || reasonLower.includes('postcode')
-      ? 'Check your address and postcode for typos, then submit again.'
-      : null,
-  ].filter(Boolean) as string[];
+  const guide = rejectionGuideFromReason(reason);
+  const suggestions = guide.suggestions;
+  const fixPath = `/register?fix_step=${guide.defaultStep}`;
 
   return (
     <PublicLayout>
@@ -96,6 +91,11 @@ export default function RegistrationRejected() {
                   {syncError}
                 </p>
               )}
+              {statusNote && !syncError && (
+                <p role="status" style={{ color: 'var(--color-text-secondary)' }}>
+                  {statusNote}
+                </p>
+              )}
               {suggestions.length > 0 && (
                 <>
                   <p style={{ marginTop: 16, marginBottom: 8 }}>
@@ -113,7 +113,7 @@ export default function RegistrationRejected() {
                 again for review.
               </p>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
-                <Link to="/register" className="btn btn-primary">
+                <Link to={fixPath} className="btn btn-primary">
                   Update and resubmit application
                 </Link>
                 <button
@@ -128,10 +128,18 @@ export default function RegistrationRejected() {
                         const {
                           data: { user },
                         } = await supabase.auth.getUser();
-                        if (!user) return;
+                        if (!user) {
+                          setSyncError('You are signed out. Please sign in again to check your status.');
+                          return;
+                        }
                         const lite = await fetchMyProfileStatusLite(user.id);
                         const next = pathForMemberStatus(lite?.status ?? null);
-                        if (next && next !== '/registration-rejected') navigate(next, { replace: true });
+                        if (next && next !== '/registration-rejected') {
+                          navigate(next, { replace: true });
+                          return;
+                        }
+                        setReason(lite?.rejection_reason?.trim() || 'No reason provided.');
+                        setStatusNote(`Still rejected as of ${new Date().toLocaleTimeString()}.`);
                       } catch {
                         setSyncError('Status check failed. Please try again.');
                       } finally {
@@ -150,7 +158,7 @@ export default function RegistrationRejected() {
             </>
           )}
           <p style={{ color: 'var(--color-text-secondary)', marginTop: 16 }}>
-            If you have questions, please email{' '}
+            For technical issues only, contact{' '}
             <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
           </p>
           <Link to="/" className="btn btn-secondary" style={{ marginTop: 8 }}>

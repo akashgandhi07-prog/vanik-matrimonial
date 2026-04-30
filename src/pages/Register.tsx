@@ -15,6 +15,7 @@ import {
   isValidUkPostcode,
 } from '../lib/registerValidation';
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
+import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 
 const LS_KEY = 'vmr_registration_v1';
 
@@ -272,6 +273,18 @@ export default function Register() {
   useEffect(() => {
     setFieldErrors({});
   }, [form.step]);
+
+  useEffect(() => {
+    const raw = searchParams.get('fix_step');
+    if (!raw) return;
+    const n = Number(raw);
+    if (n === 1 || n === 2 || n === 3) {
+      setForm((prev) => ({ ...prev, step: n }));
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('fix_step');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -835,15 +848,8 @@ export default function Register() {
   const step = form.step;
   const progress = ((step - 1) / 3) * 100;
   const stepLabels = ['Identity & address', 'Personal details', 'Profile & photo'] as const;
-  const resubmitReasonLower = (resubmitReason ?? '').toLowerCase();
-  const resubmitTips = [
-    resubmitReasonLower.includes('photo') ? 'Use a clear, recent face photo with good lighting.' : null,
-    resubmitReasonLower.includes('id') || resubmitReasonLower.includes('identity')
-      ? 'Upload a sharp and fully visible ID image.'
-      : null,
-    resubmitReasonLower.includes('name') ? 'Check that personal names match official records.' : null,
-    resubmitReasonLower.includes('address') ? 'Review address and postcode for accuracy.' : null,
-  ].filter(Boolean) as string[];
+  const resubmitGuide = rejectionGuideFromReason(resubmitReason);
+  const resubmitTips = resubmitGuide.suggestions;
 
   return (
     <PublicLayout>
@@ -870,7 +876,7 @@ export default function Register() {
               }}
             >
               <strong>Resubmitting your application.</strong> Your previous details are pre-filled below. You
-              must upload a <strong>new proof of identity</strong> and a <strong>new profile photo</strong>, then
+              can correct the highlighted issues and re-upload required files, then
               complete all three steps and submit again for review.
               {resubmitReason && (
                 <p style={{ margin: '8px 0 0', fontSize: 13 }}>

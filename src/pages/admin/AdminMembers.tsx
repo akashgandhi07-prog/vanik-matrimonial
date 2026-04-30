@@ -38,6 +38,14 @@ const FILTERS = [
   'expires60',
 ] as const;
 
+function filterCandidates(filter: (typeof FILTERS)[number]): string[] {
+  if (filter === 'photo_pending') return ['photo_pending', 'photoPending', 'pending_photo', 'photo-pending'];
+  if (filter === 'rejected30') return ['rejected30', 'rejected_30', 'rejected-30'];
+  if (filter === 'expires60') return ['expires60', 'expires_60', 'expiring60', 'expiring_60'];
+  if (filter === 'lapsed90') return ['lapsed90', 'lapsed_90', 'long_lapsed', 'lapsed365'];
+  return [filter];
+}
+
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -84,14 +92,33 @@ export default function AdminMembers() {
     setLoadError(null);
     setLoading(true);
     try {
-      const res = (await invokeFunction('admin-manage-users', {
-        action: 'list_profiles',
-        filter,
-      })) as {
-        profiles?: Profile[];
-        emails?: Record<string, string>;
-        pending_previews?: PendingPreviews;
-      };
+      let res:
+        | {
+            profiles?: Profile[];
+            emails?: Record<string, string>;
+            pending_previews?: PendingPreviews;
+          }
+        | null = null;
+      let lastError: unknown = null;
+      const candidates = filterCandidates(filter);
+      for (const f of candidates) {
+        try {
+          res = (await invokeFunction('admin-manage-users', {
+            action: 'list_profiles',
+            filter: f,
+          })) as {
+            profiles?: Profile[];
+            emails?: Record<string, string>;
+            pending_previews?: PendingPreviews;
+          };
+          break;
+        } catch (e) {
+          lastError = e;
+          const msg = e instanceof Error ? e.message.toLowerCase() : '';
+          if (!msg.includes('invalid filter')) throw e;
+        }
+      }
+      if (!res) throw (lastError instanceof Error ? lastError : new Error('Could not load members'));
       setMembers((res.profiles ?? []) as Profile[]);
       setEmailByProfileId(res.emails ?? {});
       setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});

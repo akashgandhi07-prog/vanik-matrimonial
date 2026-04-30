@@ -129,8 +129,14 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Unfortunately we are unable to approve your application at this time.</p>
         <p><strong>Reason:</strong> ${reason}</p>
-        <p>You are welcome to sign in and <strong>update your application</strong> (for example a clearer profile photo or ID image) and submit again: <a href="${registerUrl}">${registerUrl}</a></p>
-        <p>If you believe this is an error, please reply to this email.</p>`;
+        <p>You can now self-correct and resubmit online - no manual support is required for normal fixes.</p>
+        <ul>
+          <li>Sign in and open your application: <a href="${registerUrl}">${registerUrl}</a></li>
+          <li>Update any missing or incorrect details</li>
+          <li>Upload a new clear photo and proof of identity if requested</li>
+          <li>Submit again for review</li>
+        </ul>
+        <p>Please only email us if you experience a technical issue that prevents submission.</p>`;
       break;
     }
     case 'contact_details': {

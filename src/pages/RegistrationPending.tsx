@@ -12,6 +12,7 @@ export default function RegistrationPending() {
   const [ref, setRef] = useState(() => sessionStorage.getItem('vmr_pending_ref') ?? '');
   const [checking, setChecking] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,7 +42,9 @@ export default function RegistrationPending() {
         const next = pathForMemberStatus(lite?.status ?? null);
         if (next && next !== '/registration-pending') {
           navigate(next, { replace: true });
+          return;
         }
+        setStatusNote(`Still under review as of ${new Date().toLocaleTimeString()}.`);
       } catch {
         if (!cancelled) setSyncError('Could not refresh your status right now. Please try again.');
       }
@@ -99,6 +102,11 @@ export default function RegistrationPending() {
               {syncError}
             </p>
           )}
+          {statusNote && !syncError && (
+            <p role="status" style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+              {statusNote}
+            </p>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
             <button
               type="button"
@@ -113,10 +121,17 @@ export default function RegistrationPending() {
                       data: { session },
                     } = await supabase.auth.getSession();
                     const uid = session?.user?.id;
-                    if (!uid) return;
+                    if (!uid) {
+                      setSyncError('You are signed out. Please sign in again to check your status.');
+                      return;
+                    }
                     const lite = await fetchMyProfileStatusLite(uid);
                     const next = pathForMemberStatus(lite?.status ?? null);
-                    if (next && next !== '/registration-pending') navigate(next, { replace: true });
+                    if (next && next !== '/registration-pending') {
+                      navigate(next, { replace: true });
+                      return;
+                    }
+                    setStatusNote(`Still under review as of ${new Date().toLocaleTimeString()}.`);
                   } catch {
                     setSyncError('Status check failed. Please try again.');
                   } finally {
