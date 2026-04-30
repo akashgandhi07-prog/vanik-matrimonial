@@ -10,33 +10,40 @@ export default function RegistrationPending() {
   const navigate = useNavigate();
   const [email, setEmail] = useState(() => sessionStorage.getItem('vmr_pending_email') ?? '');
   const [ref, setRef] = useState(() => sessionStorage.getItem('vmr_pending_ref') ?? '');
+  const [checking, setChecking] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function sync() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const u = session?.user;
-      if (!u) return;
-      if (u.email) setEmail(u.email);
+      setSyncError(null);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const u = session?.user;
+        if (!u) return;
+        if (u.email) setEmail(u.email);
 
-      const lite = await fetchMyProfileStatusLite(u.id);
-      if (cancelled) return;
+        const lite = await fetchMyProfileStatusLite(u.id);
+        if (cancelled) return;
 
-      if (lite?.reference_number) {
-        setRef(lite.reference_number);
-        try {
-          sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
-        } catch {
-          /* ignore */
+        if (lite?.reference_number) {
+          setRef(lite.reference_number);
+          try {
+            sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
+          } catch {
+            /* ignore */
+          }
         }
-      }
 
-      const next = pathForMemberStatus(lite?.status ?? null);
-      if (next && next !== '/registration-pending') {
-        navigate(next, { replace: true });
+        const next = pathForMemberStatus(lite?.status ?? null);
+        if (next && next !== '/registration-pending') {
+          navigate(next, { replace: true });
+        }
+      } catch {
+        if (!cancelled) setSyncError('Could not refresh your status right now. Please try again.');
       }
     }
 
@@ -80,31 +87,45 @@ export default function RegistrationPending() {
             </p>
           )}
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: '1.25rem' }}>
-            If you were approved recently, this page updates when you return to the tab or within about a minute  - 
+            If you were approved recently, this page updates when you return to the tab or within about a minute -
             or use <strong>Check status</strong> below.
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
             Need help? Contact{' '}
             <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
           </p>
+          {syncError && (
+            <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 14 }}>
+              {syncError}
+            </p>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 24 }}>
             <button
               type="button"
               className="btn btn-primary"
+              disabled={checking}
               onClick={() => {
                 void (async () => {
-                  const {
-                    data: { session },
-                  } = await supabase.auth.getSession();
-                  const uid = session?.user?.id;
-                  if (!uid) return;
-                  const lite = await fetchMyProfileStatusLite(uid);
-                  const next = pathForMemberStatus(lite?.status ?? null);
-                  if (next && next !== '/registration-pending') navigate(next, { replace: true });
+                  setChecking(true);
+                  setSyncError(null);
+                  try {
+                    const {
+                      data: { session },
+                    } = await supabase.auth.getSession();
+                    const uid = session?.user?.id;
+                    if (!uid) return;
+                    const lite = await fetchMyProfileStatusLite(uid);
+                    const next = pathForMemberStatus(lite?.status ?? null);
+                    if (next && next !== '/registration-pending') navigate(next, { replace: true });
+                  } catch {
+                    setSyncError('Status check failed. Please try again.');
+                  } finally {
+                    setChecking(false);
+                  }
                 })();
               }}
             >
-              Check status
+              {checking ? 'Checking…' : 'Check status'}
             </button>
             <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
               Sign out

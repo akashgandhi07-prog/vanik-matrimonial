@@ -67,6 +67,8 @@ type MemberCtx = {
     email_status: string;
   }[];
   feedbackKeys: Set<string>;
+  notice: { type: 'error' | 'success'; text: string } | null;
+  clearNotice: () => void;
   loadAll: () => Promise<void>;
   toggleBookmark: (id: string) => Promise<void>;
 };
@@ -98,6 +100,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     }[]
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
   const loadChainRef = useRef(Promise.resolve());
@@ -369,7 +372,9 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           .eq("bookmarked_id", id);
         if (error) {
           setBookmarks(prev);
-          alert(error.message);
+          setNotice({ type: 'error', text: `Could not remove bookmark: ${error.message}` });
+        } else {
+          setNotice(null);
         }
       } else {
         setBookmarks((b) => [...b, id]);
@@ -378,7 +383,9 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           .insert({ member_id: profile.id, bookmarked_id: id });
         if (error) {
           setBookmarks(prev);
-          alert(error.message);
+          setNotice({ type: 'error', text: `Could not save bookmark: ${error.message}` });
+        } else {
+          setNotice({ type: 'success', text: 'Profile saved to bookmarks.' });
         }
       }
     },
@@ -395,6 +402,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      notice,
+      clearNotice: () => setNotice(null),
       loadAll,
       toggleBookmark,
     }),
@@ -407,6 +416,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      notice,
       loadAll,
       toggleBookmark,
     ],

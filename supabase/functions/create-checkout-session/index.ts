@@ -13,11 +13,9 @@ function safeInternalPath(p: unknown, fallback: string): string {
   return p;
 }
 
-function siteBase(req: Request, body: { client_origin?: string }): string {
+function siteBase(): string {
   const env = Deno.env.get('PUBLIC_SITE_URL')?.replace(/\/$/, '').trim();
   if (env) return env;
-  const origin = (body.client_origin ?? req.headers.get('origin') ?? '').replace(/\/$/, '').trim();
-  if (origin.startsWith('http://') || origin.startsWith('https://')) return origin;
   return publicSiteBaseUrl();
 }
 
@@ -51,7 +49,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
-  let body: { purpose?: Purpose; client_origin?: string; renewal_success_path?: string; renewal_cancel_path?: string };
+  let body: { purpose?: Purpose; renewal_success_path?: string; renewal_cancel_path?: string };
   try {
     body = await req.json();
   } catch {
@@ -59,7 +57,7 @@ Deno.serve(async (req) => {
   }
 
   const purpose = body.purpose === 'renewal' ? 'renewal' : 'registration';
-  const base = siteBase(req, body);
+  const base = siteBase();
 
   const admin = getAdminClient();
   const uid = userData.user.id;

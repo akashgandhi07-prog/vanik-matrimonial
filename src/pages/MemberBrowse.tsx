@@ -70,9 +70,26 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
   return p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female');
 }
 
+function profileCompletenessPercent(profile: ProfileRow): number {
+  const checks = [
+    !!profile.education?.trim(),
+    !!profile.job_title?.trim(),
+    !!profile.height_cm,
+    !!profile.diet?.trim(),
+    !!profile.hobbies?.trim(),
+    !!profile.religion?.trim(),
+    !!profile.nationality?.trim(),
+    !!profile.place_of_birth?.trim(),
+    !!profile.town_country_of_origin?.trim(),
+    !!profile.photo_url,
+  ];
+  const score = checks.filter(Boolean).length;
+  return Math.round((score / checks.length) * 100);
+}
+
 export default function MemberBrowse() {
   const navigate = useNavigate();
-  const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll } =
+  const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll, notice, clearNotice } =
     useMemberArea();
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
@@ -87,6 +104,7 @@ export default function MemberBrowse() {
   const [seekUpdating, setSeekUpdating] = useState(false);
   const [seekError, setSeekError] = useState<string | null>(null);
   const [traySubmitting, setTraySubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<{ requestId: string; count: number } | null>(null);
 
   async function persistSeeking(g: 'Male' | 'Female' | 'Both') {
     if (!profile || effectiveSeeking(profile) === g || seekUpdating) return;
@@ -153,8 +171,16 @@ export default function MemberBrowse() {
   }
 
   function applyFilters() {
+    if (draftFilters.ageRange[0] > draftFilters.ageRange[1]) return;
+    if (draftFilters.heightRange[0] > draftFilters.heightRange[1]) return;
     setAppliedFilters(cloneFilters(draftFilters));
   }
+  const draftFilterError =
+    draftFilters.ageRange[0] > draftFilters.ageRange[1]
+      ? 'Minimum age cannot be greater than maximum age.'
+      : draftFilters.heightRange[0] > draftFilters.heightRange[1]
+        ? 'Minimum height cannot be greater than maximum height.'
+        : null;
 
   const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
   const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
@@ -194,6 +220,7 @@ export default function MemberBrowse() {
       })) as {
         error?: string;
         message?: string;
+        request_id?: string;
         request_ids?: string[];
       };
       if (res.error) {
@@ -207,7 +234,8 @@ export default function MemberBrowse() {
       setTray([]);
       setTrayDrawerOpen(false);
       void loadAll();
-      navigate('/dashboard/requests');
+      setSubmitSuccess({ requestId: res.request_id ?? '', count: tray.length });
+      setSubmitError(null);
     } catch (e) {
       if (e instanceof EdgeFunctionHttpError) {
         const msg = e.message;
@@ -476,15 +504,75 @@ export default function MemberBrowse() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!pendingFilterChanges}
+              disabled={!pendingFilterChanges || !!draftFilterError}
               onClick={applyFilters}
             >
               Apply filters
             </button>
           </div>
         </div>
+        {draftFilterError && (
+          <p role="alert" style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>
+            {draftFilterError}
+          </p>
+        )}
       </div>
 
+      {notice && (
+        <div
+          role={notice.type === 'error' ? 'alert' : 'status'}
+          style={{
+            marginBottom: 12,
+            padding: '10px 12px',
+            borderRadius: 8,
+            fontSize: 13,
+            border: `1px solid ${notice.type === 'error' ? 'rgba(220,38,38,0.2)' : 'rgba(22,163,74,0.25)'}`,
+            background: notice.type === 'error' ? 'rgba(220,38,38,0.08)' : 'rgba(22,163,74,0.1)',
+            color: notice.type === 'error' ? 'var(--color-danger)' : 'var(--color-success)',
+          }}
+        >
+          {notice.text}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginLeft: 8, padding: '2px 8px' }}
+            onClick={clearNotice}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {submitSuccess && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 12,
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(22,163,74,0.25)',
+            background: 'rgba(22,163,74,0.1)',
+            color: 'var(--color-success)',
+            fontSize: 14,
+          }}
+        >
+          <strong>Request sent.</strong> Contact details for {submitSuccess.count} profile
+          {submitSuccess.count === 1 ? '' : 's'} are now available in My requests.
+          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                navigate('/dashboard/requests', { state: { fromBrowse: true, requestId: submitSuccess.requestId } })
+              }
+            >
+              Go to My requests
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => setSubmitSuccess(null)}>
+              Continue browsing
+            </button>
+          </div>
+        </div>
+      )}
       {feedbackBlocking && (
         <div
           className="card"
@@ -612,6 +700,8 @@ export default function MemberBrowse() {
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
+              const completeness = profileCompletenessPercent(c);
+              const canRequestNow = !blocked && !feedbackBlocking && trayMax > 0;
               return (
                 <div
                   key={c.id}
@@ -636,6 +726,9 @@ export default function MemberBrowse() {
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                       {[c.religion, c.nationality].filter(Boolean).join(' · ')}
                     </p>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      Profile completeness: <strong>{completeness}%</strong>
+                    </p>
                     <div className="member-browse-card-actions" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                       <button
                         type="button"
@@ -658,6 +751,21 @@ export default function MemberBrowse() {
                     {blocked && (
                       <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                         Already requested. View details under My requests.
+                      </p>
+                    )}
+                    {!blocked && (
+                      <p
+                        style={{
+                          margin: '8px 0 0',
+                          fontSize: 12,
+                          color: canRequestNow ? 'var(--color-success)' : 'var(--color-warning)',
+                        }}
+                      >
+                        {feedbackBlocking
+                          ? 'Request unavailable until pending feedback is submitted.'
+                          : trayMax === 0
+                            ? 'Request unavailable while weekly/monthly quota is full.'
+                            : 'Ready to request.'}
                       </p>
                     )}
                   </div>

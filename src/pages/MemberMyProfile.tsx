@@ -6,6 +6,7 @@ import { useMemberArea } from '../member/memberContext';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
 import { rejectReasonIfNotJpegOrPng } from '../lib/profilePhotoAccept';
 import { sanitizeText } from '../lib/sanitize';
+import { isValidPlaceField } from '../lib/registerValidation';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,9 +32,11 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [pwError, setPwError] = useState('');
   const [delOpen, setDelOpen] = useState(false);
   const [delConfirm, setDelConfirm] = useState('');
+  const [delError, setDelError] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [seeking, setSeeking] = useState<'Male' | 'Female' | 'Both'>(() =>
@@ -82,6 +85,40 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
 
   async function saveField() {
     if (!hasUnsavedChanges) return;
+    const nextErrors: Record<string, string> = {};
+    if (!education.trim() || education.trim().length < 3) {
+      nextErrors.education = 'Enter at least 3 characters for education.';
+    }
+    if (!jobTitle.trim()) {
+      nextErrors.jobTitle = 'Job title is required.';
+    }
+    if (!hobbies.trim() || hobbies.trim().length < 3) {
+      nextErrors.hobbies = 'Add at least a short hobbies description.';
+    }
+    if (future.trim().length > 200) {
+      nextErrors.future = 'Future settlement plans must be 200 characters or less.';
+    }
+    if (!isValidPlaceField(nationality, 100)) {
+      nextErrors.nationality = 'Enter your nationality (at least 2 characters).';
+    }
+    if (!isValidPlaceField(town, 200)) {
+      nextErrors.town = 'Enter town and country of origin.';
+    }
+    if (height === '') {
+      nextErrors.height = 'Please select your height.';
+    }
+    if (!['Veg', 'Non-veg', 'Vegan'].includes(diet)) {
+      nextErrors.diet = 'Please choose a valid diet option.';
+    }
+    if (!['Male', 'Female', 'Both'].includes(seeking)) {
+      nextErrors.seeking = 'Please choose who you want to browse.';
+    }
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setSaveStatus('error');
+      setSaveError('Please correct the highlighted fields and save again.');
+      return;
+    }
     setSaveStatus('saving');
     setSaveError('');
     const { error } = await supabase
@@ -239,6 +276,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
               Who you can see and request contact details for. Save to apply.
             </p>
+            {fieldErrors.seeking && <p className="field-error">{fieldErrors.seeking}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-education">
@@ -249,12 +287,14 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               value={education}
               onChange={(e) => setEducation(e.target.value)}
             />
+            {fieldErrors.education && <p className="field-error">{fieldErrors.education}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-job">
               Job title
             </label>
             <input id="mp-job" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+            {fieldErrors.jobTitle && <p className="field-error">{fieldErrors.jobTitle}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-hobbies">
@@ -266,6 +306,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               onChange={(e) => setHobbies(e.target.value)}
               maxLength={400}
             />
+            {fieldErrors.hobbies && <p className="field-error">{fieldErrors.hobbies}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-future">
@@ -277,18 +318,21 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               onChange={(e) => setFuture(e.target.value)}
               maxLength={200}
             />
+            {fieldErrors.future && <p className="field-error">{fieldErrors.future}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-nationality">
               Nationality
             </label>
             <input id="mp-nationality" value={nationality} onChange={(e) => setNationality(e.target.value)} />
+            {fieldErrors.nationality && <p className="field-error">{fieldErrors.nationality}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-town">
               Town / country of origin
             </label>
             <input id="mp-town" value={town} onChange={(e) => setTown(e.target.value)} />
+            {fieldErrors.town && <p className="field-error">{fieldErrors.town}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-height">
@@ -299,12 +343,14 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               value={height === '' ? '' : String(height)}
               onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : '')}
             >
+              <option value="">Select…</option>
               {HEIGHT_OPTIONS.map((h) => (
                 <option key={h.cm} value={h.cm}>
                   {h.label}
                 </option>
               ))}
             </select>
+            {fieldErrors.height && <p className="field-error">{fieldErrors.height}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-diet">
@@ -317,6 +363,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
                 </option>
               ))}
             </select>
+            {fieldErrors.diet && <p className="field-error">{fieldErrors.diet}</p>}
           </div>
           <div className="member-form-actions">
             <button
@@ -473,18 +520,24 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
                 onClick={async () => {
                   if (delConfirm !== 'DELETE') return;
                   try {
+                    setDelError('');
                     await invokeFunction('request-account-deletion', {});
                     setDelOpen(false);
                     await supabase.auth.signOut();
                     window.location.href = '/';
                   } catch (err) {
-                    alert(err instanceof Error ? err.message : 'Failed');
+                    setDelError(err instanceof Error ? err.message : 'Failed');
                   }
                 }}
               >
                 Confirm
               </button>
             </div>
+            {delError && (
+              <p role="alert" style={{ marginTop: 10, fontSize: 13, color: 'var(--color-danger)' }}>
+                {delError}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -493,8 +546,27 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
 }
 
 export default function MemberMyProfile() {
-  const { profile, privateRow, loadAll } = useMemberArea();
-  if (!profile || !privateRow) return null;
+  const { profile, privateRow, loadAll, loading } = useMemberArea();
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 16 }}>
+        Loading your profile…
+      </div>
+    );
+  }
+  if (!profile || !privateRow) {
+    return (
+      <div className="card" style={{ padding: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Could not load your profile</h3>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+          We could not load your member profile right now. Try again in a moment.
+        </p>
+        <button type="button" className="btn btn-primary" onClick={() => void loadAll()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
   return (
     <MemberMyProfileForm
       key={`${profile.id}-${profile.updated_at}`}

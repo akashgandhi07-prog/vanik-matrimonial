@@ -63,11 +63,18 @@ Deno.serve(async (req) => {
 
   const { data: requester, error: requesterErr } = await admin
     .from('profiles')
-    .select('id')
+    .select('id, status, membership_expires_at')
     .eq('auth_user_id', userData.user.id)
     .single();
   if (requesterErr || !requester) {
     return jsonResponse({ error: 'Profile not found' }, req, 400);
+  }
+  if (
+    requester.status !== 'active' ||
+    !requester.membership_expires_at ||
+    new Date(requester.membership_expires_at) <= new Date()
+  ) {
+    return jsonResponse({ error: 'Membership not active' }, req, 403);
   }
 
   let requestQuery = admin

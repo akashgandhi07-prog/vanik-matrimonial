@@ -12,9 +12,18 @@ function normalizeOrigin(o: string): string {
   return o.trim().replace(/\/+$/, '');
 }
 
+function isProductionEnv(): boolean {
+  const denoEnv = (Deno.env.get('DENO_ENV') ?? '').toLowerCase().trim();
+  const nodeEnv = (Deno.env.get('NODE_ENV') ?? '').toLowerCase().trim();
+  const appEnv = (Deno.env.get('APP_ENV') ?? '').toLowerCase().trim();
+  return denoEnv === 'production' || nodeEnv === 'production' || appEnv === 'production';
+}
+
 function collectAllowedOrigins(): Set<string> {
   const out = new Set<string>();
-  for (const o of DEFAULT_DEV_ORIGINS) out.add(o);
+  if (!isProductionEnv()) {
+    for (const o of DEFAULT_DEV_ORIGINS) out.add(o);
+  }
   for (const o of DEFAULT_PUBLIC_SITE_ORIGINS) out.add(o);
   const site = Deno.env.get('PUBLIC_SITE_URL');
   if (site) out.add(normalizeOrigin(site));
@@ -29,17 +38,7 @@ function collectAllowedOrigins(): Set<string> {
 }
 
 function originAllowed(origin: string, allowed: Set<string>): boolean {
-  if (allowed.has(origin)) return true;
-  // Allow any Vercel preview/production host over HTTPS unless explicitly disabled (set CORS_ALLOW_VERCEL=0).
-  if (Deno.env.get('CORS_ALLOW_VERCEL') !== '0') {
-    try {
-      const u = new URL(origin);
-      if (u.protocol === 'https:' && u.hostname.endsWith('.vercel.app')) return true;
-    } catch {
-      /* ignore */
-    }
-  }
-  return false;
+  return allowed.has(origin);
 }
 
 /**
@@ -54,7 +53,9 @@ export function corsHeadersFor(req: Request): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   };
   if (!origin) {
-    base['Access-Control-Allow-Origin'] = '*';
+    if (!isProductionEnv()) {
+      base['Access-Control-Allow-Origin'] = '*';
+    }
     return base;
   }
   if (originAllowed(origin, allowed)) {

@@ -238,6 +238,8 @@ export default function Register() {
   const [stripeRedirectBusy, setStripeRedirectBusy] = useState(false);
   const [couponChecking, setCouponChecking] = useState(false);
   const [resubmitMode, setResubmitMode] = useState(false);
+  const [resubmitReason, setResubmitReason] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const rejectHydrateDoneRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -341,11 +343,13 @@ export default function Register() {
       const { data: p } = await supabase.from('profiles').select('*').eq('auth_user_id', uid).maybeSingle();
       if (!p || p.status !== 'rejected') {
         setResubmitMode(false);
+        setResubmitReason(null);
         return;
       }
       if (rejectHydrateDoneRef.current === uid) return;
       rejectHydrateDoneRef.current = uid;
       setResubmitMode(true);
+      setResubmitReason((p.rejection_reason as string | null) ?? null);
       const { data: m } = await supabase.from('member_private').select('*').eq('profile_id', p.id).maybeSingle();
       if (!m) return;
       setForm((prev) => ({
@@ -438,15 +442,15 @@ export default function Register() {
 
   async function startRegistrationCheckout() {
     setStripeRedirectBusy(true);
+    setActionNotice(null);
     try {
       const res = (await invokeFunction('create-checkout-session', {
         purpose: 'registration',
-        client_origin: window.location.origin,
       })) as { url?: string };
       if (res.url) window.location.href = res.url;
       else throw new Error('No checkout URL returned');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not start checkout');
+      setActionNotice({ type: 'err', text: e instanceof Error ? e.message : 'Could not start checkout' });
     } finally {
       setStripeRedirectBusy(false);
     }
@@ -492,7 +496,8 @@ export default function Register() {
     setIdUploading(false);
     setIdProgress(error ? 0 : 1);
     if (error) {
-      alert(error.message);
+      setFieldErrors((prev) => ({ ...prev, id_document_path: error.message }));
+      setActionNotice({ type: 'err', text: `Could not upload proof of identity: ${error.message}` });
       return;
     }
     update({ id_document_path: path, id_file_name: file.name });
@@ -507,6 +512,7 @@ export default function Register() {
     }
     clearFieldError('photo_path');
     setPhotoUploading(true);
+    setActionNotice(null);
     try {
       const compressed = await imageCompression(file, {
         maxSizeMB: 0.2,
@@ -525,12 +531,17 @@ export default function Register() {
         contentType: compressed.type || 'image/jpeg',
       });
       if (error) {
-        alert(error.message);
+        setFieldErrors((prev) => ({ ...prev, photo_path: error.message }));
+        setActionNotice({ type: 'err', text: `Could not upload profile photo: ${error.message}` });
         return;
       }
       update({ photo_path: path });
+      setActionNotice({ type: 'ok', text: 'Photo uploaded. You can submit your registration now.' });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not process this image. Try another file.');
+      setActionNotice({
+        type: 'err',
+        text: err instanceof Error ? err.message : 'Could not process this image. Please try a different file.',
+      });
     } finally {
       setPhotoUploading(false);
     }
@@ -590,7 +601,7 @@ export default function Register() {
         });
         focusFirstFieldError({ payment: 'x' });
       } else {
-        alert(err instanceof Error ? err.message : 'Submission failed');
+        setActionNotice({ type: 'err', text: err instanceof Error ? err.message : 'Submission failed' });
       }
     } finally {
       setSubmitting(false);
@@ -789,11 +800,28 @@ export default function Register() {
   const step = form.step;
   const progress = ((step - 1) / 3) * 100;
   const stepLabels = ['Identity & address', 'Personal details', 'Profile & photo'] as const;
+  const resubmitReasonLower = (resubmitReason ?? '').toLowerCase();
+  const resubmitTips = [
+    resubmitReasonLower.includes('photo') ? 'Use a clear, recent face photo with good lighting.' : null,
+    resubmitReasonLower.includes('id') || resubmitReasonLower.includes('identity')
+      ? 'Upload a sharp and fully visible ID image.'
+      : null,
+    resubmitReasonLower.includes('name') ? 'Check that personal names match official records.' : null,
+    resubmitReasonLower.includes('address') ? 'Review address and postcode for accuracy.' : null,
+  ].filter(Boolean) as string[];
 
   return (
     <PublicLayout>
       <div className="layout-max register-page">
         <div className="register-card">
+          {actionNotice && (
+            <p
+              className={`register-msg ${actionNotice.type === 'err' ? 'register-msg--error' : 'register-msg--success'}`}
+              role={actionNotice.type === 'err' ? 'alert' : 'status'}
+            >
+              {actionNotice.text}
+            </p>
+          )}
           {resubmitMode && (
             <div
               className="badge badge-warning"
@@ -809,6 +837,18 @@ export default function Register() {
               <strong>Resubmitting your application.</strong> Your previous details are pre-filled below. You
               must upload a <strong>new proof of identity</strong> and a <strong>new profile photo</strong>, then
               complete all three steps and submit again for review.
+              {resubmitReason && (
+                <p style={{ margin: '8px 0 0', fontSize: 13 }}>
+                  <strong>Review note:</strong> {resubmitReason}
+                </p>
+              )}
+              {resubmitTips.length > 0 && (
+                <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
+                  {resubmitTips.map((tip) => (
+                    <li key={tip}>{tip}</li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           <div style={{ marginBottom: 22 }}>
@@ -1068,7 +1108,9 @@ export default function Register() {
                     const f = e.target.files?.[0];
                     if (f && f.size <= 10 * 1024 * 1024) {
                       void uploadId(f);
-                    } else if (f) alert('File too large (max 10MB)');
+                    } else if (f) {
+                  setFieldErrors((prev) => ({ ...prev, id_document_path: 'File too large. Maximum size is 10MB.' }));
+                    }
                   }}
                 />
                 {idUploading && (

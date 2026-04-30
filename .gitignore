@@ -20,6 +20,9 @@ dist-ssr
 # Local Python env for migration script
 .venv-migrate
 
+# Supabase local CLI temp artifacts (may contain sensitive connection data)
+supabase/.temp/
+
 # Claude Code local worktrees (must not be git submodules - breaks Vercel clone)
 .claude/worktrees/
 
