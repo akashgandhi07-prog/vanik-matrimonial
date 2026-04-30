@@ -19,6 +19,7 @@ import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase'
 const LS_KEY = 'vmr_registration_v1';
 
 type Step = 1 | 2 | 3;
+const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
 type FormState = {
   step: Step;
@@ -561,6 +562,7 @@ export default function Register() {
     try {
       const payload = {
         gender: form.gender,
+        seeking_gender: form.gender === 'Female' ? 'Male' : 'Female',
         date_of_birth: form.date_of_birth,
         mobile_phone: sanitizeText(form.mobile_phone, 40),
         home_address_line1: sanitizeText(form.home_address_line1, 200),
@@ -1479,12 +1481,10 @@ export default function Register() {
                   Diet <span aria-hidden="true">*</span>
                 </span>
                 <div className="register-radio-row" role="group" aria-labelledby="reg-diet-label">
-                  {(['Veg', 'Non-veg', 'Vegan'] as const).map((d) => (
+                  {DIET_OPTIONS.map((d) => (
                     <label key={d}>
                       <input
-                        id={
-                          d === 'Veg' ? 'reg-diet-veg' : d === 'Non-veg' ? 'reg-diet-nonveg' : 'reg-diet-vegan'
-                        }
+                        id={`reg-diet-${d.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                         type="radio"
                         name="diet"
                         checked={form.diet === d}

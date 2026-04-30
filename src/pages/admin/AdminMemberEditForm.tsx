@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HEIGHT_OPTIONS } from '../../lib/heights';
 import { invokeFunction } from '../../lib/supabase';
+const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
 export type MemberProfileFull = {
   id: string;
@@ -421,7 +422,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
         <div>
           <label className="label">Diet</label>
           <select value={diet} onChange={(e) => setDiet(e.target.value)}>
-            {['Veg', 'Non-veg', 'Vegan'].map((d) => (
+            {DIET_OPTIONS.map((d) => (
               <option key={d} value={d}>
                 {d}
               </option>

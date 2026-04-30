@@ -21,7 +21,7 @@ type DemoProfile = {
 
 const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
-const DIET_ALL = ['Veg', 'Non-veg', 'Vegan'] as const;
+const DIET_ALL = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
 
 type BrowseFilters = {

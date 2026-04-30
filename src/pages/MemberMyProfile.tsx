@@ -9,6 +9,7 @@ import { sanitizeText } from '../lib/sanitize';
 import { isValidPlaceField } from '../lib/registerValidation';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
 type FormProps = {
   profile: ProfileRow;
@@ -107,7 +108,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     if (height === '') {
       nextErrors.height = 'Please select your height.';
     }
-    if (!['Veg', 'Non-veg', 'Vegan'].includes(diet)) {
+    if (!DIET_OPTIONS.includes(diet as (typeof DIET_OPTIONS)[number])) {
       nextErrors.diet = 'Please choose a valid diet option.';
     }
     if (!['Male', 'Female', 'Both'].includes(seeking)) {
@@ -357,7 +358,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
               Diet
             </label>
             <select id="mp-diet" value={diet} onChange={(e) => setDiet(e.target.value)}>
-              {['Veg', 'Non-veg', 'Vegan'].map((d) => (
+              {DIET_OPTIONS.map((d) => (
                 <option key={d} value={d}>
                   {d}
                 </option>
