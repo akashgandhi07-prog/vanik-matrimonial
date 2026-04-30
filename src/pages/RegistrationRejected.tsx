@@ -122,6 +122,7 @@ export default function RegistrationRejected() {
                   disabled={checking}
                   onClick={() => {
                     setChecking(true);
+                    setSyncError(null);
                     void (async () => {
                       try {
                         const {
@@ -131,6 +132,8 @@ export default function RegistrationRejected() {
                         const lite = await fetchMyProfileStatusLite(user.id);
                         const next = pathForMemberStatus(lite?.status ?? null);
                         if (next && next !== '/registration-rejected') navigate(next, { replace: true });
+                      } catch {
+                        setSyncError('Status check failed. Please try again.');
                       } finally {
                         setChecking(false);
                       }

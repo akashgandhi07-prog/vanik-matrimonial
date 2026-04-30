@@ -66,9 +66,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: error.message }, req, 500);
   }
 
-  const profiles = (data ?? []).map((p) => ({
-    id: p.id,
-    demo_label: `Member ${String(p.id).slice(0, 6).toUpperCase()}`,
+  const profiles = (data ?? []).map((p, index) => ({
+    demo_id: `demo-${index + 1}`,
+    demo_label: `Member ${index + 1}`,
     age: p.age,
     created_at: p.created_at,
     job_title: stripHtml(p.job_title ?? '', 120),
