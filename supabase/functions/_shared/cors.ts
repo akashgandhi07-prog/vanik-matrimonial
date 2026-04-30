@@ -12,6 +12,21 @@ function normalizeOrigin(o: string): string {
   return o.trim().replace(/\/+$/, '');
 }
 
+function envFlag(name: string, defaultValue = false): boolean {
+  const raw = (Deno.env.get(name) ?? '').trim().toLowerCase();
+  if (!raw) return defaultValue;
+  return !['0', 'false', 'off', 'no'].includes(raw);
+}
+
+function isVercelOrigin(origin: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === 'https:' && hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
 function isProductionEnv(): boolean {
   const denoEnv = (Deno.env.get('DENO_ENV') ?? '').toLowerCase().trim();
   const nodeEnv = (Deno.env.get('NODE_ENV') ?? '').toLowerCase().trim();
@@ -38,7 +53,10 @@ function collectAllowedOrigins(): Set<string> {
 }
 
 function originAllowed(origin: string, allowed: Set<string>): boolean {
-  return allowed.has(origin);
+  if (allowed.has(origin)) return true;
+  // Allow Vercel preview/production subdomains unless explicitly disabled.
+  if (envFlag('CORS_ALLOW_VERCEL', true) && isVercelOrigin(origin)) return true;
+  return false;
 }
 
 /**

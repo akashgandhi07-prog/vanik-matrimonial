@@ -4,10 +4,10 @@
  *
  * Keep string values in sync with [src/lib/siteUrl.ts](../../../src/lib/siteUrl.ts) (Vite app).
  */
-export const CANONICAL_PUBLIC_SITE_URL = 'https://vanikmatrimonial.co.uk';
+export const CANONICAL_PUBLIC_SITE_URL = 'https://matrimonial.vanikcouncil.uk';
 
-/** Legacy Vercel host; still allowed in CORS defaults for existing deployments. */
-export const LEGACY_VERCEL_DEPLOYMENT_URL = 'https://vanik-matrimonial.vercel.app';
+/** Secondary fallback origin kept aligned to the canonical domain. */
+export const LEGACY_VERCEL_DEPLOYMENT_URL = 'https://matrimonial.vanikcouncil.uk';
 
 export function publicSiteBaseUrl(): string {
   const raw = Deno.env.get('PUBLIC_SITE_URL')?.trim().replace(/\/+$/, '');

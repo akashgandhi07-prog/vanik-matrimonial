@@ -1,8 +1,4 @@
-// TESTING: uses Resend's shared test sender (no domain required).
-// Emails can only be delivered to the Resend account owner's address during testing.
-// When you add vanikmatrimonial.co.uk to Resend, change this back to:
-//   'Vanik Matrimonial Register <noreply@vanikmatrimonial.co.uk>'
-const FROM = 'Vanik Matrimonial Register <onboarding@resend.dev>';
+const FROM = 'Vanik Matrimonial Register <mahesh.gandhi@vanikcouncil.uk>';
 
 export type EmailPayload = {
   to: string;

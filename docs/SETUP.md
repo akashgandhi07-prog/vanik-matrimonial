@@ -30,7 +30,7 @@ See `.env.example` for frontend (`VITE_*`) variables and optional CORS-related E
 
 ## Pre-launch URL alignment (Vercel + Supabase)
 
-Use one **canonical** public origin everywhere (for example `https://vanikmatrimonial.co.uk` or your Vercel production URL).
+Use one **canonical** public origin everywhere (for example `https://matrimonial.vanikcouncil.uk` or your Vercel production URL).
 
 1. **Vercel (or other host)**  
    - Set `VITE_PUBLIC_SITE_URL` to that origin (no trailing slash).  
@@ -38,7 +38,7 @@ Use one **canonical** public origin everywhere (for example `https://vanikmatrim
 
 2. **Supabase → Edge Functions → Secrets**  
    - Set `PUBLIC_SITE_URL` to the same origin. Used in transactional emails and as a fallback for Stripe return URLs.  
-   - If you use extra browser origins (e.g. `www.` or a second domain), add them to `CORS_ALLOWED_ORIGINS` (comma-separated). The Edge CORS helper also allows `https://vanikmatrimonial.co.uk`, `https://vanik-matrimonial.vercel.app`, localhost, and (by default) `https://*.vercel.app`.
+   - If you use extra browser origins (e.g. `www.` or a second domain), add them to `CORS_ALLOWED_ORIGINS` (comma-separated). The Edge CORS helper also allows `https://matrimonial.vanikcouncil.uk`, localhost, and (by default) `https://*.vercel.app`.
 
 3. **Supabase → Authentication → URL Configuration**  
    - **Site URL** = canonical origin.  

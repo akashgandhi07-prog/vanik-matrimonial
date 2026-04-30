@@ -6,9 +6,9 @@ enabled = true
 
 [auth]
 # Local CLI only. Hosted project: Dashboard → Authentication → URL Configuration — set Site URL to your
-# canonical origin (e.g. https://vanikmatrimonial.co.uk) and add Redirect URLs for that host, previews, and local dev.
+# canonical origin (e.g. https://matrimonial.vanikcouncil.uk) and add Redirect URLs for that host, previews, and local dev.
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app", "https://vanikmatrimonial.co.uk/**"]
+additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app", "https://matrimonial.vanikcouncil.uk/**"]
 
 [auth.email]
 enable_confirmations = true

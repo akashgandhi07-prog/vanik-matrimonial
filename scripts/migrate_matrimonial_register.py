@@ -80,7 +80,7 @@ def girls_columns(mobile_col: str = "AC") -> dict[str, str]:
         "home_address": "AD",
     }
 
-RESEND_FROM = "Vanik Matrimonial Register <noreply@vanikmatrimonial.co.uk>"
+RESEND_FROM = "Vanik Matrimonial Register <mahesh.gandhi@vanikcouncil.uk>"
 
 MONTHS = {
     "jan": 1,
@@ -539,7 +539,7 @@ def process_sheet(
     log: logging.Logger,
 ) -> None:
     today = date.today()
-    site_url = (args.public_site_url or "https://vanikmatrimonial.co.uk").rstrip("/")
+    site_url = (args.public_site_url or "https://matrimonial.vanikcouncil.uk").rstrip("/")
     redirect_to = f"{site_url}/reset-password"
 
     max_row = ws.max_row or 0
