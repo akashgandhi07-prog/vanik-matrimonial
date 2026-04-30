@@ -112,7 +112,7 @@ export default function AdminScheduledJobs() {
       )}
 
       <div className="table-scroll">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+        <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ padding: 8 }}>Job</th>

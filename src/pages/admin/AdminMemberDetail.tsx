@@ -80,6 +80,7 @@ export default function AdminMemberDetail() {
   const [rejectReason, setRejectReason] = useState('');
   const [checklist, setChecklist] = useState([false, false, false, false]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineRow[]>([]);
@@ -118,7 +119,7 @@ export default function AdminMemberDetail() {
           profile?: MemberProfileFull;
           member_private?: MemberPrivateFull;
           timeline?: TimelineRow[];
-          signed_urls?: { photo: string | null; pending_photo: string | null; id_document: string | null };
+          signed_urls?: { photo: string | null; photos?: string[]; pending_photo: string | null; id_document: string | null };
           admin_note?: { body: string; updated_at: string | null; updated_by: string | null };
           recent_emails?: typeof recentEmails;
         };
@@ -132,7 +133,11 @@ export default function AdminMemberDetail() {
         setPriv(res.member_private);
         setTimeline(res.timeline ?? []);
         const su = res.signed_urls;
-        setPhotoUrl(su?.photo ?? null);
+        const signedPhotoList = Array.isArray(su?.photos)
+          ? su.photos.filter((p): p is string => typeof p === 'string' && p.length > 0)
+          : [];
+        setPhotoUrls(signedPhotoList);
+        setPhotoUrl(signedPhotoList[0] ?? su?.photo ?? null);
         setPendingPreview(su?.pending_photo ?? null);
         setIdDocSignedFromServer(su?.id_document ?? null);
         setInternalNoteDraft(res.admin_note?.body ?? '');
@@ -141,6 +146,7 @@ export default function AdminMemberDetail() {
         setDetailError(e instanceof Error ? e.message : 'Failed to load member');
         setProfile(null);
         setPriv(null);
+        setPhotoUrls([]);
       }
     })();
   }, [id, ok, mfaOk, reloadKey]);
@@ -519,12 +525,29 @@ export default function AdminMemberDetail() {
         <div className="admin-detail-photo-grid" style={{ marginTop: 24 }}>
           <div className="card">
             <h3>Profile photo</h3>
-            {photoUrl && (
-              <img
-                src={photoUrl}
-                alt={`${profile.first_name}'s profile photo`}
-                style={{ width: '100%', maxWidth: 320, borderRadius: 8 }}
-              />
+            {photoUrls.length > 0 ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {photoUrls.map((url, idx) => (
+                  <figure key={url} style={{ margin: 0 }}>
+                    <img
+                      src={url}
+                      alt={`${profile.first_name}'s profile photo ${idx + 1}`}
+                      style={{ width: '100%', maxWidth: 320, borderRadius: 8 }}
+                    />
+                    <figcaption style={{ marginTop: 6, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                      {idx === 0 ? 'Primary photo' : `Photo ${idx + 1}`}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : (
+              photoUrl && (
+                <img
+                  src={photoUrl}
+                  alt={`${profile.first_name}'s profile photo`}
+                  style={{ width: '100%', maxWidth: 320, borderRadius: 8 }}
+                />
+              )
             )}
           </div>
           <div className="card">

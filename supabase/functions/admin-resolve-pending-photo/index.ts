@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
 Deno.serve(async (req) => {
@@ -93,9 +94,8 @@ Deno.serve(async (req) => {
       target_profile_id: profileId,
       notes: stripHtml('Pending photo rejected', 500),
     });
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (resendKey) {
-      await dispatchEmail(admin, resendKey, {
+    if (isTransactionalMailConfigured()) {
+      await dispatchEmail(admin, {
         type: 'photo_update_rejected',
         recipientProfileId: profileId,
       });

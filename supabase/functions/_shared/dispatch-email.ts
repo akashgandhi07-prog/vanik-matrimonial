@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { letterHtml, sendResendEmail } from './resend.ts';
+import { letterHtml } from './resend.ts';
+import { sendTransactionalMail } from './transactional-mail.ts';
 import { publicSiteBaseUrl } from './site-url.ts';
 import { stripHtml } from './sanitize.ts';
 
@@ -44,7 +45,6 @@ async function logEmail(
 
 export async function dispatchEmail(
   admin: SupabaseClient,
-  resendKey: string,
   params: DispatchParams
 ): Promise<{ ok: boolean; error?: string; messageId?: string | null }> {
   const { type, recipientProfileId } = params;
@@ -254,7 +254,7 @@ export async function dispatchEmail(
   }
 
   const html = letterHtml('Vanik Matrimonial Register', inner);
-  const { id, error } = await sendResendEmail(resendKey, { to, subject, html });
+  const { id, error } = await sendTransactionalMail({ to, subject, html });
   const status = error ? 'failed' : 'sent';
   await logEmail(admin, {
     recipient_email: to,

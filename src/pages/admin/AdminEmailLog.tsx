@@ -59,7 +59,7 @@ export default function AdminEmailLog() {
         ngrok for Resend to reach your machine).
       </p>
       <div className="table-scroll">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+        <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ textAlign: 'left', padding: 8 }}>Sent</th>

@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -20,8 +21,7 @@ Deno.serve(async (req) => {
     .single();
   const runId = runRow?.id as string | undefined;
 
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (!resendKey) {
+  if (!isTransactionalMailConfigured()) {
     if (runId) {
       await admin
         .from('cron_job_runs')
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
         .gte('sent_at', dedupeSince);
       if ((count ?? 0) > 0) continue;
 
-      const r = await dispatchEmail(admin, resendKey, {
+      const r = await dispatchEmail(admin, {
         type: 'renewal_reminder',
         recipientProfileId: pid,
         extraData: { days },

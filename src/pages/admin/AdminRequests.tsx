@@ -88,7 +88,7 @@ function RequestsTable({
 }) {
   return (
     <div className="table-scroll">
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+      <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
         <thead>
           <tr>
             <th style={{ textAlign: 'left', padding: 8 }}>Date</th>

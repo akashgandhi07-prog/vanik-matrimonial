@@ -5,7 +5,7 @@ import { invokeFunction, supabase } from '../../lib/supabase';
 
 type PendingPreviews = Record<
   string,
-  { photo: string | null; id_document: string | null; id_is_image: boolean }
+  { photo: string | null; photos?: string[]; id_document: string | null; id_is_image: boolean }
 >;
 
 type Profile = {
@@ -200,7 +200,7 @@ export default function AdminMembers() {
         onChange={(e) => setSearch(e.target.value)}
         style={{ width: 'min(100%, 360px)', marginBottom: 12 }}
       />
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+      <div className="admin-filter-chips">
         {FILTERS.map((f) => (
           <button
             key={f}
@@ -289,33 +289,37 @@ export default function AdminMembers() {
         </button>
       </div>
       <div className="table-scroll">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+        <table
+          className="admin-data-table admin-data-table--xl"
+          style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 13, background: 'white' }}
+        >
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ padding: 8 }}>Ref</th>
+              <th style={{ padding: 8, width: 80, whiteSpace: 'nowrap' }}>Ref</th>
               {filter === 'pending' && (
                 <>
-                  <th style={{ padding: 8 }}>Photo</th>
-                  <th style={{ padding: 8 }}>ID</th>
-                  <th style={{ padding: 8 }}>Waiting</th>
-                  <th style={{ padding: 8 }}>Sel</th>
+                  <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Photo</th>
+                  <th style={{ padding: 8, width: 56, whiteSpace: 'nowrap' }}>ID</th>
+                  <th style={{ padding: 8, width: 86, whiteSpace: 'nowrap' }}>Waiting</th>
+                  <th style={{ padding: 8, width: 50, whiteSpace: 'nowrap' }}>Sel</th>
                 </>
               )}
-              <th style={{ padding: 8 }}>Name</th>
-              <th style={{ padding: 8 }}>Gender</th>
-              <th style={{ padding: 8 }}>Age</th>
-              <th style={{ padding: 8 }}>Status</th>
-              <th style={{ padding: 8 }}>Expires</th>
-              <th style={{ padding: 8 }}>Last request</th>
-              <th style={{ padding: 8 }}>Notes</th>
-              <th style={{ padding: 8 }}>Actions</th>
+              <th style={{ padding: 8, width: 124 }}>Name</th>
+              <th style={{ padding: 8, width: 220 }}>Email</th>
+              <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Gender</th>
+              <th style={{ padding: 8, width: 52, whiteSpace: 'nowrap' }}>Age</th>
+              <th style={{ padding: 8, width: 128, whiteSpace: 'nowrap' }}>Status</th>
+              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Expires</th>
+              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Last request</th>
+              <th style={{ padding: 8, width: 110, whiteSpace: 'nowrap' }}>Notes</th>
+              <th style={{ padding: 8, width: 98, whiteSpace: 'nowrap' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 13 : 9}
+                  colSpan={filter === 'pending' ? 14 : 10}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   Loading…
@@ -325,7 +329,7 @@ export default function AdminMembers() {
             {!loading && filteredMembers.length === 0 && (
               <tr>
                 <td
-                  colSpan={filter === 'pending' ? 13 : 9}
+                  colSpan={filter === 'pending' ? 14 : 10}
                   style={{ padding: 16, color: 'var(--color-text-secondary)' }}
                 >
                   {loadError
@@ -349,11 +353,17 @@ export default function AdminMembers() {
                 };
                 return (
                   <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: 8 }}>{m.reference_number}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.reference_number}</td>
                     {filter === 'pending' && (
                       <>
                         <td style={{ padding: 8, verticalAlign: 'middle' }}>
-                          {prev?.photo ? (
+                          {(prev?.photos?.length ?? 0) > 0 ? (
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                              {prev?.photos?.slice(0, 3).map((url, idx) => (
+                                <img key={url} src={url} alt="" style={thumbStyle} title={`Photo ${idx + 1}`} />
+                              ))}
+                            </div>
+                          ) : prev?.photo ? (
                             <img src={prev.photo} alt="" style={thumbStyle} />
                           ) : (
                             <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
@@ -400,12 +410,41 @@ export default function AdminMembers() {
                         </td>
                       </>
                     )}
-                    <td style={{ padding: 8 }}>{m.first_name}</td>
-                    <td style={{ padding: 8 }}>{m.gender}</td>
-                    <td style={{ padding: 8 }}>{m.age}</td>
-                    <td style={{ padding: 8 }}>{m.status}</td>
-                    <td style={{ padding: 8 }}>{fmtDate(m.membership_expires_at)}</td>
-                    <td style={{ padding: 8 }}>{fmtDate(m.last_request_at)}</td>
+                    <td style={{ padding: 8 }}>
+                      <span
+                        title={m.first_name}
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'bottom',
+                        }}
+                      >
+                        {m.first_name}
+                      </span>
+                    </td>
+                    <td style={{ padding: 8, maxWidth: 280 }}>
+                      <span
+                        title={emailByProfileId[m.id] ?? '-'}
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'bottom',
+                        }}
+                      >
+                        {emailByProfileId[m.id] ?? '-'}
+                      </span>
+                    </td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.gender}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.age}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.status}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.membership_expires_at)}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.last_request_at)}</td>
                     <td style={{ padding: 8 }}>
                       {m.pending_photo_url && (
                         <span className="badge badge-warning" style={{ whiteSpace: 'nowrap' }}>

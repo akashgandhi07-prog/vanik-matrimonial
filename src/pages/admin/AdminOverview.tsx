@@ -27,7 +27,15 @@ export default function AdminOverview() {
   });
   const [callerRole, setCallerRole] = useState<'super' | 'support' | null>(null);
   const [actions, setActions] = useState<
-    { id: string; action_type: string; created_at: string; notes: string | null }[]
+    {
+      id: string;
+      action_type: string;
+      created_at: string;
+      notes: string | null;
+      admin_email?: string | null;
+      target_profile_id?: string | null;
+      target_profile?: { first_name: string; reference_number: string | null } | null;
+    }[]
   >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -84,12 +92,14 @@ export default function AdminOverview() {
           (may include duplicates if someone paid twice). <strong>Pending</strong> and <strong>Active</strong> are live
           profile counts.
         </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', marginTop: 12 }}>
+        <div className="admin-funnel-row">
           <div>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>Paid checkouts</p>
             <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 700 }}>{funnelPaid}</p>
           </div>
-          <span style={{ fontSize: 22, color: 'var(--color-text-secondary)' }}>→</span>
+          <span className="admin-funnel-arrow" aria-hidden>
+            →
+          </span>
           <button
             type="button"
             className="card"
@@ -99,7 +109,9 @@ export default function AdminOverview() {
             <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>Pending approval</p>
             <p style={{ margin: '4px 0 0', fontSize: 26, fontWeight: 700 }}>{funnelPending}</p>
           </button>
-          <span style={{ fontSize: 22, color: 'var(--color-text-secondary)' }}>→</span>
+          <span className="admin-funnel-arrow" aria-hidden>
+            →
+          </span>
           <button
             type="button"
             className="card"
@@ -157,6 +169,18 @@ export default function AdminOverview() {
             <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
               {new Date(a.created_at).toLocaleString('en-GB')}
             </span>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              By: {a.admin_email ?? 'Unknown admin'}
+              {a.target_profile ? (
+                <>
+                  {' '}| Member: {a.target_profile.first_name} ({a.target_profile.reference_number ?? '-'})
+                </>
+              ) : a.target_profile_id ? (
+                <> | Member ID: {a.target_profile_id}</>
+              ) : (
+                ''
+              )}
+            </p>
             {a.notes && <p style={{ margin: '4px 0 0', fontSize: 14 }}>{a.notes}</p>}
           </li>
         ))}

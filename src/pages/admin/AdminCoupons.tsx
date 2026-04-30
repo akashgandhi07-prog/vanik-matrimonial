@@ -198,7 +198,7 @@ export default function AdminCoupons() {
       </div>
 
       <div className="table-scroll">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+        <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ textAlign: 'left', padding: 8 }}>Code</th>
@@ -265,7 +265,7 @@ export default function AdminCoupons() {
         <p style={{ color: '#6b7280' }}>No coupon usage recorded yet.</p>
       ) : (
         <div className="table-scroll">
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
+          <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <th style={{ textAlign: 'left', padding: 8 }}>Coupon code</th>

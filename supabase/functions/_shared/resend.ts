@@ -1,10 +1,18 @@
-const FROM = 'Vanik Matrimonial Register <mahesh.gandhi@vanikcouncil.uk>';
-
 export type EmailPayload = {
   to: string;
   subject: string;
   html: string;
 };
+
+function fromAddress(): string {
+  const fromEmail = Deno.env.get('RESEND_FROM_EMAIL')?.trim();
+  const fromName = Deno.env.get('RESEND_FROM_NAME')?.trim() || 'Vanik Matrimonial Register';
+  if (!fromEmail) {
+    // Backward-compatible fallback so existing environments keep working.
+    return 'Vanik Matrimonial Register <mahesh.gandhi@vanikcouncil.uk>';
+  }
+  return `${fromName} <${fromEmail}>`;
+}
 
 export async function sendResendEmail(
   apiKey: string,
@@ -17,7 +25,7 @@ export async function sendResendEmail(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: FROM,
+      from: fromAddress(),
       to: [payload.to],
       subject: payload.subject,
       html: payload.html,

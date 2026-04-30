@@ -4,6 +4,7 @@ export type ProfileStatusLite = {
   status: string | null;
   reference_number: string | null;
   rejection_reason: string | null;
+  created_at: string | null;
 };
 
 /** Where to send a signed-in member based on DB status (canonical routes). */
@@ -30,7 +31,7 @@ export function pathForMemberStatus(status: string | null): string | null {
 export async function fetchMyProfileStatusLite(userId: string): Promise<ProfileStatusLite | null> {
   const { data: p } = await supabase
     .from('profiles')
-    .select('status, reference_number, rejection_reason')
+    .select('status, reference_number, rejection_reason, created_at')
     .eq('auth_user_id', userId)
     .maybeSingle();
 
@@ -39,11 +40,13 @@ export async function fetchMyProfileStatusLite(userId: string): Promise<ProfileS
       status: string;
       reference_number: string | null;
       rejection_reason: string | null;
+      created_at: string | null;
     };
     return {
       status: row.status ?? null,
       reference_number: row.reference_number ?? null,
       rejection_reason: row.rejection_reason ?? null,
+      created_at: row.created_at ?? null,
     };
   }
 
@@ -53,6 +56,7 @@ export async function fetchMyProfileStatusLite(userId: string): Promise<ProfileS
         status?: string;
         reference_number?: string | null;
         rejection_reason?: string | null;
+        created_at?: string | null;
       } | null;
     };
     const pr = boot.profile;
@@ -61,6 +65,7 @@ export async function fetchMyProfileStatusLite(userId: string): Promise<ProfileS
       status: pr.status ?? null,
       reference_number: pr.reference_number ?? null,
       rejection_reason: pr.rejection_reason ?? null,
+      created_at: pr.created_at ?? null,
     };
   } catch {
     return null;

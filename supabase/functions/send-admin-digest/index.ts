@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -11,11 +12,10 @@ Deno.serve(async (req) => {
   if (deny) return deny;
 
   const admin = getAdminClient();
-  const resendKey = Deno.env.get('RESEND_API_KEY');
   const digestTo =
     Deno.env.get('ADMIN_DIGEST_EMAIL') ?? Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
 
-  if (!resendKey) {
+  if (!isTransactionalMailConfigured()) {
     return jsonResponse({ ok: true, skipped: true, reason: 'no_resend' }, req);
   }
 
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, skipped: true, reason: 'no_metrics' }, req);
   }
 
-  await dispatchEmail(admin, resendKey, {
+  await dispatchEmail(admin, {
     type: 'admin_daily_digest',
     recipientEmail: digestTo,
     extraData: metrics,

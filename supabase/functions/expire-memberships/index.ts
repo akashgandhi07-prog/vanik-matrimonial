@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
   const runId = runRow?.id as string | undefined;
 
   try {
-    const resendKey = Deno.env.get('RESEND_API_KEY');
+    const mailOk = isTransactionalMailConfigured();
     const now = new Date().toISOString();
 
     const { data: rows, error } = await admin
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
       if (up) continue;
       expired++;
 
-      if (resendKey) {
+      if (mailOk) {
         const since = new Date(Date.now() - 3 * 864e5).toISOString();
         const { count } = await admin
           .from('email_log')
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
           .eq('email_type', 'membership_expired')
           .gte('sent_at', since);
         if ((count ?? 0) === 0) {
-          await dispatchEmail(admin, resendKey, {
+          await dispatchEmail(admin, {
             type: 'membership_expired',
             recipientProfileId: pid,
           });

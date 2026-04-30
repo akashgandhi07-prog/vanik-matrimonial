@@ -134,7 +134,7 @@ export default function AdminFeedback() {
           </h2>
 
           <div className="table-scroll">
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '6px 8px' }}>Date</th>

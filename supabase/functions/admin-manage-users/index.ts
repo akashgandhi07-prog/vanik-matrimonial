@@ -3,8 +3,30 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { adminPowerRole, isSupportAdmin, metaIsAdminFlag, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, type EmailType } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+
+type QueryErrorLike = {
+  message?: string | null;
+  code?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
+function normalizeQueryError(label: string, err: unknown): string | null {
+  if (!err) return null;
+  if (typeof err !== 'object') {
+    const msg = String(err).trim();
+    return msg ? `${label}: ${msg}` : `${label}: unknown query error`;
+  }
+  const e = err as QueryErrorLike;
+  const parts = [e.message, e.code, e.details, e.hint]
+    .map((p) => (typeof p === 'string' ? p.trim() : ''))
+    .filter(Boolean);
+  if (parts.length === 0) return `${label}: unknown query error`;
+  return `${label}: ${parts.join(' | ')}`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -80,7 +102,7 @@ Deno.serve(async (req) => {
     const rows = profiles ?? [];
     const emails: Record<string, string> = {};
     let pendingPreviews:
-      | Record<string, { photo: string | null; id_document: string | null; id_is_image: boolean }>
+      | Record<string, { photo: string | null; photos: string[]; id_document: string | null; id_is_image: boolean }>
       | undefined;
     if (rows.length > 0) {
       const ids = rows.map((p: { id: string }) => p.id);
@@ -100,12 +122,18 @@ Deno.serve(async (req) => {
       if (f === 'pending') {
         pendingPreviews = {};
         const ttl = 1800;
-        for (const p of rows as { id: string; photo_url: string | null }[]) {
-          let photoSigned: string | null = null;
+        for (const p of rows as { id: string; photo_url: string | null; photo_paths?: string[] | null }[]) {
+          const photoSignedList: string[] = [];
           let idSigned: string | null = null;
-          if (p.photo_url) {
-            const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(p.photo_url, ttl);
-            photoSigned = s?.signedUrl ?? null;
+          const photoPaths = Array.isArray(p.photo_paths)
+            ? p.photo_paths.filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+            : [];
+          const uniquePaths = [...new Set(photoPaths)];
+          const effectivePhotoPaths = uniquePaths.length > 0 ? uniquePaths : (p.photo_url ? [p.photo_url] : []);
+          for (const path of effectivePhotoPaths) {
+            const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(path, ttl);
+            const signed = s?.signedUrl ?? null;
+            if (signed) photoSignedList.push(signed);
           }
           const idPath = idDocByProfile.get(p.id) ?? '';
           const idLower = idPath.toLowerCase();
@@ -116,7 +144,8 @@ Deno.serve(async (req) => {
             idSigned = s?.signedUrl ?? null;
           }
           pendingPreviews[p.id] = {
-            photo: photoSigned,
+            photo: photoSignedList[0] ?? null,
+            photos: photoSignedList,
             id_document: idSigned,
             id_is_image: idIsImage,
           };
@@ -288,34 +317,88 @@ Deno.serve(async (req) => {
         .lt('membership_expires_at', lapseCutoff),
       admin
         .from('admin_actions')
-        .select('id, action_type, created_at, notes')
+        .select('id, action_type, created_at, notes, admin_user_id, target_profile_id')
         .order('created_at', { ascending: false })
         .limit(20),
       admin.from('profiles').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       admin.from('profiles').select('id', { count: 'exact', head: true }).not('pending_photo_url', 'is', null),
       admin
         .from('stripe_checkout_sessions')
-        .select('id', { count: 'exact', head: true })
+        .select('checkout_session_id', { count: 'exact', head: true })
         .eq('purpose', 'registration')
         .eq('payment_status', 'paid'),
     ]);
 
     const errors = [
-      pending.error,
-      requestsWeek.error,
-      expiring.error,
-      flagged.error,
-      lapsed90.error,
-      actRes.error,
-      activeMembers.error,
-      photoPendingReview.error,
-      paidRegSessions.error,
-    ]
-      .filter(Boolean)
-      .map((e) => e!.message);
+      normalizeQueryError('pending profiles', pending.error),
+      normalizeQueryError('weekly requests', requestsWeek.error),
+      normalizeQueryError('expiring members', expiring.error),
+      normalizeQueryError('flagged feedback', flagged.error),
+      normalizeQueryError('long-lapsed members', lapsed90.error),
+      normalizeQueryError('recent actions', actRes.error),
+      normalizeQueryError('active members', activeMembers.error),
+      normalizeQueryError('photo pending review', photoPendingReview.error),
+      normalizeQueryError('paid registration sessions', paidRegSessions.error),
+    ].filter((e): e is string => typeof e === 'string' && e.length > 0);
     if (errors.length) {
       return jsonResponse({ error: [...new Set(errors)].join(' ') }, req, 500);
     }
+
+    const rawActions = (actRes.data ?? []) as {
+      id: string;
+      action_type: string;
+      created_at: string;
+      notes: string | null;
+      admin_user_id: string | null;
+      target_profile_id: string | null;
+    }[];
+
+    const adminIds = [
+      ...new Set(
+        rawActions
+          .map((a) => a.admin_user_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ),
+    ];
+    const adminEmailByUserId: Record<string, string | null> = {};
+    for (const uid of adminIds) {
+      const { data: u } = await admin.auth.admin.getUserById(uid);
+      adminEmailByUserId[uid] = u.user?.email ?? null;
+    }
+
+    const targetIds = [
+      ...new Set(
+        rawActions
+          .map((a) => a.target_profile_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ),
+    ];
+    const targetByProfileId: Record<string, { first_name: string; reference_number: string | null }> = {};
+    if (targetIds.length > 0) {
+      const { data: targetProfiles, error: tErr } = await admin
+        .from('profiles')
+        .select('id, first_name, reference_number')
+        .in('id', targetIds);
+      if (tErr) return jsonResponse({ error: tErr.message }, req, 500);
+      for (const p of targetProfiles ?? []) {
+        const row = p as { id: string; first_name: string; reference_number: string | null };
+        targetByProfileId[row.id] = {
+          first_name: row.first_name,
+          reference_number: row.reference_number,
+        };
+      }
+    }
+
+    const enrichedActions = rawActions.map((a) => ({
+      id: a.id,
+      action_type: a.action_type,
+      created_at: a.created_at,
+      notes: a.notes,
+      admin_user_id: a.admin_user_id,
+      admin_email: a.admin_user_id ? adminEmailByUserId[a.admin_user_id] ?? null : null,
+      target_profile_id: a.target_profile_id,
+      target_profile: a.target_profile_id ? targetByProfileId[a.target_profile_id] ?? null : null,
+    }));
 
     return jsonResponse({
       metrics: {
@@ -328,7 +411,7 @@ Deno.serve(async (req) => {
         photoPendingReview: photoPendingReview.count ?? 0,
         paidRegistrationSessions: paidRegSessions.count ?? 0,
       },
-      actions: actRes.data ?? [],
+      actions: enrichedActions,
       caller_role: adminPowerRole(userData.user),
     }, req);
   }
@@ -726,19 +809,33 @@ Deno.serve(async (req) => {
 
     const prof = profile as {
       photo_url: string | null;
+      photo_paths?: string[] | null;
       pending_photo_url: string | null;
     };
     const priv = memberPrivate as { id_document_url: string | null };
 
-    const signedUrls: { photo: string | null; pending_photo: string | null; id_document: string | null } = {
+    const signedUrls: {
+      photo: string | null;
+      photos: string[];
+      pending_photo: string | null;
+      id_document: string | null;
+    } = {
       photo: null,
+      photos: [],
       pending_photo: null,
       id_document: null,
     };
-    if (prof.photo_url) {
-      const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(prof.photo_url, 3600);
-      signedUrls.photo = s?.signedUrl ?? null;
+    const photoPaths = Array.isArray(prof.photo_paths)
+      ? prof.photo_paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      : [];
+    const uniquePaths = [...new Set(photoPaths)];
+    const effectivePhotoPaths = uniquePaths.length > 0 ? uniquePaths : (prof.photo_url ? [prof.photo_url] : []);
+    for (const path of effectivePhotoPaths) {
+      const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(path, 3600);
+      const signed = s?.signedUrl ?? null;
+      if (signed) signedUrls.photos.push(signed);
     }
+    signedUrls.photo = signedUrls.photos[0] ?? null;
     if (prof.pending_photo_url) {
       const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(prof.pending_photo_url, 900);
       signedUrls.pending_photo = s?.signedUrl ?? null;
@@ -1030,8 +1127,9 @@ Deno.serve(async (req) => {
     if (!profileId || !allowed.has(template)) {
       return jsonResponse({ error: 'profile_id and valid template required' }, req, 400);
     }
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (!resendKey) return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+    if (!isTransactionalMailConfigured()) {
+      return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+    }
 
     const { data: profT } = await admin.from('profiles').select('*').eq('id', profileId).single();
     const { data: memT } = await admin.from('member_private').select('*').eq('profile_id', profileId).single();
@@ -1049,7 +1147,7 @@ Deno.serve(async (req) => {
       extra.days = typeof body.days === 'number' ? Math.min(90, Math.max(1, body.days)) : 30;
     }
 
-    const r = await dispatchEmail(admin, resendKey, {
+    const r = await dispatchEmail(admin, {
       type: template as EmailType,
       recipientProfileId: profileId,
       extraData: extra,
@@ -1069,8 +1167,9 @@ Deno.serve(async (req) => {
     if (ids.length === 0 || ids.length > 40) {
       return jsonResponse({ error: 'profile_ids array required (max 40)' }, req, 400);
     }
-    const resendKey = Deno.env.get('RESEND_API_KEY');
-    if (!resendKey) return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+    if (!isTransactionalMailConfigured()) {
+      return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+    }
     let sent = 0;
     const skipped: string[] = [];
     for (const pid of ids) {
@@ -1079,7 +1178,7 @@ Deno.serve(async (req) => {
         skipped.push(pid);
         continue;
       }
-      const r = await dispatchEmail(admin, resendKey, {
+      const r = await dispatchEmail(admin, {
         type: 'admin_pending_reminder',
         recipientProfileId: pid,
       });

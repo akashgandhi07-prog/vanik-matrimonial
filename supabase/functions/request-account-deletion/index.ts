@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -42,9 +43,8 @@ Deno.serve(async (req) => {
     .update({ status: 'archived', show_on_register: false })
     .eq('id', prof.id);
 
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (resendKey) {
-    await dispatchEmail(admin, resendKey, {
+  if (isTransactionalMailConfigured()) {
+    await dispatchEmail(admin, {
       type: 'account_archived',
       recipientProfileId: prof.id,
     });

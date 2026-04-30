@@ -10,17 +10,13 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 export default function AdminLayout() {
   const navigate = useNavigate();
   const { ok, mfaOk, denyReason, refresh, adminRole } = useAdminGuard();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wide, setWide] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 900px)').matches : true
   );
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 900px)');
-    const fn = () => {
-      setWide(mq.matches);
-      if (mq.matches) setSidebarOpen(false);
-    };
+    const fn = () => setWide(mq.matches);
     mq.addEventListener('change', fn);
     return () => mq.removeEventListener('change', fn);
   }, []);
@@ -38,83 +34,108 @@ export default function AdminLayout() {
     return <MfaEnroll onDone={() => void refresh()} />;
   }
 
-  const showDrawer = !wide && sidebarOpen;
-
   return (
     <div className="admin-layout">
       {!wide && (
         <div className="admin-mobile-bar">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            aria-expanded={sidebarOpen}
-            aria-controls="admin-sidebar"
-            onClick={() => setSidebarOpen((o) => !o)}
-          >
-            Menu
-          </button>
-          <strong style={{ marginLeft: 12 }}>Admin</strong>
+          <strong className="admin-mobile-title">Admin</strong>
+          <div className="admin-mobile-nav">
+            <NavLink to="/admin" end className={navCls}>
+              Overview
+            </NavLink>
+            <NavLink to="/admin/members" className={navCls}>
+              Members
+            </NavLink>
+            <NavLink to="/admin/requests" className={navCls}>
+              Requests
+            </NavLink>
+            <NavLink to="/admin/feedback" className={navCls}>
+              Feedback
+            </NavLink>
+            {adminRole !== 'support' && (
+              <NavLink to="/admin/add-member" className={navCls}>
+                Add member
+              </NavLink>
+            )}
+            <NavLink to="/admin/scheduled-jobs" className={navCls}>
+              Scheduled jobs
+            </NavLink>
+            <NavLink to="/admin/coupons" className={navCls}>
+              Coupons
+            </NavLink>
+            <NavLink to="/admin/email-log" className={navCls}>
+              Email log
+            </NavLink>
+            <NavLink to="/admin/email-export" className={navCls}>
+              Export emails
+            </NavLink>
+            <NavLink to="/admin/settings" className={navCls}>
+              Settings
+            </NavLink>
+            <NavLink to="/" replace className="btn btn-secondary">
+              Exit admin
+            </NavLink>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await supabase.auth.signOut();
+                  } catch {
+                    /* still leave */
+                  }
+                  navigate('/', { replace: true });
+                })();
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       )}
-      {showDrawer && (
-        <button
-          type="button"
-          className="admin-sidebar-backdrop"
-          aria-label="Close menu"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      <aside
-        id="admin-sidebar"
-        className={`admin-sidebar ${showDrawer ? 'admin-sidebar--open' : ''}`}
-      >
+      {wide && <aside id="admin-sidebar" className="admin-sidebar">
         <strong className="admin-sidebar-title">Admin</strong>
-        <NavLink to="/admin" end className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin" end className={navCls}>
           Overview
         </NavLink>
-        <NavLink to="/admin/members" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/members" className={navCls}>
           Members
         </NavLink>
-        <NavLink to="/admin/requests" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/requests" className={navCls}>
           Requests
         </NavLink>
-        <NavLink to="/admin/feedback" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/feedback" className={navCls}>
           Feedback
         </NavLink>
         {adminRole !== 'support' && (
-          <NavLink to="/admin/add-member" className={navCls} onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/admin/add-member" className={navCls}>
             Add member
           </NavLink>
         )}
-        <NavLink to="/admin/scheduled-jobs" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/scheduled-jobs" className={navCls}>
           Scheduled jobs
         </NavLink>
-        <NavLink to="/admin/coupons" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/coupons" className={navCls}>
           Coupons
         </NavLink>
-        <NavLink to="/admin/email-log" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/email-log" className={navCls}>
           Email log
         </NavLink>
-        <NavLink to="/admin/email-export" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/email-export" className={navCls}>
           Export emails
         </NavLink>
-        <NavLink to="/admin/settings" className={navCls} onClick={() => setSidebarOpen(false)}>
+        <NavLink to="/admin/settings" className={navCls}>
           Settings
         </NavLink>
         <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <NavLink
-            to="/"
-            replace
-            className="btn btn-secondary"
-            onClick={() => setSidebarOpen(false)}
-          >
+          <NavLink to="/" replace className="btn btn-secondary">
             Exit admin
           </NavLink>
           <button
             type="button"
             className="btn btn-secondary"
             onClick={() => {
-              setSidebarOpen(false);
               void (async () => {
                 try {
                   await supabase.auth.signOut();
@@ -128,8 +149,8 @@ export default function AdminLayout() {
             Sign out
           </button>
         </div>
-      </aside>
-      <main className="admin-main table-scroll">
+      </aside>}
+      <main className="admin-main">
         <Outlet />
       </main>
     </div>

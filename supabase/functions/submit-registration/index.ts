@@ -2,7 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
-import { sendResendEmail, letterHtml } from '../_shared/resend.ts';
+import { letterHtml } from '../_shared/resend.ts';
+import { isTransactionalMailConfigured, sendTransactionalMail } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
@@ -348,9 +349,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (resendKey) {
-    await dispatchEmail(admin, resendKey, {
+  if (isTransactionalMailConfigured()) {
+    await dispatchEmail(admin, {
       type: 'registration_received',
       recipientProfileId: profileId,
       extra_data: {
@@ -371,7 +371,7 @@ Deno.serve(async (req) => {
        <strong>Email:</strong> ${email}</p>
        <p><a href="${publicSiteBaseUrl()}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
     );
-    await sendResendEmail(resendKey, {
+    await sendTransactionalMail({
       to: notify,
       subject: adminSubject,
       html,

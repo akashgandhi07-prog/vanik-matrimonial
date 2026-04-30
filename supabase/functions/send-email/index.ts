@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, EmailType } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -47,15 +48,16 @@ Deno.serve(async (req) => {
 
   if (!body.type) return jsonResponse({ error: 'type required' }, req, 400);
 
-  const resendKey = Deno.env.get('RESEND_API_KEY');
-  if (!resendKey) return jsonResponse({ error: 'Email not configured' }, req, 500);
+  if (!isTransactionalMailConfigured()) {
+    return jsonResponse({ error: 'Email not configured' }, req, 500);
+  }
 
   const admin = createClient(
     supabaseUrl,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  const result = await dispatchEmail(admin, resendKey, {
+  const result = await dispatchEmail(admin, {
     type: body.type,
     recipientProfileId: body.recipient_profile_id,
     recipientEmail: body.recipient_email,

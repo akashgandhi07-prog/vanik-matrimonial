@@ -5,6 +5,15 @@ import { fetchMyProfileStatusLite, pathForMemberStatus } from '../lib/memberProf
 import { supabase } from '../lib/supabase';
 
 const POLL_MS = 60_000;
+const FOLLOW_UP_DAYS = 10;
+
+function daysSinceRegistered(createdAt: string | null): number | null {
+  if (!createdAt) return null;
+  const started = new Date(createdAt).getTime();
+  if (Number.isNaN(started)) return null;
+  const elapsedMs = Date.now() - started;
+  return Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+}
 
 export default function RegistrationPending() {
   const navigate = useNavigate();
@@ -13,56 +22,76 @@ export default function RegistrationPending() {
   const [checking, setChecking] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
+  const [statusModalMessage, setStatusModalMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function sync() {
-      setSyncError(null);
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const u = session?.user;
-        if (!u) return;
-        if (u.email) setEmail(u.email);
-
-        const lite = await fetchMyProfileStatusLite(u.id);
-        if (cancelled) return;
-
-        if (lite?.reference_number) {
-          setRef(lite.reference_number);
-          try {
-            sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
-          } catch {
-            /* ignore */
-          }
-        }
-
-        const next = pathForMemberStatus(lite?.status ?? null);
-        if (next && next !== '/registration-pending') {
-          navigate(next, { replace: true });
-          return;
-        }
-        setStatusNote(`Still under review as of ${new Date().toLocaleTimeString()}.`);
-      } catch {
-        if (!cancelled) setSyncError('Could not refresh your status right now. Please try again.');
-      }
-    }
-
-    void sync();
-    const interval = window.setInterval(() => void sync(), POLL_MS);
+    void syncStatus();
+    const interval = window.setInterval(() => void syncStatus(), POLL_MS);
     const onVis = () => {
-      if (document.visibilityState === 'visible') void sync();
+      if (document.visibilityState === 'visible') void syncStatus();
     };
     document.addEventListener('visibilitychange', onVis);
 
     return () => {
-      cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [navigate]);
+
+  async function syncStatus(options?: { manual?: boolean }) {
+    const manual = options?.manual === true;
+    if (manual) {
+      setChecking(true);
+      setStatusNote('Checking status...');
+    }
+    setSyncError(null);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const u = session?.user;
+      if (!u) {
+        setSyncError('You are signed out. Please sign in again to check your status.');
+        return;
+      }
+      if (u.email) setEmail(u.email);
+
+      const lite = await fetchMyProfileStatusLite(u.id);
+      if (lite?.reference_number) {
+        setRef(lite.reference_number);
+        try {
+          sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const next = pathForMemberStatus(lite?.status ?? null);
+      if (next && next !== '/registration-pending') {
+        navigate(next, { replace: true });
+        return;
+      }
+      if (manual) {
+        const waitedDays = daysSinceRegistered(lite?.created_at ?? null);
+        const daysLabel =
+          waitedDays == null
+            ? 'We could not calculate your registration age yet.'
+            : `It has been ${waitedDays} day${waitedDays === 1 ? '' : 's'} since you registered.`;
+        const followUp =
+          waitedDays != null && waitedDays > FOLLOW_UP_DAYS
+            ? `It has been over ${FOLLOW_UP_DAYS} days. Please email mahesh.gandhi@vanikcouncil.uk.`
+            : '';
+        setStatusModalMessage(
+          ['Your account is still under review.', daysLabel, followUp].filter(Boolean).join('\n\n')
+        );
+      }
+      setStatusNote(`Still under review as of ${new Date().toLocaleTimeString()}.`);
+    } catch {
+      setSyncError('Status check failed. Please try again.');
+    } finally {
+      if (manual) setChecking(false);
+    }
+  }
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -113,31 +142,7 @@ export default function RegistrationPending() {
               className="btn btn-primary"
               disabled={checking}
               onClick={() => {
-                void (async () => {
-                  setChecking(true);
-                  setSyncError(null);
-                  try {
-                    const {
-                      data: { session },
-                    } = await supabase.auth.getSession();
-                    const uid = session?.user?.id;
-                    if (!uid) {
-                      setSyncError('You are signed out. Please sign in again to check your status.');
-                      return;
-                    }
-                    const lite = await fetchMyProfileStatusLite(uid);
-                    const next = pathForMemberStatus(lite?.status ?? null);
-                    if (next && next !== '/registration-pending') {
-                      navigate(next, { replace: true });
-                      return;
-                    }
-                    setStatusNote(`Still under review as of ${new Date().toLocaleTimeString()}.`);
-                  } catch {
-                    setSyncError('Status check failed. Please try again.');
-                  } finally {
-                    setChecking(false);
-                  }
-                })();
+                void syncStatus({ manual: true });
               }}
             >
               {checking ? 'Checking…' : 'Check status'}
@@ -151,6 +156,29 @@ export default function RegistrationPending() {
           </div>
         </div>
       </div>
+      {statusModalMessage && (
+        <div
+          role="dialog"
+          aria-modal
+          aria-labelledby="pending-status-modal-title"
+          className="modal-backdrop"
+          onClick={() => setStatusModalMessage(null)}
+        >
+          <div className="card modal-panel" onClick={(e) => e.stopPropagation()}>
+            <h3 id="pending-status-modal-title">Status update</h3>
+            {statusModalMessage.split('\n\n').map((paragraph) => (
+              <p key={paragraph} style={{ margin: '0.6rem 0' }}>
+                {paragraph}
+              </p>
+            ))}
+            <div className="modal-actions" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-primary" onClick={() => setStatusModalMessage(null)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PublicLayout>
   );
 }
