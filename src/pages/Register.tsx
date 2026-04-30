@@ -48,6 +48,7 @@ type FormState = {
   diet: string;
   hobbies: string;
   photo_path: string;
+  photo_paths: string[];
   consent_contact: boolean;
   consent_age: boolean;
   consent_privacy: boolean;
@@ -82,6 +83,7 @@ const defaultState: FormState = {
   diet: '',
   hobbies: '',
   photo_path: '',
+  photo_paths: [],
   consent_contact: false,
   consent_age: false,
   consent_privacy: false,
@@ -156,7 +158,7 @@ function validateStep3(form: FormState): Record<string, string> {
   if (!form.diet) e.diet = 'Please select a diet preference.';
   if (!form.hobbies.trim()) e.hobbies = 'Hobbies and interests are required.';
   else if (form.hobbies.trim().length < 3) e.hobbies = 'Please share a little more (at least a few words).';
-  if (!form.photo_path) e.photo_path = 'Please upload a profile photo.';
+  if (!form.photo_paths.length) e.photo_path = 'Please upload at least one profile photo.';
   if (!form.consent_contact) e.consent_contact = 'You must consent to share contact details for this service.';
   if (!form.consent_age) e.consent_age = 'You must confirm you are 18 or over.';
   if (!form.consent_privacy) e.consent_privacy = 'You must accept the privacy policy and terms of use.';
@@ -225,7 +227,8 @@ export default function Register() {
   const [form, setForm] = useState<FormState>(() => loadState());
   const [idProgress, setIdProgress] = useState(0);
   const [idUploading, setIdUploading] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [dragPhotoIndex, setDragPhotoIndex] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -380,6 +383,7 @@ export default function Register() {
         coupon_hint: '',
         id_document_path: '',
         photo_path: '',
+        photo_paths: [],
         id_file_name: '',
         photo_compress_note: '',
         consent_contact: false,
@@ -387,9 +391,9 @@ export default function Register() {
         consent_privacy: false,
         step: 1,
       }));
-      setPhotoPreview((old) => {
-        if (old) URL.revokeObjectURL(old);
-        return null;
+      setPhotoPreviews((old) => {
+        old.forEach((url) => URL.revokeObjectURL(url));
+        return [];
       });
     })();
   }, [session?.user?.id, verified, location.pathname]);
@@ -506,6 +510,10 @@ export default function Register() {
 
   async function uploadPhoto(file: File) {
     if (!session?.user || !form.gender) return;
+    if (form.photo_paths.length >= 3) {
+      setFieldErrors((prev) => ({ ...prev, photo_path: 'Maximum 3 photos allowed.' }));
+      return;
+    }
     const reject = rejectReasonIfNotJpegOrPng(file);
     if (reject) {
       setFieldErrors((prev) => ({ ...prev, photo_path: reject }));
@@ -522,11 +530,8 @@ export default function Register() {
       });
       const note = `${(file.size / (1024 * 1024)).toFixed(1)}MB → ${(compressed.size / 1024).toFixed(0)}KB`;
       update({ photo_compress_note: note });
-      setPhotoPreview((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(compressed);
-      });
-      const path = `${form.gender}/${session.user.id}/photo.jpg`;
+      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+      const path = `${form.gender}/${session.user.id}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
       const { error } = await supabase.storage.from('profile-photos').upload(path, compressed, {
         upsert: true,
         contentType: compressed.type || 'image/jpeg',
@@ -536,7 +541,9 @@ export default function Register() {
         setActionNotice({ type: 'err', text: `Could not upload profile photo: ${error.message}` });
         return;
       }
-      update({ photo_path: path });
+      setPhotoPreviews((prev) => [...prev, URL.createObjectURL(compressed)]);
+      const nextPaths = [...form.photo_paths, path].slice(0, 3);
+      update({ photo_paths: nextPaths, photo_path: nextPaths[0] ?? '' });
       setActionNotice({ type: 'ok', text: 'Photo uploaded. You can submit your registration now.' });
     } catch (err) {
       setActionNotice({
@@ -570,6 +577,7 @@ export default function Register() {
         home_address_postcode: sanitizeText(form.home_address_postcode, 20),
         home_address_country: sanitizeText(form.home_address_country, 80),
         id_document_path: form.id_document_path,
+        photo_paths: form.photo_paths,
         photo_path: form.photo_path,
         coupon_code: form.coupon_code.trim(),
         first_name: sanitizeText(form.first_name, 80),
@@ -608,6 +616,31 @@ export default function Register() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function removePhotoAt(index: number) {
+    setPhotoPreviews((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target);
+      return prev.filter((_, i) => i !== index);
+    });
+    const nextPaths = form.photo_paths.filter((_, i) => i !== index);
+    update({ photo_paths: nextPaths, photo_path: nextPaths[0] ?? '' });
+  }
+
+  function movePhoto(from: number, to: number) {
+    if (from === to || from < 0 || to < 0) return;
+    if (from >= form.photo_paths.length || to >= form.photo_paths.length) return;
+    const nextPaths = [...form.photo_paths];
+    const [movedPath] = nextPaths.splice(from, 1);
+    nextPaths.splice(to, 0, movedPath);
+    setPhotoPreviews((prev) => {
+      const next = [...prev];
+      const [movedPreview] = next.splice(from, 1);
+      next.splice(to, 0, movedPreview);
+      return next;
+    });
+    update({ photo_paths: nextPaths, photo_path: nextPaths[0] ?? '' });
   }
 
   if (!sessionReady) {
@@ -1526,23 +1559,24 @@ export default function Register() {
               </div>
               <div>
                 <label className="label" htmlFor="reg-photo">
-                  Profile photo <span aria-hidden="true">*</span>
+                  Profile photos (up to 3) <span aria-hidden="true">*</span>
                 </label>
                 <p className="field-hint">
-                  A clear, recent face photo. <strong>JPG or PNG only.</strong> Visible to other members after
-                  approval. Images are compressed before upload.
+                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos.</strong>{' '}
+                  <strong>JPG or PNG only.</strong> Visible to other members after approval. Images are compressed
+                  before upload. Drag and drop to reorder.
                 </p>
                 <input
                   id="reg-photo"
                   type="file"
                   accept="image/jpeg,image/png"
+                  multiple
                   disabled={photoUploading}
                   onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      void uploadPhoto(f);
-                      clearFieldError('photo_path');
-                    }
+                    const files = Array.from(e.target.files ?? []);
+                    files.slice(0, 3).forEach((f) => void uploadPhoto(f));
+                    clearFieldError('photo_path');
+                    e.currentTarget.value = '';
                   }}
                 />
                 {photoUploading && (
@@ -1555,20 +1589,39 @@ export default function Register() {
                     {form.photo_compress_note}
                   </p>
                 )}
-                {photoPreview && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      width: 160,
-                      height: 160,
-                      borderRadius: 8,
-                      overflow: 'hidden',
-                      border: form.photo_path
-                        ? '3px solid var(--color-success)'
-                        : '1px solid var(--color-border)',
-                    }}
-                  >
-                    <img src={photoPreview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {photoPreviews.length > 0 && (
+                  <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                    {photoPreviews.map((src, idx) => (
+                      <div
+                        key={form.photo_paths[idx] ?? src}
+                        draggable
+                        onDragStart={() => setDragPhotoIndex(idx)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          if (dragPhotoIndex != null) movePhoto(dragPhotoIndex, idx);
+                          setDragPhotoIndex(null);
+                        }}
+                        style={{
+                          display: 'flex',
+                          gap: 10,
+                          alignItems: 'center',
+                          padding: 8,
+                          border: idx === 0 ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+                          borderRadius: 8,
+                        }}
+                      >
+                        <img src={src} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6 }} />
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 13 }}>{idx === 0 ? 'Primary profile photo' : `Photo ${idx + 1}`}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                            Drag to reorder
+                          </p>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={() => removePhotoAt(idx)}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {fieldErrors.photo_path && <p className="field-error">{fieldErrors.photo_path}</p>}

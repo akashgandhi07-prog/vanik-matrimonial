@@ -17,6 +17,14 @@ type FormProps = {
   loadAll: () => Promise<void>;
 };
 
+type ProfilePhoto = {
+  id: string;
+  storage_path: string;
+  position: number;
+  is_primary: boolean;
+  signed_url: string | null;
+};
+
 function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const navigate = useNavigate();
   const [education, setEducation] = useState(p.education ?? '');
@@ -34,7 +42,8 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [delOpen, setDelOpen] = useState(false);
   const [delConfirm, setDelConfirm] = useState('');
   const [delError, setDelError] = useState('');
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<ProfilePhoto[]>([]);
+  const [dragPhotoIndex, setDragPhotoIndex] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [saveError, setSaveError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -174,7 +183,32 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     }, 1500);
   }
 
+  async function loadPhotos() {
+    const data = (await invokeFunction('member-manage-photos', { action: 'list' })) as {
+      photos?: Array<{ id: string; storage_path: string; position: number; is_primary: boolean }>;
+    };
+    const rows = [...(data.photos ?? [])].sort((a, b) => a.position - b.position);
+    const signed = await Promise.all(
+      rows.map(async (row) => {
+        const { data: signedData } = await supabase.storage.from('profile-photos').createSignedUrl(row.storage_path, 3600);
+        return {
+          ...row,
+          signed_url: signedData?.signedUrl ?? null,
+        };
+      })
+    );
+    setPhotos(signed);
+  }
+
+  useEffect(() => {
+    void loadPhotos();
+  }, [p.id]);
+
   async function newPhoto(file: File) {
+    if (photos.length >= 3) {
+      setPhotoError('Maximum 3 photos allowed.');
+      return;
+    }
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
     if (!uid) return;
@@ -191,24 +225,61 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         maxWidthOrHeight: 800,
         useWebWorker: true,
       });
-      setPreview(URL.createObjectURL(compressed));
-      const path = `${p.gender}/${uid}/photo-pending.jpg`;
+      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+      const path = `${p.gender}/${uid}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
       const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
         upsert: true,
+        contentType: compressed.type || 'image/jpeg',
       });
       if (upErr) {
         setPhotoError(upErr.message);
         return;
       }
-      const { error: dbErr } = await supabase
-        .from('profiles')
-        .update({ pending_photo_url: path, photo_status: 'pending' })
-        .eq('id', p.id);
-      if (dbErr) {
-        setPhotoError(dbErr.message);
-        return;
-      }
+      await invokeFunction('member-manage-photos', { action: 'add', storage_path: path });
+      await loadPhotos();
       void loadAll();
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  async function removePhoto(photoId: string) {
+    setPhotoSaving(true);
+    setPhotoError('');
+    try {
+      await invokeFunction('member-manage-photos', { action: 'remove', photo_id: photoId });
+      await loadPhotos();
+      void loadAll();
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Could not remove photo.');
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  async function setPrimary(photoId: string) {
+    setPhotoSaving(true);
+    setPhotoError('');
+    try {
+      await invokeFunction('member-manage-photos', { action: 'set_primary', photo_id: photoId });
+      await loadPhotos();
+      void loadAll();
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Could not set primary photo.');
+    } finally {
+      setPhotoSaving(false);
+    }
+  }
+
+  async function movePhoto(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || from >= photos.length || to >= photos.length) return;
+    setPhotoSaving(true);
+    setPhotoError('');
+    try {
+      await invokeFunction('member-manage-photos', { action: 'reorder', from_index: from, to_index: to });
+      await loadPhotos();
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Could not reorder photos.');
     } finally {
       setPhotoSaving(false);
     }
@@ -393,24 +464,24 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
 
         <h3>Profile photo</h3>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          New photos require admin approval before they replace your current picture.
+          Upload up to 3 photos. Drag and drop to reorder, and set any photo as your profile picture.
         </p>
-        {(p.pending_photo_url || p.photo_status === 'pending') && (
-          <p className="badge badge-warning" style={{ marginBottom: 8 }}>
-            Your new photo is awaiting admin review. Your current approved photo remains visible where applicable.
-          </p>
-        )}
         <label className="label" htmlFor="mp-photo-file">
-          Upload new photo (JPG or PNG only)
+          Upload photo (JPG or PNG only)
         </label>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
+          Use a clear photo of your face only. Group photos are not accepted.
+        </p>
         <input
           id="mp-photo-file"
           type="file"
           accept="image/jpeg,image/png"
+          multiple
           disabled={photoSaving}
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void newPhoto(f);
+            const files = Array.from(e.target.files ?? []);
+            files.slice(0, 3).forEach((f) => void newPhoto(f));
+            e.currentTarget.value = '';
           }}
         />
         {photoSaving && (
@@ -421,12 +492,53 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         {photoError && (
           <p style={{ fontSize: 13, color: 'var(--color-danger)', margin: '4px 0 0' }}>{photoError}</p>
         )}
-        {preview && (
-          <img
-            src={preview}
-            alt="Preview of your selected photo"
-            style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 8, marginTop: 8 }}
-          />
+        {photos.length > 0 && (
+          <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+            {photos.map((photo, idx) => (
+              <div
+                key={photo.id}
+                draggable
+                onDragStart={() => setDragPhotoIndex(idx)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  if (dragPhotoIndex != null) void movePhoto(dragPhotoIndex, idx);
+                  setDragPhotoIndex(null);
+                }}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'center',
+                  border: photo.is_primary ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+                  borderRadius: 8,
+                  padding: 8,
+                }}
+              >
+                {photo.signed_url ? (
+                  <img
+                    src={photo.signed_url}
+                    alt={`Profile photo ${idx + 1}`}
+                    style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6 }}
+                  />
+                ) : (
+                  <div style={{ width: 72, height: 72, borderRadius: 6, background: 'var(--color-surface-muted)' }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    {photo.is_primary ? 'Primary profile photo' : `Photo ${idx + 1}`}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}>Drag to reorder</p>
+                </div>
+                {!photo.is_primary && (
+                  <button type="button" className="btn btn-secondary" disabled={photoSaving} onClick={() => void setPrimary(photo.id)}>
+                    Set primary
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" disabled={photoSaving} onClick={() => void removePhoto(photo.id)}>
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
         )}
 
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />

@@ -124,16 +124,32 @@ Deno.serve(async (req) => {
   }
 
   const gender = body.gender === 'Female' ? 'Female' : 'Male';
-  const photoPath = String(body.photo_path ?? '');
+  const authUserId = userData.user.id;
+  const rawPhotoPaths = Array.isArray(body.photo_paths)
+    ? body.photo_paths.map((v) => String(v ?? '').trim()).filter((v) => !!v)
+    : [];
+  const singlePhotoPath = String(body.photo_path ?? '').trim();
+  const photoPaths = rawPhotoPaths.length > 0 ? rawPhotoPaths.slice(0, 3) : singlePhotoPath ? [singlePhotoPath] : [];
+  const photoPath = photoPaths[0] ?? '';
   const idPath = String(body.id_document_path ?? '');
-  if (!photoPath || !idPath) {
+  if (!photoPaths.length || !idPath) {
     return jsonResponse({ error: 'Files required' }, req, 400);
   }
+  if (photoPaths.length > 3) {
+    return jsonResponse({ error: 'You can upload up to 3 photos' }, req, 400);
+  }
 
-  if (!pathExtensionOk(photoPath, 'photo') || !pathExtensionOk(idPath, 'id')) {
+  if (photoPaths.some((p) => !pathExtensionOk(p, 'photo')) || !pathExtensionOk(idPath, 'id')) {
     return jsonResponse({ error: 'Profile photo and proof of identity must be JPG or PNG' }, req, 400);
   }
-  const photoOk = await verifyObjectExists(admin, 'profile-photos', photoPath);
+  const expectedPhotoPrefix = `${gender}/${authUserId}/`;
+  const expectedIdPrefix = `${authUserId}/`;
+  if (photoPaths.some((p) => !p.startsWith(expectedPhotoPrefix)) || !idPath.startsWith(expectedIdPrefix)) {
+    return jsonResponse({ error: 'Upload path is invalid for this account.' }, req, 400);
+  }
+  const photoOk = (await Promise.all(photoPaths.map((p) => verifyObjectExists(admin, 'profile-photos', p)))).every(
+    Boolean
+  );
   const idOk = await verifyObjectExists(admin, 'id-documents', idPath);
   if (!photoOk || !idOk) {
     return jsonResponse({ error: 'Upload not found' }, req, 400);
@@ -252,6 +268,17 @@ Deno.serve(async (req) => {
     if (upPriv) {
       return jsonResponse({ error: upPriv.message }, req, 500);
     }
+    await admin.from('profile_photos').delete().eq('profile_id', profileId);
+    const photoRows = photoPaths.map((path, idx) => ({
+      profile_id: profileId,
+      storage_path: path,
+      position: idx,
+      is_primary: idx === 0,
+    }));
+    const { error: photoInsertErr } = await admin.from('profile_photos').insert(photoRows);
+    if (photoInsertErr) {
+      return jsonResponse({ error: photoInsertErr.message }, req, 500);
+    }
 
     if (couponValid && couponRaw !== prevCouponCode) {
       await admin.rpc('increment_coupon_use', { p_code: couponRaw });
@@ -276,6 +303,18 @@ Deno.serve(async (req) => {
     if (mErr) {
       await admin.from('profiles').delete().eq('id', profileId);
       return jsonResponse({ error: mErr.message }, req, 500);
+    }
+    const photoRows = photoPaths.map((path, idx) => ({
+      profile_id: profileId,
+      storage_path: path,
+      position: idx,
+      is_primary: idx === 0,
+    }));
+    const { error: photoInsertErr } = await admin.from('profile_photos').insert(photoRows);
+    if (photoInsertErr) {
+      await admin.from('member_private').delete().eq('profile_id', profileId);
+      await admin.from('profiles').delete().eq('id', profileId);
+      return jsonResponse({ error: photoInsertErr.message }, req, 500);
     }
 
     const { data: refResult, error: refErr } = await admin.rpc('assign_next_reference_number', {
