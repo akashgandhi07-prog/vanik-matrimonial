@@ -73,7 +73,7 @@ export default function Landing() {
             <div className="landing-aside-card">
               <h2>How it works</h2>
               <ol className="landing-steps-list">
-                <li>Register and upload proof of identity. We review your application within five working days.</li>
+                <li>Register and upload proof of identity. We review your application within 10 working days.</li>
                 <li>Once approved, browse verified profiles and save anyone you'd like to know more about.</li>
                 <li>
                   Request contact details and view them directly in your My requests page. You can line up

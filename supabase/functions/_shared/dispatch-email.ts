@@ -89,8 +89,8 @@ export async function dispatchEmail(
       inner = `<p>Dear ${first},</p>
         <p>${
           resubmitted
-            ? 'Thank you - we have received your <strong>updated</strong> application and will review it again within five working days.'
-            : 'We have received your application to the Vanik Matrimonial Register and will review it within five working days.'
+            ? 'Thank you - we have received your <strong>updated</strong> application and will review it again within 10 working days.'
+            : 'We have received your application to the Vanik Matrimonial Register and will review it within 10 working days.'
         }</p>
         <p>If you have any questions, simply reply to this email.</p>`;
       break;
@@ -118,7 +118,7 @@ export async function dispatchEmail(
           <li>We ask for a short piece of feedback after each introduction - this is for admin and safeguarding purposes only and is never shared with the other person.</li>
         </ul>
         <p>If you have any questions, simply reply to this email.</p>
-        <p>With good wishes,<br/>The register team<br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
+        <p>With good wishes,<br/><br/>The register team<br/><br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
       break;
     }
        case 'registration_rejected': {
@@ -245,7 +245,7 @@ export async function dispatchEmail(
       subject = 'Reminder: your application is awaiting review';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
-        <p>We aim to review applications within five working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
+        <p>We aim to review applications within 10 working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;
       break;

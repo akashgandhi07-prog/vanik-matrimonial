@@ -107,7 +107,7 @@ export default function RegistrationPending() {
           <h1>Thanks - we&apos;ve got everything</h1>
           <p className="register-lead" style={{ marginBottom: '1rem' }}>
             You&apos;ve submitted your full profile and we&apos;re reviewing your application. We aim to get back
-            to you within <strong>five working days</strong> at <strong>{displayEmail}</strong>.
+            to you within <strong>10 working days</strong> at <strong>{displayEmail}</strong>.
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: 1.5 }}>
             There&apos;s nothing else you need to do for now - we&apos;ll email you once your membership has been

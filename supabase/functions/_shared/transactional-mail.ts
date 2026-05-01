@@ -55,6 +55,21 @@ export function transactionalMailMissingReason(): string {
   return `Edge sees smtp_user=${s.smtp_user_present} smtp_pass=${s.smtp_pass_present} resend=${s.resend_present} (functions project host: ${s.edge_supabase_host ?? 'unknown'}). If the dashboard shows SMTP secrets but this is false, your browser app may be calling a different Supabase project—check VITE_SUPABASE_URL matches that host.`;
 }
 
+/** Base64 body with 76-char lines; avoids denomailer's quoted-printable (=20 before line breaks). */
+function htmlToBase64MimeBody(html: string): string {
+  const bytes = new TextEncoder().encode(html);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const raw = btoa(binary);
+  const lines: string[] = [];
+  for (let i = 0; i < raw.length; i += 76) {
+    lines.push(raw.slice(i, i + 76));
+  }
+  return lines.join('\r\n');
+}
+
 async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; error: string | null }> {
   const user = readSmtpUser()!;
   const pass = readSmtpPass()!;
@@ -79,7 +94,13 @@ async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; 
       from: `${fromName} <${fromEmail}>`,
       to: payload.to,
       subject: payload.subject,
-      html: payload.html,
+      mimeContent: [
+        {
+          mimeType: 'text/html; charset="utf-8"',
+          content: htmlToBase64MimeBody(payload.html),
+          transferEncoding: 'base64',
+        },
+      ],
       ...(replyTo ? { replyTo } : {}),
     });
     await client.close();

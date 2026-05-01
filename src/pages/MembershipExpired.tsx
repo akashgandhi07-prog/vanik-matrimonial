@@ -60,17 +60,81 @@ export default function MembershipExpired() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('checkout') === 'success') {
-      setNotice('Payment received. Your membership will update in a few moments. Refresh if needed.');
-      setSearchParams({}, { replace: true });
-      const t = window.setTimeout(() => void load(), 2000);
-      return () => window.clearTimeout(t);
-    }
     if (searchParams.get('checkout') === 'cancel') {
       setNotice('Payment was cancelled.');
-      setSearchParams({}, { replace: true });
+      const next = new URLSearchParams(searchParams);
+      next.delete('checkout');
+      setSearchParams(next, { replace: true });
+      return;
     }
-  }, [searchParams, setSearchParams, load]);
+    if (searchParams.get('checkout') !== 'success') return;
+
+    setNotice('Payment received. Updating your membership…');
+    const next = new URLSearchParams(searchParams);
+    next.delete('checkout');
+    next.delete('session_id');
+    setSearchParams(next, { replace: true });
+
+    let cancelled = false;
+
+    function subscriptionRenewed(
+      before: { exp: string | null; st: string },
+      after: { exp: string | null; st: string }
+    ): boolean {
+      if (
+        after.st === 'active' &&
+        before.st !== 'active' &&
+        (before.st === 'expired' || before.st === 'archived')
+      ) {
+        return true;
+      }
+      const a = before.exp ? new Date(before.exp).getTime() : 0;
+      const b = after.exp ? new Date(after.exp).getTime() : 0;
+      return b > a;
+    }
+
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+
+      async function snapshot() {
+        const { data } = await supabase
+          .from('profiles')
+          .select('membership_expires_at, status')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        return {
+          exp: (data?.membership_expires_at as string) ?? null,
+          st: (data?.status as string) ?? '',
+        };
+      }
+
+      const before = await snapshot();
+      for (let i = 0; i < 12 && !cancelled; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 1500));
+        await load();
+        const after = await snapshot();
+        if (subscriptionRenewed(before, after)) {
+          if (!cancelled) {
+            setNotice('Renewal complete — opening your member area…');
+            navigate('/dashboard/browse', { replace: true });
+          }
+          return;
+        }
+      }
+      if (!cancelled) {
+        setNotice(
+          'Payment received. If your expiry date still looks wrong, refresh the page or check your email for confirmation.',
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, setSearchParams, load, navigate]);
 
   const dateLabel = profile?.membership_expires_at
     ? new Date(profile.membership_expires_at).toLocaleDateString('en-GB', {

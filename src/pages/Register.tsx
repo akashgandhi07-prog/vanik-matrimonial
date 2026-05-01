@@ -464,6 +464,7 @@ export default function Register() {
     try {
       const res = (await invokeFunction('create-checkout-session', {
         purpose: 'registration',
+        client_origin: window.location.origin,
       })) as { url?: string };
       if (res.url) window.location.href = res.url;
       else throw new Error('No checkout URL returned');
@@ -864,17 +865,7 @@ export default function Register() {
             </p>
           )}
           {resubmitMode && (
-            <div
-              className="badge badge-warning"
-              style={{
-                display: 'block',
-                marginBottom: 16,
-                padding: 12,
-                textAlign: 'left',
-                fontSize: 14,
-                lineHeight: 1.5,
-              }}
-            >
+            <div className="register-resubmit-callout" role="status">
               <strong>Resubmitting your application.</strong> Your previous details are pre-filled below. You
               can correct the highlighted issues and re-upload required files, then
               complete all three steps and submit again for review.

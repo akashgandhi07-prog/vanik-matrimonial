@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
-import { publicSiteBaseUrl } from '../_shared/site-url.ts';
+import { checkoutRedirectBase } from '../_shared/site-url.ts';
 
 type Purpose = 'registration' | 'renewal';
 
@@ -11,12 +11,6 @@ function safeInternalPath(p: unknown, fallback: string): string {
     return fallback;
   }
   return p;
-}
-
-function siteBase(): string {
-  const env = Deno.env.get('PUBLIC_SITE_URL')?.replace(/\/$/, '').trim();
-  if (env) return env;
-  return publicSiteBaseUrl();
 }
 
 Deno.serve(async (req) => {
@@ -49,7 +43,13 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
-  let body: { purpose?: Purpose; renewal_success_path?: string; renewal_cancel_path?: string };
+  let body: {
+    purpose?: Purpose;
+    renewal_success_path?: string;
+    renewal_cancel_path?: string;
+    /** Browser origin (e.g. https://hostname) — must be allowlisted; see checkoutRedirectBase. */
+    client_origin?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
   }
 
   const purpose = body.purpose === 'renewal' ? 'renewal' : 'registration';
-  const base = siteBase();
+  const base = checkoutRedirectBase(body.client_origin);
 
   const admin = getAdminClient();
   const uid = userData.user.id;
