@@ -38,6 +38,7 @@ async function logEmail(
     subject: string;
     resend_message_id: string | null;
     status: string;
+    failure_detail?: string | null;
   }
 ) {
   await admin.from('email_log').insert(row);
@@ -263,6 +264,7 @@ export async function dispatchEmail(
     subject,
     resend_message_id: id,
     status,
+    failure_detail: error ?? null,
   });
   if (error) return { ok: false, error };
   return { ok: true, messageId: id };
