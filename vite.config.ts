@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: () => '/functions/v1/resend-webhook',
         },
+        '/bff/functions': {
+          target: supabaseOrigin,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/bff\/functions/, '/functions/v1'),
+        },
       },
     },
   }

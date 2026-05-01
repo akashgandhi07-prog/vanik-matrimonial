@@ -21,6 +21,27 @@ export const supabase = createClient(url ?? '', anon ?? '', {
   },
 });
 
+/**
+ * Same-origin proxy for Edge Functions (see `VITE_SUPABASE_FUNCTIONS_BFF_PREFIX` in `.env.example`).
+ * Avoids "Failed to fetch" when trackers block `*.supabase.co` requests.
+ */
+function usesFunctionsBffProxy(): boolean {
+  const prefix = (import.meta.env.VITE_SUPABASE_FUNCTIONS_BFF_PREFIX as string | undefined)?.trim();
+  return !!prefix && typeof window !== 'undefined' && !!window.location?.origin;
+}
+
+/** Absolute URL path after `/functions/v1` (starts with `/`, may include query). */
+function functionsHttpUrl(pathAfterV1Root: string): string {
+  const rawPrefix = (import.meta.env.VITE_SUPABASE_FUNCTIONS_BFF_PREFIX as string | undefined)?.trim();
+  const path = pathAfterV1Root.startsWith('/') ? pathAfterV1Root : `/${pathAfterV1Root}`;
+  if (rawPrefix && typeof window !== 'undefined' && window.location?.origin) {
+    const normalized = rawPrefix.startsWith('/') ? rawPrefix : `/${rawPrefix}`;
+    return `${window.location.origin.replace(/\/$/, '')}${normalized.replace(/\/$/, '')}${path}`;
+  }
+  const base = (url ?? '').replace(/\/$/, '');
+  return `${base}/functions/v1${path}`;
+}
+
 function functionsBase(): string {
   return (url ?? '').replace(/\/$/, '');
 }
@@ -94,7 +115,8 @@ async function fetchFunctionEndpoint(
   }
 ) {
   const { anon } = requireEnv();
-  const res = await fetch(`${functionsBase()}/functions/v1${path}`, {
+  const invokeUrl = functionsHttpUrl(path);
+  const res = await fetch(invokeUrl, {
     method: options.method ?? 'POST',
     headers: {
       Authorization: `Bearer ${options.token}`,
@@ -104,10 +126,12 @@ async function fetchFunctionEndpoint(
     ...(options.method !== 'GET' ? { body: JSON.stringify(options.body ?? {}) } : {}),
   }).catch((error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error);
-    const target = `${functionsBase()}/functions/v1`;
+    const directTarget = `${functionsBase()}/functions/v1`;
     const hint =
       msg.includes('fetch') || msg.includes('NetworkError')
-        ? ` Check DevTools → Network for ${target}. Common causes: browser/ad-blocker blocking *.supabase.co, wrong VITE_SUPABASE_URL (must be https://YOUR_PROJECT_REF.supabase.co), or CORS (add your exact Origin to Edge secret CORS_ALLOWED_ORIGINS).`
+        ? usesFunctionsBffProxy()
+          ? ` Request URL was ${invokeUrl}. If still failing, check Vercel rewrites for /bff/functions → Supabase or local Vite proxy.`
+          : ` Check DevTools → Network for ${directTarget}. If blocked by an extension/network, set VITE_SUPABASE_FUNCTIONS_BFF_PREFIX=/bff/functions in hosting + add the Vercel rewrite (see .env.example), or whitelist *.supabase.co. Also verify VITE_SUPABASE_URL and Edge CORS.`
         : '';
     throw new Error(`${options.networkErrorPrefix ?? 'Could not reach Edge Function'}: ${msg}.${hint}`);
   });
@@ -167,6 +191,26 @@ export async function invokeFunction(name: string, body?: object) {
 
   const networkErrorPrefix =
     'Could not reach Edge Function. Deploy functions and check network / ad blockers';
+
+  if (usesFunctionsBffProxy()) {
+    let lastRelay: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!tokenNow) throw new Error('Not authenticated - please log in again.');
+      try {
+        return await invokeFunctionDirectFetch(name, body, tokenNow);
+      } catch (e) {
+        lastRelay = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (attempt === 0 && jwtHint401(msg)) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (refreshed.session?.access_token) continue;
+        }
+        throw e instanceof Error ? e : new Error(String(e));
+      }
+    }
+    throw lastRelay instanceof Error ? lastRelay : new Error(String(lastRelay));
+  }
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
@@ -276,7 +320,7 @@ export async function fetchPhotoSignedUrl(profileId: string): Promise<string | n
   const token = await getAccessToken();
   if (!token || !url || !anon) return null;
   const res = await fetch(
-    `${functionsBase()}/functions/v1/serve-photo?profile_id=${encodeURIComponent(profileId)}`,
+    functionsHttpUrl(`/serve-photo?profile_id=${encodeURIComponent(profileId)}`),
     { headers: { Authorization: `Bearer ${token}`, apikey: anon } }
   ).catch(() => null);
   if (!res || !res.ok) return null;

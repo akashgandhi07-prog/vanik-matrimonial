@@ -1,3 +1,20 @@
 {
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/bff/functions/:path*",
+      "destination": "https://foltwnahxqlijbwtkhih.supabase.co/functions/v1/:path*"
+    },
+    {
+      "source": "/bff/functions/",
+      "destination": "https://foltwnahxqlijbwtkhih.supabase.co/functions/v1/"
+    },
+    {
+      "source": "/bff/functions",
+      "destination": "https://foltwnahxqlijbwtkhih.supabase.co/functions/v1/"
+    },
+    {
+      "source": "/((?!api/|bff/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
