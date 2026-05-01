@@ -1,15 +1,63 @@
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 import { sendResendEmail, type EmailPayload } from './resend.ts';
 
+function readSmtpUser(): string | undefined {
+  for (const key of ['SMTP_USER', 'SMTP_USERNAME', 'GMAIL_SMTP_USER'] as const) {
+    const t = Deno.env.get(key)?.trim();
+    if (t) return t;
+  }
+  return undefined;
+}
+
+function readSmtpPass(): string | undefined {
+  for (const key of ['SMTP_PASS', 'SMTP_PASSWORD', 'GMAIL_SMTP_PASS', 'GMAIL_APP_PASSWORD'] as const) {
+    const t = Deno.env.get(key)?.trim();
+    if (t) return t;
+  }
+  return undefined;
+}
+
 /** True when Edge Functions can send mail (Gmail/custom SMTP or Resend). */
 export function isTransactionalMailConfigured(): boolean {
-  const smtp = !!(Deno.env.get('SMTP_USER')?.trim() && Deno.env.get('SMTP_PASS'));
+  const smtp = !!(readSmtpUser() && readSmtpPass());
   return smtp || !!Deno.env.get('RESEND_API_KEY');
 }
 
+/** Safe diagnostics for admin tooling (no secret values). */
+export function transactionalMailRuntimeStatus(): {
+  configured: boolean;
+  smtp_user_present: boolean;
+  smtp_pass_present: boolean;
+  resend_present: boolean;
+  edge_supabase_host: string | null;
+} {
+  const u = readSmtpUser();
+  const p = readSmtpPass();
+  let edge_supabase_host: string | null = null;
+  try {
+    const raw = Deno.env.get('SUPABASE_URL');
+    if (raw) edge_supabase_host = new URL(raw).host;
+  } catch {
+    edge_supabase_host = null;
+  }
+  return {
+    configured: !!(u && p) || !!Deno.env.get('RESEND_API_KEY'),
+    smtp_user_present: !!u,
+    smtp_pass_present: !!p,
+    resend_present: !!Deno.env.get('RESEND_API_KEY'),
+    edge_supabase_host,
+  };
+}
+
+export function transactionalMailMissingReason(): string {
+  if (isTransactionalMailConfigured()) return '';
+  const s = transactionalMailRuntimeStatus();
+  return `Edge sees smtp_user=${s.smtp_user_present} smtp_pass=${s.smtp_pass_present} resend=${s.resend_present} (functions project host: ${s.edge_supabase_host ?? 'unknown'}). If the dashboard shows SMTP secrets but this is false, your browser app may be calling a different Supabase project—check VITE_SUPABASE_URL matches that host.`;
+}
+
 async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; error: string | null }> {
-  const user = Deno.env.get('SMTP_USER')!.trim();
-  const pass = Deno.env.get('SMTP_PASS')!;
+  const user = readSmtpUser()!;
+  const pass = readSmtpPass()!;
   const host = Deno.env.get('SMTP_HOST')?.trim() || 'smtp.gmail.com';
   const port = Number(Deno.env.get('SMTP_PORT') || '587');
   const tls = port === 465;
@@ -53,14 +101,21 @@ async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; 
 export async function sendTransactionalMail(
   payload: EmailPayload
 ): Promise<{ id: string | null; error: string | null }> {
-  const user = Deno.env.get('SMTP_USER')?.trim();
-  const pass = Deno.env.get('SMTP_PASS');
+  const user = readSmtpUser();
+  const pass = readSmtpPass();
   if (user && pass) {
     return sendViaSmtp(payload);
   }
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (resendKey) {
-    return sendResendEmail(resendKey, payload);
+    const r = await sendResendEmail(resendKey, payload);
+    if (r.error && /not verified|verify your domain/i.test(r.error)) {
+      return {
+        id: null,
+        error: `${r.error} — If you use Gmail for transactional mail, set Edge secrets SMTP_USER + SMTP_PASS (same app password as Auth SMTP), redeploy functions, and remove RESEND_API_KEY so Resend is not used.`,
+      };
+    }
+    return r;
   }
   return { id: null, error: 'Email not configured (set SMTP_USER + SMTP_PASS or RESEND_API_KEY)' };
 }

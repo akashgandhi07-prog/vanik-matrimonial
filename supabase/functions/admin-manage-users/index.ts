@@ -3,7 +3,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { adminPowerRole, isSupportAdmin, metaIsAdminFlag, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, type EmailType } from '../_shared/dispatch-email.ts';
-import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
+import {
+  isTransactionalMailConfigured,
+  transactionalMailMissingReason,
+  transactionalMailRuntimeStatus,
+} from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
@@ -64,6 +68,10 @@ Deno.serve(async (req) => {
   }
 
   const action = typeof body.action === 'string' ? body.action : '';
+
+  if (action === 'mail_provider_status') {
+    return jsonResponse(transactionalMailRuntimeStatus(), req);
+  }
 
   if (action === 'list_profiles') {
     const f = typeof body.filter === 'string' ? body.filter : 'all';
@@ -1128,7 +1136,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'profile_id and valid template required' }, req, 400);
     }
     if (!isTransactionalMailConfigured()) {
-      return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+      return jsonResponse(
+        { error: `Email provider not configured. ${transactionalMailMissingReason()}` },
+        req,
+        500
+      );
     }
 
     const { data: profT } = await admin.from('profiles').select('*').eq('id', profileId).single();
@@ -1168,7 +1180,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'profile_ids array required (max 40)' }, req, 400);
     }
     if (!isTransactionalMailConfigured()) {
-      return jsonResponse({ error: 'Email provider not configured' }, req, 500);
+      return jsonResponse(
+        { error: `Email provider not configured. ${transactionalMailMissingReason()}` },
+        req,
+        500
+      );
     }
     let sent = 0;
     const skipped: string[] = [];

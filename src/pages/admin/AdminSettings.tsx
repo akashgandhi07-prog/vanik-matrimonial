@@ -10,6 +10,24 @@ type AuthRow = {
   created_at: string;
 };
 
+type MailProviderStatus = {
+  configured: boolean;
+  smtp_user_present: boolean;
+  smtp_pass_present: boolean;
+  resend_present: boolean;
+  edge_supabase_host: string | null;
+};
+
+function browserSupabaseHost(): string | null {
+  const raw = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!raw?.trim()) return null;
+  try {
+    return new URL(raw.trim()).host;
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminSettings() {
   const [users, setUsers] = useState<AuthRow[]>([]);
   const [stats, setStats] = useState<{
@@ -23,12 +41,13 @@ export default function AdminSettings() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [myPowerRole, setMyPowerRole] = useState<'super' | 'support' | null>(null);
+  const [mailStatus, setMailStatus] = useState<MailProviderStatus | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const [listRes, statsRes] = await Promise.all([
+      const [listRes, statsRes, mailRes] = await Promise.all([
         invokeFunction('admin-manage-users', { action: 'list' }) as Promise<{ users?: AuthRow[] }>,
         invokeFunction('admin-manage-users', { action: 'settings_stats' }) as Promise<{
           byStatus?: Record<string, number>;
@@ -37,7 +56,16 @@ export default function AdminSettings() {
           emailAttempted?: number;
           emailOk?: number;
         }>,
+        invokeFunction('admin-manage-users', { action: 'mail_provider_status' }) as Promise<MailProviderStatus>,
       ]);
+      setMailStatus(
+        mailRes &&
+          typeof mailRes.configured === 'boolean' &&
+          typeof mailRes.smtp_user_present === 'boolean' &&
+          typeof mailRes.smtp_pass_present === 'boolean'
+          ? mailRes
+          : null
+      );
       setUsers(listRes.users ?? []);
       if (
         statsRes.byStatus != null &&
@@ -60,6 +88,7 @@ export default function AdminSettings() {
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load settings');
       setStats(null);
+      setMailStatus(null);
     } finally {
       setLoading(false);
     }
@@ -115,6 +144,12 @@ export default function AdminSettings() {
       ? Math.round((stats.emailOk / stats.emailAttempted) * 1000) / 10
       : null;
 
+  const viteHost = browserSupabaseHost();
+  const hostMismatch =
+    mailStatus?.edge_supabase_host &&
+    viteHost &&
+    mailStatus.edge_supabase_host !== viteHost;
+
   return (
     <div>
       <h1>Settings</h1>
@@ -137,6 +172,54 @@ export default function AdminSettings() {
       )}
 
       {loading && <p>Loading…</p>}
+
+      {mailStatus && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 24,
+            padding: 16,
+            background: mailStatus.configured && !hostMismatch ? 'var(--color-surface)' : '#fff8e6',
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Email delivery (Edge Functions)</h2>
+          <p style={{ marginBottom: 12, fontSize: 14, color: 'var(--color-text-secondary)' }}>
+            Transactional mail (approvals, reminders, etc.) uses SMTP or Resend secrets on the{' '}
+            <strong>same</strong> Supabase project your app calls. Auth “forgot password” uses Dashboard SMTP
+            separately.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14, lineHeight: 1.6 }}>
+            <li>
+              <strong>Edge sees SMTP user:</strong> {mailStatus.smtp_user_present ? 'yes' : 'no'}
+            </li>
+            <li>
+              <strong>Edge sees SMTP password:</strong> {mailStatus.smtp_pass_present ? 'yes' : 'no'}
+            </li>
+            <li>
+              <strong>Resend API key:</strong> {mailStatus.resend_present ? 'set' : 'not set'}
+            </li>
+            <li>
+              <strong>Ready to send from Edge:</strong> {mailStatus.configured ? 'yes' : 'no'}
+            </li>
+            <li>
+              <strong>Functions project host:</strong>{' '}
+              <code style={{ fontSize: 13 }}>{mailStatus.edge_supabase_host ?? '—'}</code>
+            </li>
+            <li>
+              <strong>This build’s VITE_SUPABASE_URL host:</strong>{' '}
+              <code style={{ fontSize: 13 }}>{viteHost ?? '—'}</code>
+            </li>
+          </ul>
+          {hostMismatch && (
+            <p style={{ marginTop: 12, color: 'var(--color-danger)', fontSize: 14 }}>
+              Host mismatch: secrets apply to <code>{mailStatus.edge_supabase_host}</code> but this site is configured
+              for <code>{viteHost}</code>. Update Vercel (or env) so <code>VITE_SUPABASE_URL</code> matches the project
+              where you set SMTP secrets, then redeploy the frontend.
+            </p>
+          )}
+        </div>
+      )}
 
       {stats && (
         <div className="card table-scroll" style={{ marginBottom: 24 }}>

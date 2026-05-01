@@ -104,7 +104,12 @@ async function fetchFunctionEndpoint(
     ...(options.method !== 'GET' ? { body: JSON.stringify(options.body ?? {}) } : {}),
   }).catch((error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`${options.networkErrorPrefix ?? 'Could not reach Edge Function'}: ${msg}`);
+    const target = `${functionsBase()}/functions/v1`;
+    const hint =
+      msg.includes('fetch') || msg.includes('NetworkError')
+        ? ` Check DevTools → Network for ${target}. Common causes: browser/ad-blocker blocking *.supabase.co, wrong VITE_SUPABASE_URL (must be https://YOUR_PROJECT_REF.supabase.co), or CORS (add your exact Origin to Edge secret CORS_ALLOWED_ORIGINS).`
+        : '';
+    throw new Error(`${options.networkErrorPrefix ?? 'Could not reach Edge Function'}: ${msg}.${hint}`);
   });
 
   const text = await res.text();
