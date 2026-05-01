@@ -98,12 +98,13 @@ export default function MembershipExpired() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
+      const authUserId = user.id;
 
       async function snapshot() {
         const { data } = await supabase
           .from('profiles')
           .select('membership_expires_at, status')
-          .eq('auth_user_id', user.id)
+          .eq('auth_user_id', authUserId)
           .maybeSingle();
         return {
           exp: (data?.membership_expires_at as string) ?? null,
