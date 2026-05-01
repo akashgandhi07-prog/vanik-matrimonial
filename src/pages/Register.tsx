@@ -734,7 +734,7 @@ export default function Register() {
               </button>
             </form>
             <p className="register-auth-footer">
-              <Link to="/login">Already registered? Sign in</Link>
+              Already a member? <Link to="/login">Member login</Link>
             </p>
           </div>
         </div>
@@ -1559,10 +1559,18 @@ export default function Register() {
                 <label className="label" htmlFor="reg-photo">
                   Profile photos (up to 3) <span aria-hidden="true">*</span>
                 </label>
-                <p className="field-hint">
-                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos.</strong>{' '}
-                  <strong>JPG or PNG only.</strong> Visible to other members after approval. Images are compressed
-                  before upload. Drag and drop to reorder.
+                <p id="reg-photo-hint" className="field-hint">
+                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos</strong>—group
+                  shots or unclear images will be rejected. <strong>JPG or PNG only.</strong> Visible to other members
+                  after approval. Images are compressed before upload. Drag and drop to reorder.
+                </p>
+                <p
+                  id="reg-photo-footnote"
+                  className="field-hint"
+                  style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}
+                >
+                  Your photos are only shown to someone after they have requested full details for your
+                  profile—not on the initial browse list.
                 </p>
                 <input
                   id="reg-photo"
@@ -1570,6 +1578,7 @@ export default function Register() {
                   accept="image/jpeg,image/png"
                   multiple
                   disabled={photoUploading}
+                  aria-describedby="reg-photo-hint reg-photo-footnote"
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []);
                     files.slice(0, 3).forEach((f) => void uploadPhoto(f));

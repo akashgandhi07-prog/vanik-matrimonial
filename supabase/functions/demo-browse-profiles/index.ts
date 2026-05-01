@@ -12,31 +12,16 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!supabaseUrl || !anonKey || !serviceKey) {
+  if (!supabaseUrl || !serviceKey) {
     return jsonResponse({ error: 'Server misconfigured' }, req, 500);
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, req, 401);
-  }
-
-  const bearer = authHeader.slice(7).trim();
   /**
-   * Public browse preview: no names, photos, or contact data — same shape as the logged-in teaser.
-   * Allow the project's anon key (how `invokePublicFunction` calls) or any valid user session JWT.
+   * Public browse preview only (fields below are sanitized). `verify_jwt` is false for this function.
+   * No in-handler auth: the SPA already ships the anon key; strict Bearer/anon matching returned 401
+   * when hosting env keys drifted from the Supabase project or proxies dropped `Authorization`.
    */
-  const publicAnonCall = bearer === anonKey;
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (!publicAnonCall && (userErr || !userData.user)) {
-    return jsonResponse({ error: 'Unauthorized' }, req, 401);
-  }
-
   const admin = createClient(supabaseUrl, serviceKey);
   const { data, error } = await admin
     .from('profiles')
