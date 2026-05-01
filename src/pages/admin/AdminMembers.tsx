@@ -87,6 +87,9 @@ export default function AdminMembers() {
   const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const loadMembers = useCallback(async () => {
     setLoadError(null);
@@ -181,6 +184,13 @@ export default function AdminMembers() {
     });
   }, [members, search, emailByProfileId]);
 
+  const selectedCount = useMemo(
+    () => Object.keys(selectedIds).filter((id) => selectedIds[id]).length,
+    [selectedIds]
+  );
+
+  const tableColCount = filter === 'pending' ? 14 : 11;
+
   return (
     <div>
       <h1>Members</h1>
@@ -212,27 +222,26 @@ export default function AdminMembers() {
           </button>
         ))}
       </div>
-      {filter === 'pending' && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => {
-              const rows = filteredMembers.filter((m) => m.status === 'pending_approval');
-              const next: Record<string, boolean> = {};
-              for (const m of rows) next[m.id] = true;
-              setSelectedIds(next);
-            }}
-          >
-            Select all (pending in view)
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={() => setSelectedIds({})}>
-            Clear selection
-          </button>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            const next: Record<string, boolean> = {};
+            for (const m of filteredMembers) next[m.id] = true;
+            setSelectedIds(next);
+          }}
+        >
+          Select all in view
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => setSelectedIds({})}>
+          Clear selection
+        </button>
+        {filter === 'pending' && (
           <button
             type="button"
             className="btn btn-primary"
-            disabled={bulkBusy || Object.keys(selectedIds).filter((id) => selectedIds[id]).length === 0}
+            disabled={bulkBusy || selectedCount === 0}
             onClick={async () => {
               const ids = Object.keys(selectedIds).filter((id) => selectedIds[id]);
               if (!ids.length) return;
@@ -255,8 +264,22 @@ export default function AdminMembers() {
           >
             {bulkBusy ? 'Sending…' : 'Send reminder to selected'}
           </button>
-        </div>
-      )}
+        )}
+        {!supportOnly && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: 'var(--color-danger)' }}
+            disabled={selectedCount === 0}
+            onClick={() => {
+              setDeleteConfirmText('');
+              setDeleteModalOpen(true);
+            }}
+          >
+            Delete selected permanently…
+          </button>
+        )}
+      </div>
       <div style={{ marginBottom: 12 }}>
         <button
           type="button"
@@ -296,12 +319,14 @@ export default function AdminMembers() {
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ padding: 8, width: 80, whiteSpace: 'nowrap' }}>Ref</th>
+              <th style={{ padding: 8, width: 44, whiteSpace: 'nowrap' }} title="Select for bulk actions">
+                Sel
+              </th>
               {filter === 'pending' && (
                 <>
                   <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Photo</th>
                   <th style={{ padding: 8, width: 56, whiteSpace: 'nowrap' }}>ID</th>
                   <th style={{ padding: 8, width: 86, whiteSpace: 'nowrap' }}>Waiting</th>
-                  <th style={{ padding: 8, width: 50, whiteSpace: 'nowrap' }}>Sel</th>
                 </>
               )}
               <th style={{ padding: 8, width: 124 }}>Name</th>
@@ -318,20 +343,14 @@ export default function AdminMembers() {
           <tbody>
             {loading && (
               <tr>
-                <td
-                  colSpan={filter === 'pending' ? 14 : 10}
-                  style={{ padding: 16, color: 'var(--color-text-secondary)' }}
-                >
+                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && filteredMembers.length === 0 && (
               <tr>
-                <td
-                  colSpan={filter === 'pending' ? 14 : 10}
-                  style={{ padding: 16, color: 'var(--color-text-secondary)' }}
-                >
+                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
                   {loadError
                     ? 'Could not load members.'
                     : 'No rows for this filter. If you expect pending applications, confirm their status is pending_approval in Supabase and that your admin session can read all profiles (see note above).'}
@@ -354,6 +373,14 @@ export default function AdminMembers() {
                 return (
                   <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.reference_number}</td>
+                    <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!selectedIds[m.id]}
+                        onChange={(e) => setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))}
+                        aria-label={`Select ${m.first_name}`}
+                      />
+                    </td>
                     {filter === 'pending' && (
                       <>
                         <td style={{ padding: 8, verticalAlign: 'middle' }}>
@@ -392,20 +419,6 @@ export default function AdminMembers() {
                             </>
                           ) : (
                             '-'
-                          )}
-                        </td>
-                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
-                          {m.status === 'pending_approval' ? (
-                            <input
-                              type="checkbox"
-                              checked={!!selectedIds[m.id]}
-                              onChange={(e) =>
-                                setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))
-                              }
-                              aria-label={`Select ${m.first_name}`}
-                            />
-                          ) : (
-                            <span style={{ color: 'var(--color-text-secondary)' }}>-</span>
                           )}
                         </td>
                       </>
@@ -474,6 +487,89 @@ export default function AdminMembers() {
           </tbody>
         </table>
       </div>
+
+      {deleteModalOpen && (
+        <div
+          role="dialog"
+          aria-modal
+          aria-labelledby="admin-bulk-del-title"
+          className="modal-backdrop"
+          onClick={() => !deleteBusy && setDeleteModalOpen(false)}
+        >
+          <div className="card modal-panel" onClick={(e) => e.stopPropagation()}>
+            <h3 id="admin-bulk-del-title" style={{ marginTop: 0 }}>
+              Permanently delete members
+            </h3>
+            <p style={{ marginBottom: 12 }}>
+              This will remove <strong>{selectedCount}</strong> selected member account(s): auth login, profile,
+              private details, and related data (same as automated purge after archival). Storage photos and ID files
+              are removed where possible. This cannot be undone.
+            </p>
+            <p style={{ marginBottom: 8 }}>
+              Type <strong>DELETE</strong> to confirm.
+            </p>
+            <label className="label" htmlFor="admin-bulk-del-confirm">
+              Confirmation
+            </label>
+            <input
+              id="admin-bulk-del-confirm"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+              disabled={deleteBusy}
+            />
+            <div className="modal-actions" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={deleteBusy}
+                onClick={() => setDeleteModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ background: 'var(--color-danger)' }}
+                disabled={deleteBusy || deleteConfirmText !== 'DELETE'}
+                onClick={async () => {
+                  if (deleteConfirmText !== 'DELETE') return;
+                  const ids = Object.keys(selectedIds).filter((id) => selectedIds[id]);
+                  if (!ids.length) return;
+                  setDeleteBusy(true);
+                  try {
+                    const res = (await invokeFunction('admin-manage-users', {
+                      action: 'delete_members_permanent',
+                      confirm_text: 'DELETE',
+                      profile_ids: ids,
+                    })) as {
+                      deleted?: string[];
+                      failed?: { profile_id: string; error: string }[];
+                    };
+                    const deleted = res.deleted ?? [];
+                    const failed = res.failed ?? [];
+                    const parts = [
+                      `Removed ${deleted.length} account(s).`,
+                      failed.length ? `Failed (${failed.length}): ${failed.map((f) => `${f.profile_id}: ${f.error}`).join('; ')}` : '',
+                    ].filter(Boolean);
+                    alert(parts.join('\n\n'));
+                    setDeleteModalOpen(false);
+                    setSelectedIds({});
+                    await loadMembers();
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Delete failed');
+                  } finally {
+                    setDeleteBusy(false);
+                  }
+                }}
+              >
+                {deleteBusy ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

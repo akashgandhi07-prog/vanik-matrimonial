@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) {
-    return jsonResponse({ error: userErr?.message ?? 'Unauthorized' }, req, 401);
+    return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   if (isUserAdmin(userData.user)) {
@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (pErr) {
-    return jsonResponse({ error: pErr.message }, req, 500);
+    console.error('member-bootstrap profile by auth_user_id', pErr.message);
+    return jsonResponse({ error: 'Request failed' }, req, 500);
   }
 
   if (!profile && userData.user.email) {
@@ -62,7 +63,8 @@ Deno.serve(async (req) => {
       .limit(1);
 
     if (privErr) {
-      return jsonResponse({ error: privErr.message }, req, 500);
+      console.error('member-bootstrap member_private lookup', privErr.message);
+      return jsonResponse({ error: 'Request failed' }, req, 500);
     }
 
     const profileId = (privRows?.[0] as { profile_id?: string } | undefined)?.profile_id;
@@ -74,7 +76,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (p2Err) {
-        return jsonResponse({ error: p2Err.message }, req, 500);
+        console.error('member-bootstrap profile by id', p2Err.message);
+        return jsonResponse({ error: 'Request failed' }, req, 500);
       }
 
       if (p2) {
@@ -97,6 +100,26 @@ Deno.serve(async (req) => {
               .eq('id', p2.id as string);
             if (!upErr) {
               profile = { ...p2, auth_user_id: uid };
+              const pid = p2.id as string;
+              const note =
+                `auth_user_id re-linked: profile recovered when prior Auth user was absent. previous_auth_user_id=${currentAuth} new_auth_user_id=${uid}`;
+              console.warn(
+                JSON.stringify({
+                  event: 'member_bootstrap_auth_relink',
+                  profile_id: pid,
+                  previous_auth_user_id: currentAuth,
+                  new_auth_user_id: uid,
+                })
+              );
+              const { error: actErr } = await admin.from('admin_actions').insert({
+                admin_user_id: null,
+                target_profile_id: pid,
+                action_type: 'auth_user_relinked',
+                notes: note.slice(0, 4000),
+              });
+              if (actErr) {
+                console.error('member-bootstrap admin_actions insert', actErr.message);
+              }
             }
           }
         }
@@ -115,7 +138,8 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (mErr) {
-    return jsonResponse({ error: mErr.message }, req, 500);
+    console.error('member-bootstrap member_private select', mErr.message);
+    return jsonResponse({ error: 'Request failed' }, req, 500);
   }
 
   return jsonResponse(

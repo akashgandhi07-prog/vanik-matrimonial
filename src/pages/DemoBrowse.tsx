@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
-import { invokePublicFunction } from '../lib/supabase';
+import { EdgeFunctionHttpError, invokeFunction } from '../lib/supabase';
 
 type DemoProfile = {
   id: string;
@@ -94,14 +94,20 @@ export default function DemoBrowse() {
     setLoading(true);
     setError(null);
     try {
-      const res = (await invokePublicFunction('demo-browse-profiles', {})) as {
+      const res = (await invokeFunction('demo-browse-profiles', {})) as {
         profiles?: Array<
           Omit<DemoProfile, 'id' | 'reference_number' | 'first_name'> & {
             demo_id: string;
             demo_label?: string;
           }
         >;
+        demo_unavailable_for_admin?: boolean;
       };
+      if (res.demo_unavailable_for_admin) {
+        setError('Demo browse uses member visibility rules. Sign in with a member account to preview.');
+        setProfiles([]);
+        return;
+      }
       const rows = res.profiles ?? [];
       setProfiles(
         rows.map((p) => ({
@@ -120,8 +126,20 @@ export default function DemoBrowse() {
         }))
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Could not load demo profiles.';
-      setError(msg);
+      if (e instanceof EdgeFunctionHttpError && e.code === 'auth_required') {
+        setError('Sign in to explore how member profiles appear to other members.');
+      } else if (e instanceof EdgeFunctionHttpError && e.code === 'rate_limited') {
+        setError('Too many requests. Please try again later.');
+      } else {
+        const msg = e instanceof Error ? e.message : 'Could not load demo profiles.';
+        if (msg.includes('Not authenticated')) {
+          setError('Sign in to explore how member profiles appear to other members.');
+        } else if (msg.includes('Too many attempts') || msg.includes('rate_limited')) {
+          setError('Too many requests. Please try again later.');
+        } else {
+          setError(msg);
+        }
+      }
       setProfiles([]);
     } finally {
       setLoading(false);
