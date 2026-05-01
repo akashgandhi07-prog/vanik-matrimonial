@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { ProfileRow } from '../member/memberContext';
@@ -90,6 +90,8 @@ function friendlyContactsError(err: unknown): string {
 }
 
 export default function MemberRequests() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { profile, candidates, requests, feedbackKeys, bookmarks, toggleBookmark } = useMemberArea();
   const [contactsByRequest, setContactsByRequest] = useState<Record<string, ContactDetailRow[]>>({});
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -219,6 +221,28 @@ export default function MemberRequests() {
     };
   }, [requests, candidates]);
 
+  useEffect(() => {
+    const focusProfileId = (location.state as { focusProfileId?: string } | null)?.focusProfileId;
+    if (!focusProfileId) return;
+
+    const prof = profilesById[focusProfileId] ?? candidates.find((x) => x.id === focusProfileId);
+    if (!prof) return;
+
+    const requestForCandidate = requests.find((r) => {
+      const ids = Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [];
+      return ids.includes(focusProfileId);
+    });
+    const contacts = requestForCandidate ? contactsByRequest[requestForCandidate.id] ?? [] : [];
+    const details = contacts.find((row) => row.profile_id === focusProfileId);
+
+    setSelectedProfile({
+      profile: prof,
+      contactDetails: details?.mobile ? { mobile: details.mobile } : undefined,
+    });
+
+    navigate('/dashboard/requests', { replace: true, state: {} });
+  }, [location.state, profilesById, candidates, contactsByRequest, requests, navigate]);
+
   const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
 
   const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
@@ -230,7 +254,8 @@ export default function MemberRequests() {
       <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
         <p style={{ margin: 0, fontWeight: 500 }}>No requests yet</p>
         <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-          Go to <Link to="/dashboard/browse">Browse</Link> and select up to 3 candidates to request their contact details.
+          Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit — up to 3 at a time,
+          within your 7-day and monthly limits shown there.
         </p>
       </div>
     );
@@ -240,12 +265,22 @@ export default function MemberRequests() {
     <div className="card">
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
-        Everything you requested is shown here, so you can call or message directly from this screen.
-        Limits: up to <strong>3</strong> distinct profiles per rolling 7-day window, and up to{' '}
-        <strong>6 distinct profiles</strong> per calendar month (asking again for someone you already requested this
-        month does not use
-        an extra monthly slot once the 7-day cooldown has passed). If you still owe feedback on introductions older than
-        21 days, new requests are blocked until that feedback is submitted.
+        Phone numbers and other details you were approved for appear here so you can follow up directly.
+      </p>
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+        <strong>Limits:</strong> up to <strong>3</strong> new people per rolling 7 days, and <strong>6</strong> distinct
+        people per calendar month. Outstanding feedback can block new requests — see the Feedback column below.
+      </p>
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
+        <details>
+          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text)' }}>
+            Repeat requests &amp; monthly count
+          </summary>
+          <span style={{ display: 'block', marginTop: 8 }}>
+            If you already counted someone in this month&apos;s 6, asking again after the 7-day wait does not use another
+            monthly slot.
+          </span>
+        </details>
       </p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, margin: '12px 0 16px' }}>
         <div
@@ -260,9 +295,9 @@ export default function MemberRequests() {
           }}
         >
           {weeklyWindow.locked ? (
-            <>All 3 weekly slots used. Resets {weeklyWindow.resetAt ?? 'soon'}.</>
+            <>7-day limit: all 3 used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.</>
           ) : (
-            <>This week: {weeklyWindow.used}/3 distinct profiles · {weeklyWindow.remaining} remaining</>
+            <>7-day limit: {weeklyWindow.used} of 3 used · {weeklyWindow.remaining} left</>
           )}
         </div>
         <div
@@ -277,9 +312,9 @@ export default function MemberRequests() {
           }}
         >
           {monthlyWindow.locked ? (
-            <>All 6 monthly slots used. Resets {monthlyWindow.resetAt}.</>
+            <>Month limit: all 6 used. Resets {monthlyWindow.resetAt}.</>
           ) : (
-            <>This month: {monthlyWindow.used}/6 distinct profiles · {monthlyWindow.remaining} remaining</>
+            <>Month limit: {monthlyWindow.used} of 6 used · {monthlyWindow.remaining} left</>
           )}
         </div>
       </div>

@@ -4,7 +4,8 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6–v8 and some valid DB ids. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Stable `code` for clients; `error` duplicates `code` for older callers. */
 function jsonErr(
@@ -70,7 +71,7 @@ Deno.serve(async (req) => {
       if (typeof rawId !== 'string') {
         return jsonErr(req, 400, 'candidate_ids_invalid_type', 'candidate_ids must contain only strings');
       }
-      const id = rawId.trim();
+      const id = rawId.trim().toLowerCase();
       if (!id || !UUID_RE.test(id)) {
         return jsonErr(req, 400, 'candidate_ids_invalid_uuid', 'candidate_ids contains an invalid profile id');
       }

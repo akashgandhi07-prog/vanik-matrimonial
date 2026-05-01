@@ -70,23 +70,6 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
   return p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female');
 }
 
-function profileCompletenessPercent(profile: ProfileRow): number {
-  const checks = [
-    !!profile.education?.trim(),
-    !!profile.job_title?.trim(),
-    !!profile.height_cm,
-    !!profile.diet?.trim(),
-    !!profile.hobbies?.trim(),
-    !!profile.religion?.trim(),
-    !!profile.nationality?.trim(),
-    !!profile.place_of_birth?.trim(),
-    !!profile.town_country_of_origin?.trim(),
-    !!profile.photo_url,
-  ];
-  const score = checks.filter(Boolean).length;
-  return Math.round((score / checks.length) * 100);
-}
-
 export default function MemberBrowse() {
   const navigate = useNavigate();
   const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll, notice, clearNotice } =
@@ -213,10 +196,18 @@ export default function MemberBrowse() {
   async function submitTray() {
     if (!profile || tray.length === 0 || feedbackBlocking || traySubmitting) return;
     setSubmitError(null);
+    const candidate_ids = [...new Set(tray.map((id) => id.trim().toLowerCase()).filter(Boolean))];
+    if (candidate_ids.length === 0) {
+      setSubmitError({
+        type: 'generic',
+        message: 'No valid profiles selected. Refresh the page and add people from the list again.',
+      });
+      return;
+    }
     setTraySubmitting(true);
     try {
       const res = (await invokeFunction('submit-contact-request', {
-        candidate_ids: tray,
+        candidate_ids,
       })) as {
         error?: string;
         message?: string;
@@ -234,7 +225,7 @@ export default function MemberBrowse() {
       setTray([]);
       setTrayDrawerOpen(false);
       void loadAll();
-      setSubmitSuccess({ requestId: res.request_id ?? '', count: tray.length });
+      setSubmitSuccess({ requestId: res.request_id ?? '', count: candidate_ids.length });
       setSubmitError(null);
     } catch (e) {
       if (e instanceof EdgeFunctionHttpError) {
@@ -595,7 +586,7 @@ export default function MemberBrowse() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <div
           style={{
             flex: '1 1 200px',
@@ -608,9 +599,9 @@ export default function MemberBrowse() {
           }}
         >
           {weeklyWindow.locked ? (
-            <>All 3 weekly slots used. Resets {weeklyWindow.resetAt ?? 'soon'}.</>
+            <>7-day limit: all 3 used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.</>
           ) : (
-            <>This week: {weeklyWindow.used}/3 distinct profiles used · {weeklyWindow.remaining} remaining</>
+            <>7-day limit: {weeklyWindow.used} of 3 used · {weeklyWindow.remaining} left</>
           )}
         </div>
         <div
@@ -625,19 +616,44 @@ export default function MemberBrowse() {
           }}
         >
           {monthlyWindow.locked ? (
-            <>All 6 monthly slots used. Resets {monthlyWindow.resetAt}.</>
+            <>Month limit: all 6 used. Resets {monthlyWindow.resetAt}.</>
           ) : (
-            <>
-              This month: {monthlyWindow.used}/6 distinct profiles used · {monthlyWindow.remaining} remaining
-            </>
+            <>Month limit: {monthlyWindow.used} of 6 used · {monthlyWindow.remaining} left</>
           )}
         </div>
       </div>
-      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
-        Your tray can hold up to <strong>{trayMax}</strong> profile{trayMax === 1 ? '' : 's'} right now (the lower of
-        weekly and monthly slots, and at most 3). Re-requesting the same person after the 7-day cooldown does not use an
-        extra monthly slot if you already counted them this month.
-      </p>
+      <div
+        style={{
+          margin: '0 0 16px',
+          padding: '12px 14px',
+          borderRadius: 10,
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-surface)',
+          fontSize: 13,
+          color: 'var(--color-text-secondary)',
+          lineHeight: 1.5,
+        }}
+      >
+        <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)' }}>
+          Your tray · queue up to {trayMax} profile{trayMax === 1 ? '' : 's'}, then submit once
+        </p>
+        <p style={{ margin: '8px 0 0' }}>
+          Choose people from the grid, add them to the tray, then press submit to request contact details for everyone in
+          the tray at the same time. How many you can queue is the smaller of the two numbers above (and never more than
+          3 at once).{' '}
+          <strong>Photos are not shown on these cards</strong>—after you request someone, their picture appears when you
+          open them under <Link to="/dashboard/requests">My requests</Link>.
+        </p>
+        <details style={{ marginTop: 10 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text)' }}>
+            Requesting the same person again
+          </summary>
+          <p style={{ margin: '8px 0 0' }}>
+            After the 7-day wait, a repeat request does not count again toward this month&apos;s 6 if that person was
+            already counted this month.
+          </p>
+        </details>
+      </div>
 
       <section className="member-browse-grid">
         <div className="member-browse-result-line">
@@ -647,6 +663,11 @@ export default function MemberBrowse() {
                 ? 'No profiles to show yet.'
                 : 'No profiles match these filters.'
               : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
+            {filtered.length > 0 ? (
+              <span style={{ display: 'block', marginTop: 6, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                Cards list details only. Profile photos show in My requests after you request someone.
+              </span>
+            ) : null}
           </span>
           {atTrayCapacity && trayMax > 0 && (
             <span className="member-browse-result-line-warn">
@@ -655,7 +676,7 @@ export default function MemberBrowse() {
           )}
           {trayMax === 0 && !feedbackBlocking && (
             <span className="member-browse-result-line-warn">
-              No request slots available until your weekly or monthly limit resets.
+              No request slots left until your 7-day or month limit resets.
             </span>
           )}
         </div>
@@ -700,7 +721,6 @@ export default function MemberBrowse() {
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
-              const completeness = profileCompletenessPercent(c);
               const canRequestNow = !blocked && !feedbackBlocking && trayMax > 0;
               return (
                 <div
@@ -726,9 +746,6 @@ export default function MemberBrowse() {
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                       {[c.religion, c.nationality].filter(Boolean).join(' · ')}
                     </p>
-                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      Profile completeness: <strong>{completeness}%</strong>
-                    </p>
                     <div className="member-browse-card-actions" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                       <button
                         type="button"
@@ -738,19 +755,40 @@ export default function MemberBrowse() {
                       >
                         {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
-                        disabled={blocked || (!inTray && (atTrayCapacity || feedbackBlocking))}
-                        onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
-                      >
-                        {blocked ? '✓ Details available' : inTray ? '✕ Remove' : '+ Request'}
-                      </button>
+                      {blocked ? (
+                        <Link
+                          to="/dashboard/requests"
+                          state={{ focusProfileId: c.id }}
+                          className="btn btn-primary"
+                          style={{
+                            flex: 1,
+                            padding: '7px 10px',
+                            fontSize: 13,
+                            textAlign: 'center',
+                            textDecoration: 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Already requested
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
+                          disabled={!inTray && (atTrayCapacity || feedbackBlocking)}
+                          onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
+                        >
+                          {inTray ? '✕ Remove' : '+ Request'}
+                        </button>
+                      )}
                     </div>
                     {blocked && (
                       <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        Already requested. View details under My requests.
+                        Opens their card in My requests (photo and contact details).
                       </p>
                     )}
                     {!blocked && (
@@ -842,10 +880,10 @@ export default function MemberBrowse() {
                   <><strong>Already requested.</strong> {submitError.message}</>
                 )}
                 {submitError.type === 'weekly_limit' && (
-                  <><strong>Weekly limit reached.</strong> You can request up to 3 profiles per 7-day window. Check My requests to see when your slots reset.</>
+                  <><strong>7-day limit reached.</strong> You can add up to 3 new people in any rolling 7-day period. The counters at the top of this page show when the next slot opens.</>
                 )}
                 {submitError.type === 'monthly_limit' && (
-                  <><strong>Monthly limit reached.</strong> You can request up to 6 profiles per calendar month. Your slots reset on the 1st of next month.</>
+                  <><strong>Month limit reached.</strong> You can request up to 6 distinct people per calendar month. Counts reset on the 1st.</>
                 )}
                 {submitError.type === 'generic' && submitError.message}
               </div>

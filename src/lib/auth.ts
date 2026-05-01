@@ -58,7 +58,7 @@ export function userFacingAuthError(
     lower.includes('not confirmed')
   ) {
     return (
-      'Please verify your email before signing in. Check your inbox for the link, or use the option to resend from the registration page.'
+      'Please verify your email before signing in. Check your inbox and junk or spam folder for the link, or use the option to resend from the registration page.'
     );
   }
 

@@ -1,6 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
@@ -24,33 +23,21 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
+  const bearer = authHeader.slice(7).trim();
+  /**
+   * Public browse preview: no names, photos, or contact data — same shape as the logged-in teaser.
+   * Allow the project's anon key (how `invokePublicFunction` calls) or any valid user session JWT.
+   */
+  const publicAnonCall = bearer === anonKey;
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData.user) {
+  if (!publicAnonCall && (userErr || !userData.user)) {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-  const { data: requesterProfile, error: requesterErr } = await admin
-    .from('profiles')
-    .select('status, membership_expires_at')
-    .eq('auth_user_id', userData.user.id)
-    .maybeSingle();
-  if (requesterErr) {
-    return jsonResponse({ error: requesterErr.message }, req, 500);
-  }
-
-  const hasActiveMembership =
-    requesterProfile?.status === 'active' &&
-    !!requesterProfile.membership_expires_at &&
-    new Date(requesterProfile.membership_expires_at) > new Date();
-
-  if (!isUserAdmin(userData.user) && !hasActiveMembership) {
-    return jsonResponse({ error: 'Forbidden' }, req, 403);
-  }
-
   const { data, error } = await admin
     .from('profiles')
     .select(

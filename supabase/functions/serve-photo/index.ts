@@ -70,21 +70,42 @@ Deno.serve(async (req) => {
     .eq('id', profileId)
     .single();
 
-  if (!target?.photo_url) {
+  const { data: photoRows } = await admin
+    .from('profile_photos')
+    .select('storage_path')
+    .eq('profile_id', profileId)
+    .order('position', { ascending: true });
+
+  const pathsFromTable =
+    photoRows?.map((r) => r.storage_path).filter((p): p is string => typeof p === 'string' && p.length > 0) ?? [];
+  const uniquePaths = [...new Set(pathsFromTable)];
+  const storagePaths =
+    uniquePaths.length > 0
+      ? uniquePaths
+      : target?.photo_url
+        ? [target.photo_url]
+        : [];
+
+  if (!storagePaths.length) {
     return jsonResponse({ error: 'No photo' }, req, 404);
   }
 
-  const { data: signed, error: signErr } = await admin.storage
-    .from('profile-photos')
-    .createSignedUrl(target.photo_url, 3600);
-
-  if (signErr || !signed?.signedUrl) {
-    return jsonResponse({ error: 'Could not sign URL' }, req, 500);
+  const signedList: string[] = [];
+  for (const path of storagePaths) {
+    const { data: signed, error: signErr } = await admin.storage
+      .from('profile-photos')
+      .createSignedUrl(path, 3600);
+    if (signErr || !signed?.signedUrl) {
+      return jsonResponse({ error: 'Could not sign URL' }, req, 500);
+    }
+    signedList.push(signed.signedUrl);
   }
+
+  const primary = signedList[0]!;
 
   if (req.method === 'GET' && url.searchParams.get('redirect') === '1') {
-    return Response.redirect(signed.signedUrl, 302);
+    return Response.redirect(primary, 302);
   }
 
-  return jsonResponse({ signedUrl: signed.signedUrl }, req);
+  return jsonResponse({ signedUrl: primary, signedUrls: signedList }, req);
 });

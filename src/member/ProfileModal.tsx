@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { ProfileThumb, useProfilePhotoDisplayUrl } from './ProfileThumb';
+import { useCallback, useEffect, useState, type MouseEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { ProfileThumb, useProfilePhotoDisplayUrls } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
 import type { ProfileRow } from './memberContext';
 
@@ -50,21 +51,64 @@ export function ProfileModal({
   onToggleTray,
 }: Props) {
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
-  const photoDisplayUrl = useProfilePhotoDisplayUrl(c.id, c.first_name, !anonymous);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const photoUrls = useProfilePhotoDisplayUrls(c.id, c.first_name, !anonymous);
+  const gallerySize = !anonymous ? photoUrls.length : 0;
+  const hasMultiPhotos = gallerySize > 1;
+  const safeIndex = gallerySize > 0 ? Math.min(photoIndex, gallerySize - 1) : 0;
+  const currentPhotoUrl = !anonymous ? photoUrls[safeIndex] : null;
 
-  // Close on Escape (lightbox first, then modal)
+  const goPrevPhoto = useCallback(
+    (e?: MouseEvent) => {
+      e?.stopPropagation();
+      if (gallerySize <= 1) return;
+      setPhotoIndex((i) => (i - 1 + gallerySize) % gallerySize);
+    },
+    [gallerySize]
+  );
+
+  const goNextPhoto = useCallback(
+    (e?: MouseEvent) => {
+      e?.stopPropagation();
+      if (gallerySize <= 1) return;
+      setPhotoIndex((i) => (i + 1) % gallerySize);
+    },
+    [gallerySize]
+  );
+
+  useEffect(() => {
+    setPhotoIndex(0);
+  }, [c.id]);
+
+  useEffect(() => {
+    if (photoIndex >= gallerySize && gallerySize > 0) {
+      setPhotoIndex(0);
+    }
+  }, [photoIndex, gallerySize]);
+
+  // Close on Escape (lightbox first, then modal); arrow keys cycle photos when gallery has multiple.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== 'Escape') return;
-      if (photoLightboxOpen) {
-        setPhotoLightboxOpen(false);
+      if (e.key === 'Escape') {
+        if (photoLightboxOpen) {
+          setPhotoLightboxOpen(false);
+          return;
+        }
+        onClose();
         return;
       }
-      onClose();
+      if (!hasMultiPhotos) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goPrevPhoto();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        goNextPhoto();
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, photoLightboxOpen]);
+  }, [onClose, photoLightboxOpen, hasMultiPhotos, goPrevPhoto, goNextPhoto]);
 
   // Lock body scroll
   useEffect(() => {
@@ -90,10 +134,10 @@ export function ProfileModal({
         ? 'Submit outstanding feedback under My requests (introductions older than 21 days) before adding new requests.'
         : !inTray && trayFull
           ? trayCapacity === 0
-            ? 'No request slots left this week or month. Open My requests to see when limits reset.'
+            ? 'No request slots left this week or month. Check the numbers at the top of Browse.'
             : trayCapacity != null && trayCapacity < 3
-              ? `You can only add up to ${trayCapacity} profile${trayCapacity === 1 ? '' : 's'} right now (weekly and monthly limits). Remove someone from the tray or wait for a reset.`
-              : 'Tray is full. Submit or remove a candidate first.'
+              ? `Tray holds up to ${trayCapacity} right now (see the 7-day and month limits on Browse). Remove someone or wait for a reset.`
+              : 'Tray is full. Submit or remove someone first.'
           : undefined;
 
   return (
@@ -106,110 +150,171 @@ export function ProfileModal({
     >
       <div
         className="card modal-panel profile-modal-panel"
-        style={{ padding: 0, maxWidth: 620 }}
+        style={{ padding: 0, maxWidth: 920 }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Photo header (hidden when browsing anonymously - no placeholder) */}
-        <div
-          className={anonymous ? undefined : 'profile-modal-photo-wrap'}
-          style={{ position: 'relative', minHeight: anonymous ? 44 : undefined }}
-        >
-          {!anonymous && photoDisplayUrl && (
-            <button
-              type="button"
-              className="profile-modal-photo-trigger"
-              aria-label="View full-size photo"
-              onClick={() => setPhotoLightboxOpen(true)}
+        <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
+          {'\u2715'}
+        </button>
+
+        <div className={`profile-modal-layout${anonymous ? ' profile-modal-layout--anonymous' : ''}`}>
+          {!anonymous && currentPhotoUrl && (
+            <div
+              className="profile-modal-media"
+              role="region"
+              aria-roledescription="carousel"
+              aria-label="Profile photos"
             >
-              <ProfileThumb
-                profileId={c.id}
-                firstName={c.first_name}
-                className="profile-modal-photo"
-                anonymous={false}
-                controlledSrc={photoDisplayUrl}
-                imageFit="contain"
-              />
-            </button>
-          )}
-          <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
-            {'\u2715'}
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="profile-modal-body" style={{ padding: '20px 24px 24px' }}>
-          <h2
-            id="profile-modal-title"
-            style={{ margin: '0 0 4px', fontSize: 22 }}
-          >
-            {displayTitle}
-          </h2>
-          {!anonymous && c.job_title && (
-            <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
-              {c.job_title}
-            </p>
-          )}
-          {anonymous && c.job_title && (
-            <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
-              {c.job_title}
-            </p>
-          )}
-
-          <Row label="Religion" value={c.religion} />
-          <Row label="Nationality" value={c.nationality} />
-          <Row label="Location" value={c.place_of_birth} />
-          <Row label="Family origin" value={c.town_country_of_origin} />
-          <Row label="Diet" value={c.diet} />
-          <Row label="Height" value={heightDisplay} />
-          <Row label="Education" value={c.education} />
-          <Row label="Settlement plans" value={c.future_settlement_plans} />
-          {/* Contact details - only shown when the user has already received them (My Requests view) */}
-          {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
-
-          {c.hobbies && (
-            <div style={{ padding: '8px 0' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                Hobbies &amp; interests
-              </p>
-              <p style={{ margin: 0, fontSize: 14 }}>{c.hobbies}</p>
+              <button
+                type="button"
+                className="profile-modal-photo-trigger"
+                aria-label={
+                  hasMultiPhotos
+                    ? `View full-size photo (${safeIndex + 1} of ${gallerySize})`
+                    : 'View full-size photo'
+                }
+                onClick={() => setPhotoLightboxOpen(true)}
+              >
+                <ProfileThumb
+                  profileId={c.id}
+                  firstName={c.first_name}
+                  className="profile-modal-photo"
+                  anonymous={false}
+                  controlledSrc={currentPhotoUrl}
+                  imageFit="contain"
+                />
+              </button>
+              {hasMultiPhotos && (
+                <>
+                  <button
+                    type="button"
+                    className="profile-modal-carousel-btn profile-modal-carousel-btn--prev"
+                    aria-label="Previous photo"
+                    onClick={goPrevPhoto}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="profile-modal-carousel-btn profile-modal-carousel-btn--next"
+                    aria-label="Next photo"
+                    onClick={goNextPhoto}
+                  >
+                    ›
+                  </button>
+                  <div className="profile-modal-carousel-dots">
+                    {photoUrls.map((_, i) => (
+                      <button
+                        key={`${c.id}-photo-dot-${i}`}
+                        type="button"
+                        className={`profile-modal-carousel-dot${i === safeIndex ? ' is-active' : ''}`}
+                        aria-label={`Show photo ${i + 1} of ${gallerySize}`}
+                        aria-current={i === safeIndex ? 'true' : undefined}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPhotoIndex(i);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* Action buttons */}
-          <div className="profile-modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
-              {bookmarked ? '★ Saved' : '☆ Save profile'}
-            </button>
-            {allowRequestAction ? (
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={blocked || (!inTray && (trayFull || feedbackRequiredBeforeRequests))}
-                title={requestTrayTitle}
-                onClick={onToggleTray}
-              >
-                {blocked
-                  ? '✓ Details available'
-                  : inTray
-                  ? '✕ Remove from request'
-                  : 'Request contact details'}
+          <div className="profile-modal-body" style={{ padding: '20px 24px 24px' }}>
+            <h2
+              id="profile-modal-title"
+              style={{ margin: '0 0 4px', fontSize: 22 }}
+            >
+              {displayTitle}
+            </h2>
+            {c.job_title && (
+              <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
+                {c.job_title}
+              </p>
+            )}
+            {anonymous && (
+              <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+                {blocked ? (
+                  <>
+                    Their photo is visible when you open this person under{' '}
+                    <Link to="/dashboard/requests" state={{ focusProfileId: c.id }} style={{ fontWeight: 600, color: 'inherit' }}>
+                      My requests
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>Profile photos are only shown after you request their details; they then appear under My requests.</>
+                )}
+              </p>
+            )}
+
+            <Row label="Religion" value={c.religion} />
+            <Row label="Nationality" value={c.nationality} />
+            <Row label="Location" value={c.place_of_birth} />
+            <Row label="Family origin" value={c.town_country_of_origin} />
+            <Row label="Diet" value={c.diet} />
+            <Row label="Height" value={heightDisplay} />
+            <Row label="Education" value={c.education} />
+            <Row label="Settlement plans" value={c.future_settlement_plans} />
+            {/* Contact details - only shown when the user has already received them (My Requests view) */}
+            {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
+
+            {c.hobbies && (
+              <div style={{ padding: '8px 0' }}>
+                <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                  Hobbies &amp; interests
+                </p>
+                <p style={{ margin: 0, fontSize: 14 }}>{c.hobbies}</p>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="profile-modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
+                {bookmarked ? '★ Saved' : '☆ Save profile'}
               </button>
-            ) : null}
+              {allowRequestAction ? (
+                blocked ? (
+                  <Link
+                    to="/dashboard/requests"
+                    state={{ focusProfileId: c.id }}
+                    className="btn btn-primary"
+                    style={{ textAlign: 'center', textDecoration: 'none' }}
+                    onClick={onClose}
+                  >
+                    Already requested
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!inTray && (trayFull || feedbackRequiredBeforeRequests)}
+                    title={requestTrayTitle}
+                    onClick={onToggleTray}
+                  >
+                    {inTray ? '✕ Remove from request' : 'Request contact details'}
+                  </button>
+                )
+              ) : null}
+            </div>
+            {!allowRequestAction && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                To request contact details, open this profile from Browse and add it to your request tray.
+              </p>
+            )}
+            {blocked && allowRequestAction && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-warning)' }}>
+                You already requested this profile. Use the button above to open their card in My requests (photo and
+                contacts).
+              </p>
+            )}
           </div>
-          {!allowRequestAction && (
-            <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              To request contact details, open this profile from Browse and add it to your request tray.
-            </p>
-          )}
-          {blocked && (
-            <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-warning)' }}>
-              You already requested this profile. Their details are available under My requests.
-            </p>
-          )}
         </div>
       </div>
 
-      {!anonymous && photoLightboxOpen && photoDisplayUrl && (
+      {!anonymous && photoLightboxOpen && currentPhotoUrl && (
         <div
           className="profile-photo-lightbox"
           role="dialog"
@@ -225,10 +330,41 @@ export function ProfileModal({
           >
             {'\u2715'}
           </button>
+          {hasMultiPhotos && (
+            <>
+              <button
+                type="button"
+                className="profile-photo-lightbox-nav profile-photo-lightbox-nav--prev"
+                aria-label="Previous photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrevPhoto();
+                }}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="profile-photo-lightbox-nav profile-photo-lightbox-nav--next"
+                aria-label="Next photo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNextPhoto();
+                }}
+              >
+                ›
+              </button>
+            </>
+          )}
           <div className="profile-photo-lightbox-frame" onClick={(e) => e.stopPropagation()}>
-            <img src={photoDisplayUrl} alt="" className="profile-photo-lightbox-img" />
+            <img src={currentPhotoUrl} alt="" className="profile-photo-lightbox-img" />
             <div className="profile-photo-lightbox-overlay" aria-hidden>
               <span className="profile-photo-lightbox-name">{displayTitle}</span>
+              {hasMultiPhotos && (
+                <span className="profile-photo-lightbox-counter">
+                  {safeIndex + 1} / {gallerySize}
+                </span>
+              )}
             </div>
           </div>
         </div>

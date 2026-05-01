@@ -324,7 +324,7 @@ export default function AdminMemberDetail() {
                     profile_id: profile.id,
                     template,
                   });
-                  alert('Email sent.');
+                  alert('Email sent. Ask them to check junk or spam too if they do not see it.');
                   setReloadKey((k) => k + 1);
                 } catch (e) {
                   alert(e instanceof Error ? e.message : 'Failed');

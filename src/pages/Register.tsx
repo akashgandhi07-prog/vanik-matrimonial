@@ -449,7 +449,7 @@ export default function Register() {
         options: { emailRedirectTo: publicAuthUrl('/verify-email-success') },
       });
       if (error) setAuthMsg(userFacingAuthError(error));
-      else setAuthMsg('Check your inbox to verify your email before continuing.');
+      else setAuthMsg('Check your inbox and junk or spam folder to verify your email before continuing.');
     } catch (error) {
       const msg = error instanceof Error ? error.message : '';
       setAuthMsg(msg || 'Could not create account. Please try again.');
@@ -679,8 +679,8 @@ export default function Register() {
           <div className="register-card">
             <h1>Create your account</h1>
             <p className="register-lead">
-              We will email you a verification link. After you confirm your email, you can complete your
-              profile in a few steps.
+              We will email you a verification link. If you do not see it, check your junk or spam folder. After you
+              confirm your email, you can complete your profile in a few steps.
             </p>
             <form className="register-form-grid" onSubmit={signUpAccount}>
               <div>
@@ -764,7 +764,7 @@ export default function Register() {
             <h1>Verify your email</h1>
             <p className="register-lead">
               We sent a link to <strong>{session.user.email}</strong>. Open the email and tap the link to
-              continue registration. Check your spam or promotions folder if you do not see it within a few
+              continue registration. Check your junk, spam, or promotions folder if you do not see it within a few
               minutes.
             </p>
             {verifyNotice && (
@@ -792,7 +792,7 @@ export default function Register() {
                     else
                       setVerifyNotice({
                         type: 'ok',
-                        text: 'Another verification email is on its way. Check your inbox and spam folder.',
+                        text: 'Another verification email is on its way. Check your inbox and junk or spam folder.',
                       });
                   } finally {
                     setResendBusy(false);
@@ -828,7 +828,8 @@ export default function Register() {
                     else {
                       setVerifyNotice({
                         type: 'ok',
-                        text: 'If the update succeeded, check your new inbox for the verification link.',
+                        text:
+                          'If the update succeeded, check your new inbox and junk or spam folder for the verification link.',
                       });
                       setNewEmail('');
                     }

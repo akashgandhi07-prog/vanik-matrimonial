@@ -317,13 +317,22 @@ export async function postFunctionOptionalAuth(
 }
 
 export async function fetchPhotoSignedUrl(profileId: string): Promise<string | null> {
+  const urls = await fetchProfilePhotoSignedUrls(profileId);
+  return urls[0] ?? null;
+}
+
+/** All gallery photos the viewer may see (same access rules as single photo). */
+export async function fetchProfilePhotoSignedUrls(profileId: string): Promise<string[]> {
   const token = await getAccessToken();
-  if (!token || !url || !anon) return null;
+  if (!token || !url || !anon) return [];
   const res = await fetch(
     functionsHttpUrl(`/serve-photo?profile_id=${encodeURIComponent(profileId)}`),
     { headers: { Authorization: `Bearer ${token}`, apikey: anon } }
   ).catch(() => null);
-  if (!res || !res.ok) return null;
-  const j = (await res.json()) as { signedUrl?: string };
-  return j.signedUrl ?? null;
+  if (!res || !res.ok) return [];
+  const j = (await res.json()) as { signedUrl?: string; signedUrls?: string[] };
+  if (Array.isArray(j.signedUrls) && j.signedUrls.length > 0) {
+    return j.signedUrls.filter((u): u is string => typeof u === 'string' && u.length > 0);
+  }
+  return j.signedUrl ? [j.signedUrl] : [];
 }

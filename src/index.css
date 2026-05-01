@@ -1913,6 +1913,7 @@ textarea:focus-visible {
   position: absolute;
   top: 12px;
   right: 12px;
+  z-index: 10;
   width: 32px;
   height: 32px;
   display: flex;
@@ -1942,15 +1943,45 @@ textarea:focus-visible {
   box-shadow: var(--shadow-sm);
 }
 
-/* Profile modal photo */
-.profile-modal-photo-wrap {
+/* Profile modal: side-by-side on wide screens; photo height-capped on mobile */
+.profile-modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: min(92vh, 900px);
+}
+
+.profile-modal-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.profile-modal-layout--anonymous {
+  /* single column; body fills width */
+}
+
+.profile-modal-media {
+  position: relative;
   flex-shrink: 0;
   background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: min(44vh, 360px);
+  min-height: 200px;
 }
 
 .profile-modal-photo-trigger {
-  display: block;
+  display: flex;
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
   margin: 0;
   padding: 0;
   border: none;
@@ -1966,10 +1997,106 @@ textarea:focus-visible {
 
 .profile-modal-photo {
   width: 100%;
-  max-height: min(42vh, 360px);
+  max-width: 100%;
+  max-height: min(44vh, 360px);
   object-fit: contain;
   border-radius: 0;
   display: block;
+}
+
+.profile-modal-carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  font-size: 26px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.profile-modal-carousel-btn:hover {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.profile-modal-carousel-btn--prev {
+  left: 10px;
+}
+
+.profile-modal-carousel-btn--next {
+  right: 10px;
+}
+
+.profile-modal-carousel-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.profile-modal-carousel-dots .profile-modal-carousel-dot {
+  pointer-events: auto;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.profile-modal-carousel-dots .profile-modal-carousel-dot.is-active {
+  background: #fff;
+  transform: scale(1.15);
+}
+
+@media (min-width: 720px) {
+  .profile-modal-layout:not(.profile-modal-layout--anonymous) {
+    flex-direction: row;
+    max-height: min(88vh, 860px);
+  }
+
+  .profile-modal-media {
+    flex: 0 0 min(42%, 400px);
+    width: min(42%, 400px);
+    max-width: 400px;
+    max-height: none;
+    min-height: 280px;
+    align-self: stretch;
+  }
+
+  .profile-modal-photo-trigger {
+    flex: 1;
+    min-height: 280px;
+  }
+
+  .profile-modal-photo {
+    max-height: 100%;
+    height: auto;
+    width: 100%;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .profile-modal-body {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
 .profile-photo-lightbox {
@@ -2007,6 +2134,39 @@ textarea:focus-visible {
   background: rgba(15, 23, 42, 0.92);
 }
 
+.profile-photo-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  font-size: 28px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.profile-photo-lightbox-nav:hover {
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.profile-photo-lightbox-nav--prev {
+  left: max(12px, env(safe-area-inset-left, 0px));
+}
+
+.profile-photo-lightbox-nav--next {
+  right: max(12px, env(safe-area-inset-right, 0px));
+}
+
 .profile-photo-lightbox-frame {
   position: relative;
   width: 100%;
@@ -2032,7 +2192,10 @@ textarea:focus-visible {
   height: 16.666%;
   min-height: 56px;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 2px;
   padding: 16px 20px max(16px, env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
@@ -2047,10 +2210,11 @@ textarea:focus-visible {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 
-.profile-modal-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+.profile-photo-lightbox-counter {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .profile-modal-body {

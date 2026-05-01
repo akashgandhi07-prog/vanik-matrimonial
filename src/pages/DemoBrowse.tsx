@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
-import { invokeFunction, supabase } from '../lib/supabase';
+import { invokePublicFunction } from '../lib/supabase';
 
 type DemoProfile = {
   id: string;
@@ -85,7 +85,6 @@ function filtersEqual(a: BrowseFilters, b: BrowseFilters): boolean {
 export default function DemoBrowse() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [authRequired, setAuthRequired] = useState(false);
   const [profiles, setProfiles] = useState<DemoProfile[]>([]);
   const [browseSeeking, setBrowseSeeking] = useState<'Male' | 'Female' | 'Both'>('Both');
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
@@ -94,15 +93,8 @@ export default function DemoBrowse() {
   const loadProfiles = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setAuthRequired(false);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session?.access_token) {
-        setAuthRequired(true);
-        setProfiles([]);
-        return;
-      }
-      const res = (await invokeFunction('demo-browse-profiles', {})) as {
+      const res = (await invokePublicFunction('demo-browse-profiles', {})) as {
         profiles?: Array<
           Omit<DemoProfile, 'id' | 'reference_number' | 'first_name'> & {
             demo_id: string;
@@ -129,19 +121,8 @@ export default function DemoBrowse() {
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not load demo profiles.';
-      const lower = msg.toLowerCase();
-      if (lower.includes('not authenticated') || lower.includes('please sign in') || lower.includes('log in')) {
-        setAuthRequired(true);
-        setProfiles([]);
-      } else if (msg === 'Forbidden' || lower.includes('forbidden')) {
-        setError(
-          'You need an active membership or admin access to browse profiles here. Complete registration or sign in with an active account.'
-        );
-        setProfiles([]);
-      } else {
-        setError(msg);
-        setProfiles([]);
-      }
+      setError(msg);
+      setProfiles([]);
     } finally {
       setLoading(false);
     }
@@ -149,15 +130,6 @@ export default function DemoBrowse() {
 
   useEffect(() => {
     void loadProfiles();
-  }, [loadProfiles]);
-
-  useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        void loadProfiles();
-      }
-    });
-    return () => sub.subscription.unsubscribe();
   }, [loadProfiles]);
 
   const filtered = useMemo(() => {
@@ -471,44 +443,23 @@ export default function DemoBrowse() {
         <section className="member-browse-grid">
           <div className="member-browse-result-line">
             <span>
-              {authRequired
-                ? 'Sign in to load the register preview.'
-                : filtered.length === 0
-                  ? profiles.length === 0
-                    ? 'No profiles to show yet.'
-                    : 'No profiles match these filters.'
-                  : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
+              {filtered.length === 0
+                ? profiles.length === 0
+                  ? 'No profiles to show yet.'
+                  : 'No profiles match these filters.'
+                : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
             </span>
           </div>
 
           {loading && <p>Loading profiles…</p>}
-
-          {authRequired && !loading && (
-            <div className="member-browse-empty">
-              <p className="member-browse-empty-title">Sign in to browse</p>
-              <p className="member-browse-empty-desc" style={{ marginBottom: 16 }}>
-                The public preview uses your account — sign in with an active membership or an admin account to see
-                anonymised profiles. New here? Apply for membership first.
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                <Link to="/login?next=/demo" className="btn btn-primary">
-                  Sign in
-                </Link>
-                <Link to="/register" className="btn btn-secondary">
-                  Apply for membership
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {error && !authRequired && (
+          {error && (
             <div className="member-browse-empty">
               <p className="member-browse-empty-title">Could not load profiles</p>
               <p className="member-browse-empty-desc">{error}</p>
             </div>
           )}
 
-          {!loading && !error && !authRequired && (
+          {!loading && !error && (
             <div className="member-browse-cards">
               {filtered.map((c) => (
                 <article key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>

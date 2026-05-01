@@ -127,7 +127,7 @@ export default function MembershipExpired() {
       }
       if (!cancelled) {
         setNotice(
-          'Payment received. If your expiry date still looks wrong, refresh the page or check your email for confirmation.',
+          'Payment received. If your expiry date still looks wrong, refresh the page or check your email (including junk or spam) for confirmation.',
         );
       }
     })();

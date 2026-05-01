@@ -111,7 +111,7 @@ export default function RegistrationPending() {
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '1rem', lineHeight: 1.5 }}>
             There&apos;s nothing else you need to do for now - we&apos;ll email you once your membership has been
-            approved (or if we need anything further).
+            approved (or if we need anything further). Look in junk or spam too in case our message was filtered there.
           </p>
           {ref && (
             <p style={{ marginTop: '1rem' }}>

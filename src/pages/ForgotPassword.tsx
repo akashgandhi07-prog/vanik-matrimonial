@@ -25,7 +25,9 @@ export default function ForgotPassword() {
         setErr(userFacingAuthError(error));
         return;
       }
-      setMsg('If an account exists for this email, we have sent reset instructions.');
+      setMsg(
+        'If an account exists for this email, we have sent reset instructions. Check your junk or spam folder too if nothing appears in your inbox shortly.',
+      );
     } catch (error) {
       setErr(error instanceof Error ? error.message : 'Could not send reset link. Please try again.');
     } finally {

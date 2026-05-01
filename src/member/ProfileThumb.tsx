@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchPhotoSignedUrl } from '../lib/supabase';
+import { fetchPhotoSignedUrl, fetchProfilePhotoSignedUrls } from '../lib/supabase';
 
 function fallbackAvatarUrl(firstName: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(firstName)}&size=300&background=e8d5c4&color=7c4a2d&font-size=0.38&bold=true&format=svg`;
@@ -23,6 +23,30 @@ export function useProfilePhotoDisplayUrl(profileId: string, firstName: string, 
 
   if (!enabled) return null;
   return signed ?? fallback;
+}
+
+/** Gallery URLs for the profile modal (ordered); falls back to avatar while loading or if none returned. */
+export function useProfilePhotoDisplayUrls(profileId: string, firstName: string, enabled: boolean): string[] {
+  const fallback = useMemo(() => fallbackAvatarUrl(firstName), [firstName]);
+  const [signed, setSigned] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fetchProfilePhotoSignedUrls(profileId).then((urls) => {
+      if (!alive) return;
+      setSigned(urls.length > 0 ? urls : []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profileId, enabled]);
+
+  return useMemo(() => {
+    if (!enabled) return [];
+    if (signed === null) return [fallback];
+    return signed.length > 0 ? signed : [fallback];
+  }, [enabled, signed, fallback]);
 }
 
 export function ProfileThumb({
