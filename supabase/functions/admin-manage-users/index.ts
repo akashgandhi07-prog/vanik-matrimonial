@@ -163,6 +163,136 @@ Deno.serve(async (req) => {
     return jsonResponse({ profiles: rows, emails, pending_previews: pendingPreviews }, req);
   }
 
+  if (action === 'delete_members_permanent') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Super admin only' }, req, 403);
+    }
+    const confirmText = typeof body.confirm_text === 'string' ? body.confirm_text.trim() : '';
+    if (confirmText !== 'DELETE') {
+      return jsonResponse({ error: 'You must send confirm_text exactly DELETE' }, req, 400);
+    }
+    const rawIds = Array.isArray(body.profile_ids)
+      ? body.profile_ids.filter((x): x is string => typeof x === 'string')
+      : [];
+    const profileIds = [...new Set(rawIds.map((x) => x.trim()).filter(Boolean))];
+    if (profileIds.length === 0 || profileIds.length > 80) {
+      return jsonResponse({ error: 'profile_ids required: 1–80 unique UUIDs' }, req, 400);
+    }
+
+    const deleted: string[] = [];
+    const failed: { profile_id: string; error: string }[] = [];
+
+    const { data: profRows, error: profErr } = await admin
+      .from('profiles')
+      .select('id, auth_user_id')
+      .in('id', profileIds);
+    if (profErr) return jsonResponse({ error: profErr.message }, req, 500);
+
+    const uidByProfile = new Map<string, string>(
+      (profRows ?? []).map((r: { id: string; auth_user_id: string }) => [r.id, r.auth_user_id])
+    );
+
+    type Pair = { profile_id: string; auth_user_id: string };
+    const toDelete: Pair[] = [];
+
+    for (const pid of profileIds) {
+      const uid = uidByProfile.get(pid);
+      if (!uid) {
+        failed.push({ profile_id: pid, error: 'Profile not found' });
+        continue;
+      }
+      if (uid === callerId) {
+        failed.push({ profile_id: pid, error: 'Cannot delete your own account' });
+        continue;
+      }
+      const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(uid);
+      if (authErr || !authUser?.user) {
+        failed.push({
+          profile_id: pid,
+          error: authErr?.message ?? 'Auth user not found',
+        });
+        continue;
+      }
+      const am = authUser.user.app_metadata as Record<string, unknown> | undefined;
+      if (metaIsAdminFlag(am?.is_admin)) {
+        failed.push({ profile_id: pid, error: 'Cannot delete an admin user' });
+        continue;
+      }
+      toDelete.push({ profile_id: pid, auth_user_id: uid });
+    }
+
+    if (toDelete.length > 0) {
+      const okProfileIds = toDelete.map((p) => p.profile_id);
+
+      const { data: photoRows } = await admin
+        .from('profile_photos')
+        .select('storage_path')
+        .in('profile_id', okProfileIds);
+      const photoPaths = new Set<string>();
+      for (const row of photoRows ?? []) {
+        const path = (row as { storage_path?: string }).storage_path;
+        if (path) photoPaths.add(path);
+      }
+      const { data: profExtras } = await admin
+        .from('profiles')
+        .select('photo_url, pending_photo_url')
+        .in('id', okProfileIds);
+      for (const row of profExtras ?? []) {
+        const r = row as { photo_url?: string | null; pending_photo_url?: string | null };
+        if (r.photo_url) photoPaths.add(r.photo_url);
+        if (r.pending_photo_url) photoPaths.add(r.pending_photo_url);
+      }
+      const photoList = [...photoPaths];
+      if (photoList.length > 0) {
+        const { error: remPh } = await admin.storage.from('profile-photos').remove(photoList);
+        if (remPh) console.error('delete_members_permanent profile-photos remove', remPh);
+      }
+
+      const { data: privRows } = await admin
+        .from('member_private')
+        .select('id_document_url')
+        .in('profile_id', okProfileIds);
+      const idPaths = [
+        ...new Set(
+          (privRows ?? [])
+            .map((row) => (row as { id_document_url?: string | null }).id_document_url)
+            .filter((x): x is string => typeof x === 'string' && x.length > 0)
+        ),
+      ];
+      if (idPaths.length > 0) {
+        const { error: remId } = await admin.storage.from('id-documents').remove(idPaths);
+        if (remId) console.error('delete_members_permanent id-documents remove', remId);
+      }
+
+      await admin.from('admin_actions').update({ target_profile_id: null }).in('target_profile_id', okProfileIds);
+      await admin.from('email_log').update({ recipient_profile_id: null }).in('recipient_profile_id', okProfileIds);
+      await admin.from('requests').update({ requester_id: null }).in('requester_id', okProfileIds);
+      await admin.from('feedback').update({ candidate_id: null }).in('candidate_id', okProfileIds);
+      await admin.from('feedback').update({ requester_id: null }).in('requester_id', okProfileIds);
+
+      for (const { profile_id: pid, auth_user_id: uid } of toDelete) {
+        const { error: delErr } = await admin.auth.admin.deleteUser(uid);
+        if (delErr) {
+          failed.push({ profile_id: pid, error: delErr.message });
+          continue;
+        }
+        deleted.push(pid);
+      }
+    }
+
+    if (deleted.length > 0) {
+      const note = `count=${deleted.length} deleted=${deleted.join(',')}`.slice(0, 30000);
+      await admin.from('admin_actions').insert({
+        admin_user_id: callerId,
+        target_profile_id: null,
+        action_type: 'bulk_permanent_delete',
+        notes: note,
+      });
+    }
+
+    return jsonResponse({ ok: true, deleted, failed }, req);
+  }
+
   if (action === 'export_emails') {
     const rawStatuses = Array.isArray(body.statuses) ? body.statuses : [];
     const allowed = new Set([
@@ -935,6 +1065,68 @@ Deno.serve(async (req) => {
     return jsonResponse({ runs: data ?? [] }, req);
   }
 
+  /** Trigger a cron edge function using CRON_SECRET (browser cannot safely send x-cron-secret). */
+  if (action === 'run_cron_job') {
+    const allowed = new Set([
+      'send-feedback-reminders',
+      'send-renewal-reminders',
+      'expire-memberships',
+      'archive-lapsed-members',
+      'purge-archived-accounts',
+    ]);
+    const jobName = typeof body.job_name === 'string' ? body.job_name.trim() : '';
+    if (!jobName || !allowed.has(jobName)) {
+      return jsonResponse({ error: 'Invalid job_name' }, req, 400);
+    }
+    const cronSecret = Deno.env.get('CRON_SECRET')?.trim();
+    if (!cronSecret) {
+      return jsonResponse(
+        {
+          error: 'Forbidden',
+          message: 'Set CRON_SECRET in Edge Function secrets and send header x-cron-secret.',
+        },
+        req,
+        403
+      );
+    }
+    const fnUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/${encodeURIComponent(jobName)}`;
+    let invokeRes: Response;
+    try {
+      invokeRes = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${anon}`,
+          apikey: anon,
+          'x-cron-secret': cronSecret,
+        },
+        body: '{}',
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return jsonResponse({ error: `Cron invoke failed: ${msg}` }, req, 502);
+    }
+    const text = await invokeRes.text();
+    let parsed: unknown;
+    try {
+      parsed = text ? JSON.parse(text) : {};
+    } catch {
+      parsed = { error: 'Invalid JSON from cron function', raw: text.slice(0, 500) };
+    }
+    if (!invokeRes.ok) {
+      const payload =
+        typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : { error: text || invokeRes.statusText };
+      return jsonResponse(payload, req, invokeRes.status);
+    }
+    const out =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : { result: parsed };
+    return jsonResponse(out, req);
+  }
+
   if (action === 'coupons_data') {
     const { data: coupons, error: cErr } = await admin
       .from('coupons')
@@ -991,6 +1183,13 @@ Deno.serve(async (req) => {
     }
     const codeRaw = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
     if (!codeRaw) return jsonResponse({ error: 'code required' }, req, 400);
+    if (codeRaw.length < 10 || !/^[A-Z0-9]+$/.test(codeRaw)) {
+      return jsonResponse(
+        { error: 'Coupon code must be at least 10 characters (A–Z, 0–9 only)' },
+        req,
+        400
+      );
+    }
     const type = body.type === 'discount_percent' ? 'discount_percent' : 'free';
     let discountPercent: number | null = null;
     if (type === 'discount_percent') {

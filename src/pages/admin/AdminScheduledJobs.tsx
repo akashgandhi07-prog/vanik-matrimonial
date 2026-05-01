@@ -84,7 +84,7 @@ export default function AdminScheduledJobs() {
     if (!confirm(`Run "${jobName}" now?`)) return;
     setRunningJob(jobName);
     try {
-      await invokeFunction(jobName, {});
+      await invokeFunction('admin-manage-users', { action: 'run_cron_job', job_name: jobName });
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
