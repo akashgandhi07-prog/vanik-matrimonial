@@ -87,7 +87,6 @@ export default function MemberBrowse() {
   const [seekUpdating, setSeekUpdating] = useState(false);
   const [seekError, setSeekError] = useState<string | null>(null);
   const [traySubmitting, setTraySubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState<{ requestId: string; count: number } | null>(null);
 
   async function persistSeeking(g: 'Male' | 'Female' | 'Both') {
     if (!profile || effectiveSeeking(profile) === g || seekUpdating) return;
@@ -224,9 +223,12 @@ export default function MemberBrowse() {
       }
       setTray([]);
       setTrayDrawerOpen(false);
-      void loadAll();
-      setSubmitSuccess({ requestId: res.request_id ?? '', count: candidate_ids.length });
       setSubmitError(null);
+      await loadAll();
+      navigate('/dashboard/requests', {
+        replace: true,
+        state: { fromBrowse: true, requestId: res.request_id ?? '' },
+      });
     } catch (e) {
       if (e instanceof EdgeFunctionHttpError) {
         const msg = e.message;
@@ -533,37 +535,6 @@ export default function MemberBrowse() {
           </button>
         </div>
       )}
-      {submitSuccess && (
-        <div
-          role="status"
-          style={{
-            marginBottom: 12,
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: '1px solid rgba(22,163,74,0.25)',
-            background: 'rgba(22,163,74,0.1)',
-            color: 'var(--color-success)',
-            fontSize: 14,
-          }}
-        >
-          <strong>Request sent.</strong> Contact details for {submitSuccess.count} profile
-          {submitSuccess.count === 1 ? '' : 's'} are now available in My requests.
-          <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() =>
-                navigate('/dashboard/requests', { state: { fromBrowse: true, requestId: submitSuccess.requestId } })
-              }
-            >
-              Go to My requests
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={() => setSubmitSuccess(null)}>
-              Continue browsing
-            </button>
-          </div>
-        </div>
-      )}
       {feedbackBlocking && (
         <div
           className="card"
@@ -633,8 +604,7 @@ export default function MemberBrowse() {
               : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
             {filtered.length > 0 ? (
               <span style={{ display: 'block', marginTop: 6, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                Tap <strong>+ Request</strong> to pick someone. When you&apos;re ready, use <strong>Submit</strong> on the
-                bar that pops up at the bottom. You can pick up to {trayMax} for now. After you submit, photos show in{' '}
+                Photos are not shown on these cards. After you request someone, their picture appears when you open them under{' '}
                 <Link to="/dashboard/requests">My requests</Link>.
               </span>
             ) : null}

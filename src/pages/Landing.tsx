@@ -1,7 +1,31 @@
-import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
+import { useSiteSession } from '../components/SessionContext';
 
 export default function Landing() {
+  const navigate = useNavigate();
+  const { user, isAdmin, ready } = useSiteSession();
+
+  useEffect(() => {
+    if (!ready || !user) return;
+    if (isAdmin) {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    navigate('/dashboard/browse', { replace: true });
+  }, [ready, user, isAdmin, navigate]);
+
+  if (!ready || user) {
+    return (
+      <PublicLayout>
+        <div className="layout-max" style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+          Loading…
+        </div>
+      </PublicLayout>
+    );
+  }
+
   return (
     <PublicLayout>
       <div className="layout-max">

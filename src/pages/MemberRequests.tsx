@@ -103,6 +103,7 @@ export default function MemberRequests() {
       mobile?: string | null;
     };
   } | null>(null);
+  const [fromBrowseFlash, setFromBrowseFlash] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +223,14 @@ export default function MemberRequests() {
   }, [requests, candidates]);
 
   useEffect(() => {
+    const st = location.state as { fromBrowse?: boolean; focusProfileId?: string } | null;
+    if (!st?.fromBrowse) return;
+    setFromBrowseFlash(true);
+    const next = st.focusProfileId ? { focusProfileId: st.focusProfileId } : {};
+    navigate('/dashboard/requests', { replace: true, state: next });
+  }, [location.state, navigate]);
+
+  useEffect(() => {
     const focusProfileId = (location.state as { focusProfileId?: string } | null)?.focusProfileId;
     if (!focusProfileId) return;
 
@@ -252,6 +261,31 @@ export default function MemberRequests() {
   if (requests.length === 0) {
     return (
       <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+        {fromBrowseFlash && (
+          <div
+            role="status"
+            style={{
+              marginBottom: 16,
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: '1px solid rgba(22,163,74,0.25)',
+              background: 'rgba(22,163,74,0.1)',
+              color: 'var(--color-success)',
+              fontSize: 14,
+              textAlign: 'left',
+            }}
+          >
+            <strong>Request sent.</strong> If your list does not appear in a few seconds, refresh the page.
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginLeft: 8, padding: '2px 8px' }}
+              onClick={() => setFromBrowseFlash(false)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <p style={{ margin: 0, fontWeight: 500 }}>No requests yet</p>
         <p style={{ margin: '8px 0 0', fontSize: 14 }}>
           Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit — up to 3 at a time,
@@ -263,6 +297,30 @@ export default function MemberRequests() {
 
   return (
     <div className="card">
+      {fromBrowseFlash && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(22,163,74,0.25)',
+            background: 'rgba(22,163,74,0.1)',
+            color: 'var(--color-success)',
+            fontSize: 14,
+          }}
+        >
+          <strong>Request sent.</strong> Contact details for your chosen profiles are listed below.
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginLeft: 8, padding: '2px 8px' }}
+            onClick={() => setFromBrowseFlash(false)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
         Phone numbers and other details you were approved for appear here so you can follow up directly.
