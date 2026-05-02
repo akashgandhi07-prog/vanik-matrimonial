@@ -291,7 +291,7 @@ export async function fetchPublicFunction(pathAndQuery: string) {
   });
 
   if (!res.ok) {
-    throw new Error(responseMessage(res, text, json));
+    throw edgeHttpErrorFromPayload(json, responseMessage(res, text, json));
   }
   return (json ?? {}) as JsonObject;
 }
@@ -311,7 +311,7 @@ export async function postFunctionOptionalAuth(
   });
 
   if (!res.ok) {
-    throw new Error(responseMessage(res, text, json));
+    throw edgeHttpErrorFromPayload(json, responseMessage(res, text, json));
   }
   return (json ?? {}) as JsonObject;
 }

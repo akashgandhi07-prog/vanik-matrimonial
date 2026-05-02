@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
-import { EdgeFunctionHttpError, invokeFunction } from '../lib/supabase';
+import { EdgeFunctionHttpError, getAccessToken, postFunctionOptionalAuth } from '../lib/supabase';
 
 type DemoProfile = {
   id: string;
@@ -94,7 +94,8 @@ export default function DemoBrowse() {
     setLoading(true);
     setError(null);
     try {
-      const res = (await invokeFunction('demo-browse-profiles', {})) as {
+      const token = await getAccessToken();
+      const res = (await postFunctionOptionalAuth('demo-browse-profiles', {}, token)) as {
         profiles?: Array<
           Omit<DemoProfile, 'id' | 'reference_number' | 'first_name'> & {
             demo_id: string;

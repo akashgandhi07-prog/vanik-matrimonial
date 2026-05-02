@@ -622,38 +622,6 @@ export default function MemberBrowse() {
           )}
         </div>
       </div>
-      <div
-        style={{
-          margin: '0 0 16px',
-          padding: '12px 14px',
-          borderRadius: 10,
-          border: '1px solid var(--color-border)',
-          background: 'var(--color-surface)',
-          fontSize: 13,
-          color: 'var(--color-text-secondary)',
-          lineHeight: 1.5,
-        }}
-      >
-        <p style={{ margin: 0, fontWeight: 600, color: 'var(--color-text)' }}>
-          Your tray · queue up to {trayMax} profile{trayMax === 1 ? '' : 's'}, then submit once
-        </p>
-        <p style={{ margin: '8px 0 0' }}>
-          Choose people from the grid, add them to the tray, then press submit to request contact details for everyone in
-          the tray at the same time. How many you can queue is the smaller of the two numbers above (and never more than
-          3 at once).{' '}
-          <strong>Photos are not shown on these cards</strong>—after you request someone, their picture appears when you
-          open them under <Link to="/dashboard/requests">My requests</Link>.
-        </p>
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--color-text)' }}>
-            Requesting the same person again
-          </summary>
-          <p style={{ margin: '8px 0 0' }}>
-            After the 7-day wait, a repeat request does not count again toward this month&apos;s 6 if that person was
-            already counted this month.
-          </p>
-        </details>
-      </div>
 
       <section className="member-browse-grid">
         <div className="member-browse-result-line">
@@ -665,13 +633,15 @@ export default function MemberBrowse() {
               : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
             {filtered.length > 0 ? (
               <span style={{ display: 'block', marginTop: 6, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                Cards list details only. Profile photos show in My requests after you request someone.
+                Tap <strong>+ Request</strong> to pick someone. When you&apos;re ready, use <strong>Submit</strong> on the
+                bar that pops up at the bottom. You can pick up to {trayMax} for now. After you submit, photos show in{' '}
+                <Link to="/dashboard/requests">My requests</Link>.
               </span>
             ) : null}
           </span>
           {atTrayCapacity && trayMax > 0 && (
             <span className="member-browse-result-line-warn">
-              Tray full ({tray.length}/{trayMax}). Submit or remove one before adding another.
+              Max selected ({tray.length}/{trayMax}). Submit or remove someone to add another.
             </span>
           )}
           {trayMax === 0 && !feedbackBlocking && (
@@ -721,7 +691,6 @@ export default function MemberBrowse() {
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
-              const canRequestNow = !blocked && !feedbackBlocking && trayMax > 0;
               return (
                 <div
                   key={c.id}
@@ -791,19 +760,17 @@ export default function MemberBrowse() {
                         Opens their card in My requests (photo and contact details).
                       </p>
                     )}
-                    {!blocked && (
+                    {!blocked && (feedbackBlocking || trayMax === 0) && (
                       <p
                         style={{
                           margin: '8px 0 0',
                           fontSize: 12,
-                          color: canRequestNow ? 'var(--color-success)' : 'var(--color-warning)',
+                          color: 'var(--color-warning)',
                         }}
                       >
                         {feedbackBlocking
                           ? 'Request unavailable until pending feedback is submitted.'
-                          : trayMax === 0
-                            ? 'Request unavailable while weekly/monthly quota is full.'
-                            : 'Ready to request.'}
+                          : 'Request unavailable while weekly/monthly quota is full.'}
                       </p>
                     )}
                   </div>
