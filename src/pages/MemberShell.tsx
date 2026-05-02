@@ -46,6 +46,20 @@ function MemberLayoutBody() {
               </div>
             )}
           </div>
+          <nav className="member-dashboard-nav" aria-label="Member dashboard">
+            {(
+              [
+                ['/dashboard/browse', 'Browse'],
+                ['/dashboard/saved', 'Saved profiles'],
+                ['/dashboard/requests', 'My requests'],
+                ['/dashboard/my-profile', 'My profile'],
+              ] as const
+            ).map(([to, label]) => (
+              <NavLink key={to} to={to} className={navCls}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
         </div>
         {showAmber && (
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">
@@ -93,21 +107,7 @@ function MemberLayoutBody() {
         </div>
       )}
 
-      <div className="layout-max member-dashboard-main" style={{ marginTop: 20 }}>
-        <nav className="member-dashboard-nav" aria-label="Member dashboard">
-          {(
-            [
-              ['/dashboard/browse', 'Browse'],
-              ['/dashboard/saved', 'Saved profiles'],
-              ['/dashboard/requests', 'My requests'],
-              ['/dashboard/my-profile', 'My profile'],
-            ] as const
-          ).map(([to, label]) => (
-            <NavLink key={to} to={to} className={navCls}>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+      <div className="layout-max member-dashboard-main" style={{ marginTop: 16 }}>
         <Outlet />
       </div>
     </div>
