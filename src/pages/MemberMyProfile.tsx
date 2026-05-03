@@ -52,10 +52,37 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [seeking, setSeeking] = useState<'Male' | 'Female' | 'Both'>(() =>
     p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female')
   );
+  const [browsePaused, setBrowsePaused] = useState(() => !!p.browse_paused);
+  const [browsePauseSaving, setBrowsePauseSaving] = useState(false);
+  const [browsePauseError, setBrowsePauseError] = useState('');
 
   useEffect(() => {
     setSeeking(p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'));
   }, [p.seeking_gender, p.gender, p.id]);
+
+  useEffect(() => {
+    setBrowsePaused(!!p.browse_paused);
+  }, [p.browse_paused, p.id]);
+
+  const nonPrimaryOrdered = useMemo(() => {
+    return [...photos].filter((x) => !x.is_primary).sort((a, b) => a.position - b.position);
+  }, [photos]);
+
+  async function setBrowsePause(next: boolean) {
+    if (p.status !== 'active') return;
+    const prev = browsePaused;
+    setBrowsePaused(next);
+    setBrowsePauseSaving(true);
+    setBrowsePauseError('');
+    const { error } = await supabase.from('profiles').update({ browse_paused: next }).eq('id', p.id);
+    if (error) {
+      setBrowsePauseError(error.message);
+      setBrowsePaused(prev);
+    } else {
+      void loadAll();
+    }
+    setBrowsePauseSaving(false);
+  }
 
   const heightCm = height === '' ? null : Number(height);
   const initialHeight = p.height_cm == null ? '' : Number(p.height_cm);
@@ -293,6 +320,39 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         <p style={{ marginTop: 12 }}>
           {p.first_name}, {p.age}
         </p>
+        {p.status === 'active' && (
+          <>
+            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
+            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Browse</h4>
+            <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              Pause hides you from browse and saved lists. People who already sent you a contact request still see you
+              in their My requests.
+            </p>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: browsePauseSaving ? 'wait' : 'pointer',
+                fontSize: 14,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={browsePaused}
+                disabled={browsePauseSaving}
+                onChange={(e) => void setBrowsePause(e.target.checked)}
+              />
+              <span>{browsePaused ? 'Browsing paused' : 'Pause my profile on browse'}</span>
+            </label>
+            {browsePauseSaving && (
+              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>Updating…</p>
+            )}
+            {browsePauseError && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>{browsePauseError}</p>
+            )}
+          </>
+        )}
       </div>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Edit profile</h3>
@@ -462,9 +522,11 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
 
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
 
-        <h3>Profile photo</h3>
+        <h3>Profile photos</h3>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          Upload up to 3 photos. Drag and drop to reorder, and set any photo as your profile picture.
+          Upload up to 3 photos. The <strong>main photo</strong> is the one others see in browse and on your card; extra
+          photos appear in your full profile. Drag a row to reorder gallery order; use &quot;Set main&quot; to choose which
+          image is primary.
         </p>
         <label className="label" htmlFor="mp-photo-file">
           Upload photo (JPG or PNG only)
@@ -494,50 +556,92 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         )}
         {photos.length > 0 && (
           <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
-            {photos.map((photo, idx) => (
-              <div
-                key={photo.id}
-                draggable
-                onDragStart={() => setDragPhotoIndex(idx)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (dragPhotoIndex != null) void movePhoto(dragPhotoIndex, idx);
-                  setDragPhotoIndex(null);
-                }}
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  alignItems: 'center',
-                  border: photo.is_primary ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
-                  borderRadius: 8,
-                  padding: 8,
-                }}
-              >
-                {photo.signed_url ? (
-                  <img
-                    src={photo.signed_url}
-                    alt={`Profile photo ${idx + 1}`}
-                    style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6 }}
-                  />
-                ) : (
-                  <div style={{ width: 72, height: 72, borderRadius: 6, background: 'var(--color-surface-muted)' }} />
-                )}
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontSize: 13 }}>
-                    {photo.is_primary ? 'Primary profile photo' : `Photo ${idx + 1}`}
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}>Drag to reorder</p>
+            {photos.map((photo, idx) => {
+              const thumbSize = photo.is_primary ? 132 : 76;
+              const additionalIdx = !photo.is_primary
+                ? nonPrimaryOrdered.findIndex((x) => x.id === photo.id) + 1
+                : 0;
+              return (
+                <div
+                  key={photo.id}
+                  draggable
+                  onDragStart={() => setDragPhotoIndex(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragPhotoIndex != null) void movePhoto(dragPhotoIndex, idx);
+                    setDragPhotoIndex(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    border: photo.is_primary ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+                    borderRadius: 10,
+                    padding: photo.is_primary ? 12 : 8,
+                    background: photo.is_primary ? 'var(--color-surface-muted)' : undefined,
+                  }}
+                >
+                  {photo.signed_url ? (
+                    <img
+                      src={photo.signed_url}
+                      alt={photo.is_primary ? 'Main profile photo' : `Additional photo ${additionalIdx}`}
+                      style={{
+                        width: thumbSize,
+                        height: thumbSize,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        flexShrink: 0,
+                        boxShadow: photo.is_primary ? '0 1px 4px rgba(0,0,0,0.12)' : undefined,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: thumbSize,
+                        height: thumbSize,
+                        borderRadius: 8,
+                        background: 'var(--color-surface-muted)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: photo.is_primary ? 600 : 400 }}>
+                      {photo.is_primary ? 'Main photo' : `Additional photo ${additionalIdx}`}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      {photo.is_primary
+                        ? 'Shown on your card in browse and as the first image in your profile.'
+                        : 'Shown only in your full profile gallery.'}
+                    </p>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      Drag this row to reorder.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+                    {!photo.is_primary && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={photoSaving}
+                        onClick={() => void setPrimary(photo.id)}
+                      >
+                        Set main
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={photoSaving}
+                      onClick={() => void removePhoto(photo.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-                {!photo.is_primary && (
-                  <button type="button" className="btn btn-secondary" disabled={photoSaving} onClick={() => void setPrimary(photo.id)}>
-                    Set primary
-                  </button>
-                )}
-                <button type="button" className="btn btn-secondary" disabled={photoSaving} onClick={() => void removePhoto(photo.id)}>
-                  Remove
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

@@ -40,6 +40,8 @@ export type ProfileRow = {
   photo_status: string;
   status: string;
   show_on_register: boolean;
+  /** When true, member is hidden from browse; existing requests to them still work. */
+  browse_paused?: boolean;
   membership_expires_at: string | null;
   rejection_reason: string | null;
 };
@@ -250,13 +252,15 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
               rpc.error.code,
             );
           }
-          // RLS (`profiles_select_opposite_active` + own row) already enforces opposite gender, active,
-          // show_on_register, and membership. Only exclude self - duplicating filters here risks drift
-          // (e.g. gender string mismatch) and empty browse despite correct data.
+          // RLS (`profiles_select_opposite_active` + own row) enforces opposite gender, active,
+          // show_on_register, membership, and browse_paused (unless viewer already requested this profile).
+          // Restrict to browse_paused = false here so this path matches browse_opposite_profiles (no paused
+          // profiles in the browse list even when the viewer could SELECT them via an existing request).
           const { data, error } = await supabase
             .from("profiles")
             .select("*")
-            .neq("id", myId);
+            .neq("id", myId)
+            .eq("browse_paused", false);
           if (error) {
             console.error(
               "browse candidates query:",

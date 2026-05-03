@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
       .select(PROFILE_COLUMNS)
       .eq('status', 'active')
       .eq('show_on_register', true)
+      .eq('browse_paused', false)
       .not('membership_expires_at', 'is', null)
       .gt('membership_expires_at', nowIso)
       .order('created_at', { ascending: false })
