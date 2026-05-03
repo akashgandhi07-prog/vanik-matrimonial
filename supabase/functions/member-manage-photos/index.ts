@@ -135,16 +135,18 @@ Deno.serve(async (req) => {
     const photoId = String(body.photo_id ?? '').trim();
     if (!photoId) return jsonResponse({ error: 'photo_id required' }, req, 400);
     if (!currentRows.some((r) => r.id === photoId)) return jsonResponse({ error: 'Photo not found' }, req, 404);
-    for (const row of currentRows) {
-      const shouldBePrimary = row.id === photoId;
-      if (row.is_primary === shouldBePrimary) continue;
-      const { error } = await admin
-        .from('profile_photos')
-        .update({ is_primary: shouldBePrimary })
-        .eq('id', row.id)
-        .eq('profile_id', profileId);
-      if (error) return jsonResponse({ error: error.message }, req, 500);
-    }
+    // Clear primary first so we never have two rows with is_primary true (unique per profile_id).
+    const { error: clearErr } = await admin
+      .from('profile_photos')
+      .update({ is_primary: false })
+      .eq('profile_id', profileId);
+    if (clearErr) return jsonResponse({ error: clearErr.message }, req, 500);
+    const { error: primaryErr } = await admin
+      .from('profile_photos')
+      .update({ is_primary: true })
+      .eq('id', photoId)
+      .eq('profile_id', profileId);
+    if (primaryErr) return jsonResponse({ error: primaryErr.message }, req, 500);
   } else {
     return jsonResponse({ error: 'Unknown action' }, req, 400);
   }
