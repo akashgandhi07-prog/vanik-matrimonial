@@ -46,6 +46,8 @@ export type MemberPrivateFull = {
   mother_name: string | null;
   id_document_url: string | null;
   coupon_used: string | null;
+  contact_request_weekly_bonus?: number | null;
+  contact_request_monthly_bonus?: number | null;
 };
 
 function isoToDatetimeLocal(iso: string | null | undefined): string {

@@ -24,6 +24,7 @@ Use **Demote** on Settings. You cannot demote yourself, and you cannot demote th
 ## Environment and Edge Functions
 
 - Set secrets in the Supabase project (Edge Function secrets): `PUBLIC_SITE_URL`, `CRON_SECRET` (required for scheduled jobs), etc.  
+- In **Database → Cron Jobs** (or your scheduler), invoke `send-account-freeze-reminders` daily with the same pattern as other jobs (`POST` to the function URL with `x-cron-secret`). It emails members still frozen after ~30 days.  
 - **Transactional email** (registration received, approvals, reminders, digests): Edge Functions send via **SMTP** when `SMTP_USER` + `SMTP_PASS` are set (same values as Auth custom SMTP if you use Gmail — you must add them here too; the dashboard does not copy them). Optional: `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_REPLY_TO`. If SMTP is not set, `RESEND_API_KEY` (+ `RESEND_FROM_*`) is used instead.  
 - Deploy functions after pulling migrations: `supabase db push` / `supabase functions deploy`.
 

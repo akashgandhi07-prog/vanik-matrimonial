@@ -20,6 +20,11 @@ type JobInfo = {
 const JOBS: JobInfo[] = [
   { name: 'send-feedback-reminders', schedule: '0 8 * * *', scheduleLabel: 'Daily at 08:00' },
   { name: 'send-renewal-reminders', schedule: '0 8 * * *', scheduleLabel: 'Daily at 08:00' },
+  {
+    name: 'send-account-freeze-reminders',
+    schedule: '0 8 * * *',
+    scheduleLabel: 'Daily at 08:00 (emails ~30 days after freeze)',
+  },
   { name: 'expire-memberships', schedule: '0 7 * * *', scheduleLabel: 'Daily at 07:00' },
   { name: 'archive-lapsed-members', schedule: '0 9 * * 1', scheduleLabel: 'Weekly Mon 09:00' },
   { name: 'purge-archived-accounts', schedule: '0 10 * * *', scheduleLabel: 'Daily at 10:00' },

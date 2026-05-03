@@ -14,14 +14,14 @@ type FeedbackRow = {
   submitted_at: string;
 };
 
-type CandidateProfile = {
+type ProfileSummary = {
   id: string;
   first_name: string;
   reference_number: string | null;
 };
 
 type GroupedFeedback = {
-  candidate: CandidateProfile;
+  candidate: ProfileSummary;
   rows: FeedbackRow[];
 };
 
@@ -40,7 +40,7 @@ function truncate(s: string | null, len: number): string {
 
 export default function AdminFeedback() {
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
-  const [profiles, setProfiles] = useState<Record<string, CandidateProfile>>({});
+  const [profiles, setProfiles] = useState<Record<string, ProfileSummary>>({});
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export default function AdminFeedback() {
     try {
       const res = (await invokeFunction('admin-manage-users', { action: 'list_feedback' })) as {
         feedback?: FeedbackRow[];
-        profiles?: Record<string, CandidateProfile>;
+        profiles?: Record<string, ProfileSummary>;
       };
       setFeedback((res.feedback ?? []) as FeedbackRow[]);
       setProfiles(res.profiles ?? {});
@@ -113,8 +113,8 @@ export default function AdminFeedback() {
         </label>
       </div>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, maxWidth: 720, margin: '0 0 16px' }}>
-        Feedback is grouped by candidate profile. Submissions are tied to the member who made the contact
-        request (stored as requester); candidates do not see these responses.
+        Feedback is grouped by candidate (subject). Each row shows which member submitted it; candidates do not
+        see these responses.
       </p>
 
       {error && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{error}</p>}
@@ -126,6 +126,19 @@ export default function AdminFeedback() {
       {grouped.map(({ candidate, rows }) => (
         <div key={candidate.id} className="card" style={{ marginBottom: 24 }}>
           <h2 style={{ marginTop: 0, marginBottom: 12 }}>
+            <span
+              style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--color-text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                marginBottom: 6,
+              }}
+            >
+              Candidate (feedback subject)
+            </span>
             {candidate.first_name}
             {candidate.reference_number ? ` (${candidate.reference_number})` : ''}
             <span style={{ fontSize: 13, fontWeight: 400, color: '#6b7280', marginLeft: 8 }}>
@@ -138,6 +151,7 @@ export default function AdminFeedback() {
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '6px 8px' }}>Date</th>
+                  <th style={{ padding: '6px 8px' }}>Feedback from</th>
                   <th style={{ padding: '6px 8px' }}>Made contact</th>
                   <th style={{ padding: '6px 8px' }}>Recommend retain</th>
                   <th style={{ padding: '6px 8px' }}>Notes</th>
@@ -147,6 +161,16 @@ export default function AdminFeedback() {
               <tbody>
                 {rows.map((row) => {
                   const highlight = row.is_flagged || row.recommend_retain === 'no';
+                  const from = row.requester_id
+                    ? profiles[row.requester_id] ?? {
+                        id: row.requester_id,
+                        first_name: row.requester_id,
+                        reference_number: null,
+                      }
+                    : null;
+                  const fromLabel = from
+                    ? `${from.first_name}${from.reference_number ? ` (${from.reference_number})` : ''}`
+                    : '—';
                   return (
                     <tr
                       key={row.id}
@@ -158,6 +182,7 @@ export default function AdminFeedback() {
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
                         {fmtDate(row.submitted_at)}
                       </td>
+                      <td style={{ padding: '6px 8px' }}>{fromLabel}</td>
                       <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                       <td style={{ padding: '6px 8px' }}>
                         <span

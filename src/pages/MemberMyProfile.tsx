@@ -323,10 +323,11 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         {p.status === 'active' && (
           <>
             <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
-            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Browse</h4>
-            <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              Pause hides you from browse and saved lists. People who already sent you a contact request still see you
-              in their My requests.
+            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Freeze my account</h4>
+            <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              Maybe you&apos;re busy or not looking for anyone to contact you for a short time? Freezing hides you from
+              browse and saved lists. People who already sent you a contact request can still see you in their My
+              requests. If you&apos;re still frozen after about a month, we&apos;ll send one email to remind you.
             </p>
             <label
               style={{
@@ -343,7 +344,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
                 disabled={browsePauseSaving}
                 onChange={(e) => void setBrowsePause(e.target.checked)}
               />
-              <span>{browsePaused ? 'Browsing paused' : 'Pause my profile on browse'}</span>
+              <span>{browsePaused ? 'Account frozen (hidden from browse)' : 'Freeze my account'}</span>
             </label>
             {browsePauseSaving && (
               <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>Updating…</p>
@@ -523,13 +524,30 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
 
         <h3>Profile photos</h3>
-        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-          Upload up to 3 photos. The <strong>main photo</strong> is the one others see in browse and on your card; extra
-          photos appear in your full profile. Drag a row to reorder gallery order; use &quot;Set main&quot; to choose which
-          image is primary.
-        </p>
+        <ul
+          style={{
+            fontSize: 13,
+            color: 'var(--color-text-secondary)',
+            margin: '0 0 12px',
+            paddingLeft: 20,
+            lineHeight: 1.5,
+          }}
+        >
+          <li style={{ marginBottom: 8 }}>
+            <strong>Up to 3 photos in total.</strong> If you only have your main picture so far, you may upload{' '}
+            <strong>two more</strong> (for 3 altogether). The site never stores more than three.
+          </li>
+          <li style={{ marginBottom: 8 }}>
+            <strong>Replace any slot.</strong> Use <strong>Remove</strong> on a photo you want to drop, then upload again —
+            or free a slot first if you are already at three.
+          </li>
+          <li style={{ marginBottom: 0 }}>
+            <strong>Change order or the main image.</strong> Drag rows to reorder the gallery. Use <strong>Set main</strong>{' '}
+            so the right picture is the one others see in browse and as the first image in your profile.
+          </li>
+        </ul>
         <label className="label" htmlFor="mp-photo-file">
-          Upload photo (JPG or PNG only)
+          Add or replace a photo (JPG or PNG)
         </label>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
           Use a clear photo of your face only. Group photos are not accepted.

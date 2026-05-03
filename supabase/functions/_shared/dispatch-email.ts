@@ -18,7 +18,8 @@ export type EmailType =
   | 'admin_daily_digest'
   | 'matched_congratulations'
   | 'photo_update_rejected'
-  | 'admin_pending_reminder';
+  | 'admin_pending_reminder'
+  | 'account_freeze_reminder';
 
 export type DispatchParams = {
   type: EmailType;
@@ -247,6 +248,20 @@ export async function dispatchEmail(
         <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
         <p>We aim to review applications within 10 working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have questions, reply to this email.</p>
+        <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'account_freeze_reminder': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      if (!profile.browse_paused) return { ok: false, error: 'Not frozen' };
+      const dash = `${publicSiteBaseUrl()}/login`;
+      subject = 'Reminder: your account is still frozen on the register';
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>About a month ago you chose to <strong>freeze your account</strong>, so your profile stays hidden from browse and saved lists. This is just a gentle reminder that you are still frozen.</p>
+        <p>If you are ready to be visible again, sign in and open <strong>My profile</strong>, then turn off &quot;Freeze my account&quot;.</p>
+        <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Sign in</a></p>
+        <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;
       break;
     }

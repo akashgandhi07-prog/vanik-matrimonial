@@ -50,6 +50,9 @@ verify_jwt = false
 [functions.send-renewal-reminders]
 verify_jwt = false
 
+[functions.send-account-freeze-reminders]
+verify_jwt = false
+
 [functions.send-admin-digest]
 verify_jwt = false
 

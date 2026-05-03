@@ -32,6 +32,66 @@ function normalizeQueryError(label: string, err: unknown): string | null {
   return `${label}: ${parts.join(' | ')}`;
 }
 
+const CONTACT_QUOTA_WEEK_BASE = 3;
+const CONTACT_QUOTA_MONTH_BASE = 6;
+const CONTACT_QUOTA_BONUS_MAX = 50;
+
+type ContactQuotaSnapshot = {
+  weekly_used: number;
+  monthly_used: number;
+  weekly_cap: number;
+  monthly_cap: number;
+  weekly_bonus: number;
+  monthly_bonus: number;
+  week_reset_at: string | null;
+  month_reset_at: string;
+};
+
+function contactQuotaFromRequests(
+  requestRows: { created_at: string; candidate_ids: string[] | null }[],
+  weeklyBonus: number,
+  monthlyBonus: number
+): ContactQuotaSnapshot {
+  const now = Date.now();
+  const weekCut = now - 7 * 86400000;
+  const monthStart = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1);
+  const countDistinctSince = (cutoffMs: number) => {
+    const s = new Set<string>();
+    for (const r of requestRows) {
+      const t = new Date(r.created_at).getTime();
+      if (Number.isNaN(t) || t < cutoffMs) continue;
+      for (const id of r.candidate_ids ?? []) {
+        if (id) s.add(id);
+      }
+    }
+    return s.size;
+  };
+  const weeklyUsed = countDistinctSince(weekCut);
+  const monthlyUsed = countDistinctSince(monthStart);
+  const wB = Math.max(0, Math.min(CONTACT_QUOTA_BONUS_MAX, weeklyBonus));
+  const mB = Math.max(0, Math.min(CONTACT_QUOTA_BONUS_MAX, monthlyBonus));
+  const weeklyCap = CONTACT_QUOTA_WEEK_BASE + wB;
+  const monthlyCap = CONTACT_QUOTA_MONTH_BASE + mB;
+  let oldestInWeek: number | null = null;
+  for (const r of requestRows) {
+    const t = new Date(r.created_at).getTime();
+    if (Number.isNaN(t) || t < weekCut) continue;
+    oldestInWeek = oldestInWeek === null ? t : Math.min(oldestInWeek, t);
+  }
+  const weekResetAt = oldestInWeek == null ? null : new Date(oldestInWeek + 7 * 86400000).toISOString();
+  const monthResetAt = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
+  return {
+    weekly_used: weeklyUsed,
+    monthly_used: monthlyUsed,
+    weekly_cap: weeklyCap,
+    monthly_cap: monthlyCap,
+    weekly_bonus: wB,
+    monthly_bonus: mB,
+    week_reset_at: weekResetAt,
+    month_reset_at: monthResetAt,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeadersFor(req) });
@@ -599,13 +659,17 @@ Deno.serve(async (req) => {
       .order('submitted_at', { ascending: false });
     if (fErr) return jsonResponse({ error: fErr.message }, req, 500);
     const feedbackRows = fb ?? [];
-    const candidateIds = [...new Set((feedbackRows as { candidate_id: string }[]).map((r) => r.candidate_id))];
+    const profileIds = new Set<string>();
+    for (const r of feedbackRows as { candidate_id: string; requester_id: string | null }[]) {
+      profileIds.add(r.candidate_id);
+      if (r.requester_id) profileIds.add(r.requester_id);
+    }
     const profiles: Record<string, { id: string; first_name: string; reference_number: string | null }> = {};
-    if (candidateIds.length > 0) {
+    if (profileIds.size > 0) {
       const { data: profs, error: pErr } = await admin
         .from('profiles')
         .select('id, first_name, reference_number')
-        .in('id', candidateIds);
+        .in('id', [...profileIds]);
       if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
       for (const p of profs ?? []) {
         const row = p as { id: string; first_name: string; reference_number: string | null };
@@ -932,18 +996,62 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true }, req);
   }
 
+  if (action === 'set_contact_request_bonuses') {
+    const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
+    if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
+    const parseBonus = (v: unknown): number | null => {
+      if (v === undefined || v === null || v === '') return 0;
+      const n = Math.floor(Number(v));
+      if (!Number.isFinite(n) || n < 0 || n > CONTACT_QUOTA_BONUS_MAX) return null;
+      return n;
+    };
+    const wB = parseBonus(body.contact_request_weekly_bonus);
+    const mB = parseBonus(body.contact_request_monthly_bonus);
+    if (wB === null || mB === null) {
+      return jsonResponse({ error: `Bonuses must be integers 0–${CONTACT_QUOTA_BONUS_MAX}` }, req, 400);
+    }
+    const { data: beforeRow, error: be } = await admin
+      .from('member_private')
+      .select('contact_request_weekly_bonus, contact_request_monthly_bonus')
+      .eq('profile_id', profileId)
+      .single();
+    if (be || !beforeRow) return jsonResponse({ error: 'Member not found' }, req, 404);
+    const before = beforeRow as {
+      contact_request_weekly_bonus: number | null;
+      contact_request_monthly_bonus: number | null;
+    };
+    const { error: upErr } = await admin
+      .from('member_private')
+      .update({
+        contact_request_weekly_bonus: wB,
+        contact_request_monthly_bonus: mB,
+      })
+      .eq('profile_id', profileId);
+    if (upErr) return jsonResponse({ error: upErr.message }, req, 500);
+    const prevW = Number(before.contact_request_weekly_bonus ?? 0);
+    const prevM = Number(before.contact_request_monthly_bonus ?? 0);
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: profileId,
+      action_type: 'contact_request_quota_adjusted',
+      notes: `Extra 7-day slots: ${prevW} → ${wB}. Extra calendar-month slots: ${prevM} → ${mB}.`,
+    });
+    return jsonResponse({ ok: true }, req);
+  }
+
   if (action === 'get_member_detail') {
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
 
     const { data: profile, error: pErr } = await admin.from('profiles').select('*').eq('id', profileId).single();
     if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
-    const { data: memberPrivate, error: mErr } = await admin
+    const { data: memberPrivateColumns, error: mErr } = await admin
       .from('member_private')
       .select('*')
       .eq('profile_id', profileId)
       .single();
     if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+    const memberPrivate = memberPrivateColumns;
 
     const prof = profile as {
       photo_url: string | null;
@@ -1026,6 +1134,23 @@ Deno.serve(async (req) => {
       .order('sent_at', { ascending: false })
       .limit(10);
 
+    const { data: reqRows, error: rqErr } = await admin
+      .from('requests')
+      .select('created_at, candidate_ids')
+      .eq('requester_id', profileId)
+      .order('created_at', { ascending: false })
+      .limit(800);
+    if (rqErr) return jsonResponse({ error: rqErr.message }, req, 500);
+    const mpQuota = memberPrivate as {
+      contact_request_weekly_bonus?: number | null;
+      contact_request_monthly_bonus?: number | null;
+    };
+    const contact_request_quota = contactQuotaFromRequests(
+      (reqRows ?? []) as { created_at: string; candidate_ids: string[] | null }[],
+      Number(mpQuota.contact_request_weekly_bonus ?? 0),
+      Number(mpQuota.contact_request_monthly_bonus ?? 0)
+    );
+
     return jsonResponse({
       profile,
       member_private: memberPrivate,
@@ -1033,6 +1158,7 @@ Deno.serve(async (req) => {
       timeline,
       admin_note: noteRow ?? { body: '', updated_at: null, updated_by: null },
       recent_emails: recentEmails ?? [],
+      contact_request_quota,
     }, req);
   }
 
@@ -1070,6 +1196,7 @@ Deno.serve(async (req) => {
     const allowed = new Set([
       'send-feedback-reminders',
       'send-renewal-reminders',
+      'send-account-freeze-reminders',
       'expire-memberships',
       'archive-lapsed-members',
       'purge-archived-accounts',

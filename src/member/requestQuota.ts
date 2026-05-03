@@ -3,6 +3,24 @@
 export const WEEK_MS = 7 * 86400000;
 export const FEEDBACK_STALE_MS = 21 * 86400000;
 
+/** Base caps before admin-applied bonuses (see `member_private.contact_request_*_bonus`). */
+export const CONTACT_REQUEST_WEEKLY_BASE = 3;
+export const CONTACT_REQUEST_MONTHLY_BASE = 6;
+/** Matches server `LEAST(10, weekly_cap, monthly_cap)` for one submission. */
+export const CONTACT_REQUEST_MAX_PER_SUBMIT = 10;
+
+export function effectiveWeeklyCap(weeklyBonus = 0): number {
+  return CONTACT_REQUEST_WEEKLY_BASE + Math.max(0, weeklyBonus);
+}
+
+export function effectiveMonthlyCap(monthlyBonus = 0): number {
+  return CONTACT_REQUEST_MONTHLY_BASE + Math.max(0, monthlyBonus);
+}
+
+export function maxCandidatesPerSubmit(weeklyCap: number, monthlyCap: number): number {
+  return Math.min(CONTACT_REQUEST_MAX_PER_SUBMIT, weeklyCap, monthlyCap);
+}
+
 export type RequestSummary = {
   id: string;
   created_at: string;
@@ -12,6 +30,7 @@ export type RequestSummary = {
 export type QuotaWindow = {
   used: number;
   remaining: number;
+  cap: number;
   locked: boolean;
   resetAt: string | null;
 };
@@ -26,7 +45,7 @@ export function nextMonthStartUtc(): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
 }
 
-export function computeWeeklyWindow(requests: RequestSummary[]): QuotaWindow {
+export function computeWeeklyWindow(requests: RequestSummary[], weeklyCap = CONTACT_REQUEST_WEEKLY_BASE): QuotaWindow {
   const cutoff = Date.now() - WEEK_MS;
   const usedCandidateIds = new Set<string>();
   let oldestRecentRequestMs: number | null = null;
@@ -40,10 +59,12 @@ export function computeWeeklyWindow(requests: RequestSummary[]): QuotaWindow {
   }
 
   const used = usedCandidateIds.size;
-  const remaining = Math.max(0, 3 - used);
+  const cap = Math.max(CONTACT_REQUEST_WEEKLY_BASE, weeklyCap);
+  const remaining = Math.max(0, cap - used);
   return {
     used,
     remaining,
+    cap,
     locked: remaining === 0,
     resetAt:
       oldestRecentRequestMs != null
@@ -52,7 +73,10 @@ export function computeWeeklyWindow(requests: RequestSummary[]): QuotaWindow {
   };
 }
 
-export function computeMonthlyWindow(requests: RequestSummary[]): QuotaWindow {
+export function computeMonthlyWindow(
+  requests: RequestSummary[],
+  monthlyCap = CONTACT_REQUEST_MONTHLY_BASE
+): QuotaWindow {
   const start = monthStartUtc();
   const usedCandidateIds = new Set<string>();
 
@@ -64,10 +88,12 @@ export function computeMonthlyWindow(requests: RequestSummary[]): QuotaWindow {
   }
 
   const used = usedCandidateIds.size;
-  const remaining = Math.max(0, 6 - used);
+  const cap = Math.max(CONTACT_REQUEST_MONTHLY_BASE, monthlyCap);
+  const remaining = Math.max(0, cap - used);
   return {
     used,
     remaining,
+    cap,
     locked: remaining === 0,
     resetAt: nextMonthStartUtc().toLocaleDateString('en-GB', {
       day: 'numeric',
@@ -78,8 +104,14 @@ export function computeMonthlyWindow(requests: RequestSummary[]): QuotaWindow {
 }
 
 /** How many profiles the request tray can hold right now (server-aligned). */
-export function computeTrayCapacity(weeklyRemaining: number, monthlyRemaining: number): number {
-  return Math.max(0, Math.min(3, weeklyRemaining, monthlyRemaining));
+export function computeTrayCapacity(
+  weeklyRemaining: number,
+  monthlyRemaining: number,
+  weeklyCap: number,
+  monthlyCap: number
+): number {
+  const maxBatch = maxCandidatesPerSubmit(weeklyCap, monthlyCap);
+  return Math.max(0, Math.min(maxBatch, weeklyRemaining, monthlyRemaining));
 }
 
 /**

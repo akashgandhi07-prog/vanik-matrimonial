@@ -4,7 +4,7 @@ import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
-import { computeMonthlyWindow, computeWeeklyWindow } from '../member/requestQuota';
+import { computeMonthlyWindow, computeWeeklyWindow, effectiveMonthlyCap, effectiveWeeklyCap } from '../member/requestQuota';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
@@ -92,7 +92,7 @@ function friendlyContactsError(err: unknown): string {
 export default function MemberRequests() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, candidates, requests, feedbackKeys, bookmarks, toggleBookmark } = useMemberArea();
+  const { profile, privateRow, candidates, requests, feedbackKeys, bookmarks, toggleBookmark } = useMemberArea();
   const [contactsByRequest, setContactsByRequest] = useState<Record<string, ContactDetailRow[]>>({});
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -252,9 +252,17 @@ export default function MemberRequests() {
     navigate('/dashboard/requests', { replace: true, state: {} });
   }, [location.state, profilesById, candidates, contactsByRequest, requests, navigate]);
 
-  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
+  const weeklyCap = useMemo(
+    () => effectiveWeeklyCap(privateRow?.contact_request_weekly_bonus ?? 0),
+    [privateRow?.contact_request_weekly_bonus]
+  );
+  const monthlyCap = useMemo(
+    () => effectiveMonthlyCap(privateRow?.contact_request_monthly_bonus ?? 0),
+    [privateRow?.contact_request_monthly_bonus]
+  );
+  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests, weeklyCap), [requests, weeklyCap]);
 
-  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
+  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests, monthlyCap), [requests, monthlyCap]);
 
   if (!profile) return null;
 
@@ -326,8 +334,9 @@ export default function MemberRequests() {
         Phone numbers and other details you were approved for appear here so you can follow up directly.
       </p>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-        <strong>Limits:</strong> up to <strong>3</strong> new people per rolling 7 days, and <strong>6</strong> distinct
-        people per calendar month. Outstanding feedback can block new requests — see the Feedback column below.
+        <strong>Limits:</strong> up to <strong>{weeklyCap}</strong> new {weeklyCap === 1 ? 'person' : 'people'} per rolling 7 days, and{' '}
+        <strong>{monthlyCap}</strong> distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (UTC). Outstanding
+        feedback can block new requests — see the Feedback column below.
       </p>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <details>
@@ -335,7 +344,7 @@ export default function MemberRequests() {
             Repeat requests &amp; monthly count
           </summary>
           <span style={{ display: 'block', marginTop: 8 }}>
-            If you already counted someone in this month&apos;s 6, asking again after the 7-day wait does not use another
+            If you already counted someone in this month&apos;s {monthlyCap}, asking again after the 7-day wait does not use another
             monthly slot.
           </span>
         </details>
@@ -353,9 +362,13 @@ export default function MemberRequests() {
           }}
         >
           {weeklyWindow.locked ? (
-            <>7-day limit: all 3 used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.</>
+            <>
+              7-day limit: all {weeklyWindow.cap} used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.
+            </>
           ) : (
-            <>7-day limit: {weeklyWindow.used} of 3 used · {weeklyWindow.remaining} left</>
+            <>
+              7-day limit: {weeklyWindow.used} of {weeklyWindow.cap} used · {weeklyWindow.remaining} left
+            </>
           )}
         </div>
         <div
@@ -370,9 +383,13 @@ export default function MemberRequests() {
           }}
         >
           {monthlyWindow.locked ? (
-            <>Month limit: all 6 used. Resets {monthlyWindow.resetAt}.</>
+            <>
+              Month limit: all {monthlyWindow.cap} used. Resets {monthlyWindow.resetAt}.
+            </>
           ) : (
-            <>Month limit: {monthlyWindow.used} of 6 used · {monthlyWindow.remaining} left</>
+            <>
+              Month limit: {monthlyWindow.used} of {monthlyWindow.cap} used · {monthlyWindow.remaining} left
+            </>
           )}
         </div>
       </div>

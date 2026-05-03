@@ -7,6 +7,8 @@ import {
   computeMonthlyWindow,
   computeTrayCapacity,
   computeWeeklyWindow,
+  effectiveMonthlyCap,
+  effectiveWeeklyCap,
   hasOutstandingFeedbackBlock,
 } from '../member/requestQuota';
 import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
@@ -72,7 +74,7 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
 
 export default function MemberBrowse() {
   const navigate = useNavigate();
-  const { profile, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll, notice, clearNotice } =
+  const { profile, privateRow, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll, notice, clearNotice } =
     useMemberArea();
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
@@ -164,11 +166,19 @@ export default function MemberBrowse() {
         ? 'Minimum height cannot be greater than maximum height.'
         : null;
 
-  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests), [requests]);
-  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests), [requests]);
+  const weeklyCap = useMemo(
+    () => effectiveWeeklyCap(privateRow?.contact_request_weekly_bonus ?? 0),
+    [privateRow?.contact_request_weekly_bonus]
+  );
+  const monthlyCap = useMemo(
+    () => effectiveMonthlyCap(privateRow?.contact_request_monthly_bonus ?? 0),
+    [privateRow?.contact_request_monthly_bonus]
+  );
+  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests, weeklyCap), [requests, weeklyCap]);
+  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests, monthlyCap), [requests, monthlyCap]);
   const trayMax = useMemo(
-    () => computeTrayCapacity(weeklyWindow.remaining, monthlyWindow.remaining),
-    [weeklyWindow.remaining, monthlyWindow.remaining]
+    () => computeTrayCapacity(weeklyWindow.remaining, monthlyWindow.remaining, weeklyCap, monthlyCap),
+    [weeklyWindow.remaining, monthlyWindow.remaining, weeklyCap, monthlyCap]
   );
   const feedbackBlocking = useMemo(
     () => hasOutstandingFeedbackBlock(requests, feedbackKeys),
@@ -570,9 +580,13 @@ export default function MemberBrowse() {
           }}
         >
           {weeklyWindow.locked ? (
-            <>7-day limit: all 3 used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.</>
+            <>
+              7-day limit: all {weeklyWindow.cap} used. Next slot frees {weeklyWindow.resetAt ?? 'soon'}.
+            </>
           ) : (
-            <>7-day limit: {weeklyWindow.used} of 3 used · {weeklyWindow.remaining} left</>
+            <>
+              7-day limit: {weeklyWindow.used} of {weeklyWindow.cap} used · {weeklyWindow.remaining} left
+            </>
           )}
         </div>
         <div
@@ -587,9 +601,13 @@ export default function MemberBrowse() {
           }}
         >
           {monthlyWindow.locked ? (
-            <>Month limit: all 6 used. Resets {monthlyWindow.resetAt}.</>
+            <>
+              Month limit: all {monthlyWindow.cap} used. Resets {monthlyWindow.resetAt}.
+            </>
           ) : (
-            <>Month limit: {monthlyWindow.used} of 6 used · {monthlyWindow.remaining} left</>
+            <>
+              Month limit: {monthlyWindow.used} of {monthlyWindow.cap} used · {monthlyWindow.remaining} left
+            </>
           )}
         </div>
       </div>
@@ -817,10 +835,10 @@ export default function MemberBrowse() {
                   <><strong>Already requested.</strong> {submitError.message}</>
                 )}
                 {submitError.type === 'weekly_limit' && (
-                  <><strong>7-day limit reached.</strong> You can add up to 3 new people in any rolling 7-day period. The counters at the top of this page show when the next slot opens.</>
+                  <><strong>7-day limit reached.</strong> You can add up to {weeklyCap} new {weeklyCap === 1 ? 'person' : 'people'} in any rolling 7-day period (your current allowance). The counters at the top of this page show when the next slot opens.</>
                 )}
                 {submitError.type === 'monthly_limit' && (
-                  <><strong>Month limit reached.</strong> You can request up to 6 distinct people per calendar month. Counts reset on the 1st.</>
+                  <><strong>Month limit reached.</strong> You can request up to {monthlyCap} distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (your current allowance). Counts reset on the 1st (UTC).</>
                 )}
                 {submitError.type === 'generic' && submitError.message}
               </div>

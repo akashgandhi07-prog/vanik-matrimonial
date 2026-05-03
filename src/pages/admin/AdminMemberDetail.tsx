@@ -34,6 +34,7 @@ const ACTION_LABELS: Record<string, string> = {
   sessions_revoked: 'All sessions invalidated',
   password_recovery_sent: 'Password recovery email sent',
   admin_role_changed: 'Admin role changed',
+  contact_request_quota_adjusted: 'Contact request limits adjusted',
 };
 
 function humanizeAction(type: string) {
@@ -100,6 +101,19 @@ export default function AdminMemberDetail() {
   const [unrejectBusy, setUnrejectBusy] = useState(false);
   const [adminPhotoMode, setAdminPhotoMode] = useState<'direct' | 'pending_review'>('direct');
   const [adminPhotoBusy, setAdminPhotoBusy] = useState(false);
+  const [contactQuota, setContactQuota] = useState<{
+    weekly_used: number;
+    monthly_used: number;
+    weekly_cap: number;
+    monthly_cap: number;
+    weekly_bonus: number;
+    monthly_bonus: number;
+    week_reset_at: string | null;
+    month_reset_at: string;
+  } | null>(null);
+  const [quotaBonusWeek, setQuotaBonusWeek] = useState(0);
+  const [quotaBonusMonth, setQuotaBonusMonth] = useState(0);
+  const [quotaSaving, setQuotaSaving] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -122,6 +136,16 @@ export default function AdminMemberDetail() {
           signed_urls?: { photo: string | null; photos?: string[]; pending_photo: string | null; id_document: string | null };
           admin_note?: { body: string; updated_at: string | null; updated_by: string | null };
           recent_emails?: typeof recentEmails;
+          contact_request_quota?: {
+            weekly_used: number;
+            monthly_used: number;
+            weekly_cap: number;
+            monthly_cap: number;
+            weekly_bonus: number;
+            monthly_bonus: number;
+            week_reset_at: string | null;
+            month_reset_at: string;
+          };
         };
         if (!res.profile || !res.member_private) {
           setDetailError('Member not found or incomplete data.');
@@ -142,11 +166,19 @@ export default function AdminMemberDetail() {
         setIdDocSignedFromServer(su?.id_document ?? null);
         setInternalNoteDraft(res.admin_note?.body ?? '');
         setRecentEmails(res.recent_emails ?? []);
+        setContactQuota(res.contact_request_quota ?? null);
+        setQuotaBonusWeek(
+          Math.max(0, Math.min(50, Number(res.member_private.contact_request_weekly_bonus ?? 0)))
+        );
+        setQuotaBonusMonth(
+          Math.max(0, Math.min(50, Number(res.member_private.contact_request_monthly_bonus ?? 0)))
+        );
       } catch (e) {
         setDetailError(e instanceof Error ? e.message : 'Failed to load member');
         setProfile(null);
         setPriv(null);
         setPhotoUrls([]);
+        setContactQuota(null);
       }
     })();
   }, [id, ok, mfaOk, reloadKey]);
@@ -249,6 +281,110 @@ export default function AdminMemberDetail() {
             </button>
           </div>
         )}
+
+        <div className="card" style={{ marginTop: 20 }}>
+          <h3 style={{ marginTop: 0 }}>Contact request limits</h3>
+          <p className="field-hint" style={{ marginTop: 0, maxWidth: 640, lineHeight: 1.5 }}>
+            Members normally get <strong>3</strong> distinct introductions per rolling <strong>7 days</strong> and{' '}
+            <strong>6</strong> per <strong>calendar month</strong> (UTC). If someone used a slot on a poor match, add extra
+            slots here. Changes apply immediately.
+          </p>
+          {contactQuota ? (
+            <div style={{ marginBottom: 14, fontSize: 14, lineHeight: 1.55 }}>
+              <div>
+                <strong>7-day window:</strong> {contactQuota.weekly_used} of {contactQuota.weekly_cap} used
+                {contactQuota.weekly_bonus > 0 ? ` (includes +${contactQuota.weekly_bonus} admin extra)` : ''}.
+                {contactQuota.week_reset_at
+                  ? ` Oldest introduction in the rolling week clears after ${new Date(contactQuota.week_reset_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}.`
+                  : ''}
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <strong>Month (UTC):</strong> {contactQuota.monthly_used} of {contactQuota.monthly_cap} used
+                {contactQuota.monthly_bonus > 0 ? ` (includes +${contactQuota.monthly_bonus} admin extra)` : ''}. Resets{' '}
+                {new Date(contactQuota.month_reset_at).toLocaleDateString('en-GB', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+                .
+              </div>
+            </div>
+          ) : (
+            <p className="field-hint" style={{ color: 'var(--color-warning)' }}>
+              Usage summary unavailable. Deploy the latest migration and admin function, then reload.
+            </p>
+          )}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+              gap: 12,
+              maxWidth: 480,
+              alignItems: 'end',
+            }}
+          >
+            <label className="label" style={{ display: 'block', marginBottom: 0 }}>
+              Extra 7-day slots (0–50)
+              <input
+                type="number"
+                min={0}
+                max={50}
+                className="input"
+                style={{ marginTop: 6, width: '100%' }}
+                value={quotaBonusWeek}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isFinite(n)) return;
+                  setQuotaBonusWeek(Math.max(0, Math.min(50, Math.floor(n))));
+                }}
+              />
+            </label>
+            <label className="label" style={{ display: 'block', marginBottom: 0 }}>
+              Extra month slots (0–50)
+              <input
+                type="number"
+                min={0}
+                max={50}
+                className="input"
+                style={{ marginTop: 6, width: '100%' }}
+                value={quotaBonusMonth}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isFinite(n)) return;
+                  setQuotaBonusMonth(Math.max(0, Math.min(50, Math.floor(n))));
+                }}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            disabled={
+              quotaSaving ||
+              (quotaBonusWeek === (priv.contact_request_weekly_bonus ?? 0) &&
+                quotaBonusMonth === (priv.contact_request_monthly_bonus ?? 0))
+            }
+            onClick={async () => {
+              setQuotaSaving(true);
+              try {
+                await invokeFunction('admin-manage-users', {
+                  action: 'set_contact_request_bonuses',
+                  profile_id: profile.id,
+                  contact_request_weekly_bonus: quotaBonusWeek,
+                  contact_request_monthly_bonus: quotaBonusMonth,
+                });
+                setReloadKey((k) => k + 1);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Failed to save limits');
+              } finally {
+                setQuotaSaving(false);
+              }
+            }}
+          >
+            {quotaSaving ? 'Saving…' : 'Save extra slots'}
+          </button>
+        </div>
 
         <div className="card" style={{ marginTop: 20 }}>
           <h3 style={{ marginTop: 0 }}>Staff internal note</h3>
