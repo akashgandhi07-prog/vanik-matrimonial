@@ -503,7 +503,6 @@ button.public-nav-link--button:hover {
   line-height: 1.7;
   color: var(--color-text-secondary);
   margin: 0 0 14px;
-  max-width: 62ch;
 }
 
 .landing-lead:last-of-type {

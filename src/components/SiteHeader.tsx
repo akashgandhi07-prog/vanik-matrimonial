@@ -42,8 +42,8 @@ export function SiteHeader() {
               strokeLinejoin="round"
               aria-hidden
             >
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.25-8.57h.5a8.53 8.53 0 0 1 8.35 8.37z" />
-              <path d="M9 10h.01M15 10h.01M9.09 13.76a5 5 0 0 1 5.83 0" />
+              <circle cx={12} cy={12} r={9} />
+              <path d="M9 9h.01M15 9h.01M8 14s1.5 2 4 2 4-2 4-2" />
             </svg>
             Feedback
           </Link>

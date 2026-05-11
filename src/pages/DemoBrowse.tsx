@@ -29,7 +29,7 @@ type BrowseFilters = {
   dietF: string[];
   religionF: string[];
   heightRange: [number, number];
-  sort: 'newest' | 'youngest' | 'oldest';
+  sort: 'newest' | 'age';
 };
 
 function defaultFilters(): BrowseFilters {
@@ -38,7 +38,7 @@ function defaultFilters(): BrowseFilters {
     dietF: [...DIET_ALL],
     religionF: [...RELIGION_ALL],
     heightRange: [...DEFAULT_HEIGHT],
-    sort: 'youngest',
+    sort: 'age',
   };
 }
 
@@ -166,10 +166,8 @@ export default function DemoBrowse() {
       rows = [...rows].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-    } else if (sort === 'youngest') {
-      rows = [...rows].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
     } else {
-      rows = [...rows].sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
+      rows = [...rows].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
     }
     return rows;
   }, [profiles, appliedFilters, browseSeeking]);
@@ -442,8 +440,7 @@ export default function DemoBrowse() {
                     setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
                   }
                 >
-                  <option value="youngest">Youngest first</option>
-                  <option value="oldest">Oldest first</option>
+                  <option value="age">Age</option>
                   <option value="newest">Newest profiles</option>
                 </select>
               </div>

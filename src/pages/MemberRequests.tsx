@@ -603,6 +603,7 @@ export default function MemberRequests() {
           blocked
           bookmarked={bookmarks.includes(selectedProfile.profile.id)}
           allowRequestAction={false}
+          showRequestFromBrowseHint={false}
           onClose={() => setSelectedProfile(null)}
           onToggleBookmark={() => void toggleBookmark(selectedProfile.profile.id)}
           onToggleTray={() => {}}

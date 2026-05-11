@@ -39,7 +39,7 @@ export default function Landing() {
               </h1>
 
               <p className="landing-lead">
-                A private introduction service for Vanik and wider Hindu and Jain families,
+                A private introduction service for Hindu and Jain families,
                 run by Vanik Council volunteers. We have been helping families find
                 respectful introductions for many years.
               </p>

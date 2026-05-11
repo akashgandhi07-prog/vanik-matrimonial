@@ -20,6 +20,8 @@ type Props = {
   blocked: boolean;
   bookmarked: boolean;
   allowRequestAction?: boolean;
+  /** When false, hides the “open from Browse to request” footnote (e.g. My Requests already has the workflow). */
+  showRequestFromBrowseHint?: boolean;
   onClose: () => void;
   onToggleBookmark: () => void;
   onToggleTray: () => void;
@@ -46,6 +48,7 @@ export function ProfileModal({
   blocked,
   bookmarked,
   allowRequestAction = true,
+  showRequestFromBrowseHint = true,
   onClose,
   onToggleBookmark,
   onToggleTray,
@@ -299,7 +302,7 @@ export function ProfileModal({
                 )
               ) : null}
             </div>
-            {!allowRequestAction && (
+            {!allowRequestAction && showRequestFromBrowseHint && (
               <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 To request contact details, open this profile from Browse and add it to your request tray.
               </p>
