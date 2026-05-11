@@ -466,8 +466,8 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
           You are signed in, but your membership record did not load. This is
           often temporary - try again, or sign out and sign back in. If it keeps
           happening, contact{" "}
-          <a href="mailto:mahesh.gandhi@vanikcouncil.uk">
-            mahesh.gandhi@vanikcouncil.uk
+          <a href="mailto:matrimonial@vanikcouncil.uk">
+            matrimonial@vanikcouncil.uk
           </a>
           .
         </p>

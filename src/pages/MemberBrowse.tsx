@@ -649,7 +649,7 @@ export default function MemberBrowse() {
                   <p className="member-browse-empty-desc">
                     There are no profiles to show right now. Try changing <strong>Show profiles of</strong> above, widen
                     your filters, or check back later as new members join. If you think this is wrong, contact{' '}
-                    <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
+                    <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
                   </p>
                   <details style={{ marginTop: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
                     <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Site administrators</summary>

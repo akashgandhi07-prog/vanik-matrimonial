@@ -1,6 +1,18 @@
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 import { sendResendEmail, type EmailPayload } from './resend.ts';
 
+/** Splits comma/semicolon-separated lists (e.g. ADMIN_NOTIFY_EMAIL). */
+export function normalizeMailRecipients(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[,;]/g)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+    ),
+  ];
+}
+
 function readSmtpUser(): string | undefined {
   for (const key of ['SMTP_USER', 'SMTP_USERNAME', 'GMAIL_SMTP_USER'] as const) {
     const t = Deno.env.get(key)?.trim();
@@ -70,7 +82,9 @@ function htmlToBase64MimeBody(html: string): string {
   return lines.join('\r\n');
 }
 
-async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; error: string | null }> {
+async function sendViaSmtp(
+  payload: { to: string[]; subject: string; html: string }
+): Promise<{ id: string | null; error: string | null }> {
   const user = readSmtpUser()!;
   const pass = readSmtpPass()!;
   const host = Deno.env.get('SMTP_HOST')?.trim() || 'smtp.gmail.com';
@@ -92,7 +106,7 @@ async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; 
   try {
     await client.send({
       from: `${fromName} <${fromEmail}>`,
-      to: payload.to,
+      to: payload.to.length === 1 ? payload.to[0]! : payload.to,
       subject: payload.subject,
       mimeContent: [
         {
@@ -122,14 +136,17 @@ async function sendViaSmtp(payload: EmailPayload): Promise<{ id: string | null; 
 export async function sendTransactionalMail(
   payload: EmailPayload
 ): Promise<{ id: string | null; error: string | null }> {
+  const to = normalizeMailRecipients(payload.to);
+  if (!to.length) return { id: null, error: 'No valid recipient email addresses' };
+
   const user = readSmtpUser();
   const pass = readSmtpPass();
   if (user && pass) {
-    return sendViaSmtp(payload);
+    return sendViaSmtp({ ...payload, to });
   }
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (resendKey) {
-    const r = await sendResendEmail(resendKey, payload);
+    const r = await sendResendEmail(resendKey, { ...payload, to });
     if (r.error && /not verified|verify your domain/i.test(r.error)) {
       return {
         id: null,

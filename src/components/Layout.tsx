@@ -7,7 +7,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="layout-max layout-max--footer">
           <p>
             Vanik Council. Contact:{' '}
-            <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>
+            <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>
           </p>
         </div>
       </footer>

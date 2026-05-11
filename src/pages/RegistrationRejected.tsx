@@ -159,7 +159,7 @@ export default function RegistrationRejected() {
           )}
           <p style={{ color: 'var(--color-text-secondary)', marginTop: 16 }}>
             For technical issues only, contact{' '}
-            <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
+            <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
           </p>
           <Link to="/" className="btn btn-secondary" style={{ marginTop: 8 }}>
             Back to home

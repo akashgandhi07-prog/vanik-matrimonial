@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   job_title text,
   height_cm integer,
   weight_kg integer,
-  diet text CHECK (diet IN ('Veg', 'Non-veg', 'Vegan')),
+  diet text CHECK (diet IS NULL OR diet IN ('Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian')),
   religion text CHECK (religion IN ('Jain', 'Hindu', 'Other')),
   community text CHECK (community IN ('Vanik', 'Lohana', 'Brahmin', 'Other')),
   nationality text,
@@ -111,6 +111,19 @@ CREATE TABLE IF NOT EXISTS public.feedback (
   is_flagged boolean NOT NULL DEFAULT false,
   submitted_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS public.website_feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id uuid REFERENCES public.profiles (id) ON DELETE SET NULL,
+  reporter_email text,
+  how_improve text,
+  things_good text,
+  things_bad text,
+  suggestions_future text,
+  submitted_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.website_feedback IS 'Volunteer suggestions about the matrimonial register site and service; admins only.';
 
 CREATE TABLE IF NOT EXISTS public.bookmarks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -433,6 +446,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.member_private ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.website_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookmarks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_actions ENABLE ROW LEVEL SECURITY;
@@ -848,6 +862,8 @@ GRANT EXECUTE ON FUNCTION public.admin_actions_for_profile(uuid) TO authenticate
 -- ---------------------------------------------------------------------------
 
 GRANT ALL ON TABLE public.registration_rate_limits TO postgres, service_role;
+REVOKE ALL ON TABLE public.website_feedback FROM PUBLIC;
+GRANT ALL ON TABLE public.website_feedback TO postgres, service_role;
 GRANT ALL ON TABLE public.feedback_tokens TO postgres, service_role;
 GRANT ALL ON TABLE public.stripe_checkout_sessions TO postgres, service_role;
 

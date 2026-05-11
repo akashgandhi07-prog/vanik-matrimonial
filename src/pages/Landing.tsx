@@ -85,7 +85,7 @@ export default function Landing() {
               </p>
               <p>
                 If you have any questions before applying, please{' '}
-                <a href="mailto:mahesh.gandhi@vanikcouncil.uk">
+                <a href="mailto:matrimonial@vanikcouncil.uk">
                   email our team
                 </a>
                 .

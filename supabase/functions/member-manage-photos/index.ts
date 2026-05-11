@@ -125,12 +125,12 @@ Deno.serve(async (req) => {
     const reordered = [...currentRows];
     const [moved] = reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, moved);
-    for (let i = 0; i < reordered.length; i++) {
-      const row = reordered[i];
-      if (row.position === i) continue;
-      const { error } = await admin.from('profile_photos').update({ position: i }).eq('id', row.id).eq('profile_id', profileId);
-      if (error) return jsonResponse({ error: error.message }, req, 500);
-    }
+    const orderedIds = reordered.map((r) => r.id);
+    const { error: reorderRpcErr } = await admin.rpc('apply_profile_photo_order', {
+      p_profile_id: profileId,
+      p_photo_ids: orderedIds,
+    });
+    if (reorderRpcErr) return jsonResponse({ error: reorderRpcErr.message }, req, 500);
   } else if (action === 'set_primary') {
     const photoId = String(body.photo_id ?? '').trim();
     if (!photoId) return jsonResponse({ error: 'photo_id required' }, req, 400);

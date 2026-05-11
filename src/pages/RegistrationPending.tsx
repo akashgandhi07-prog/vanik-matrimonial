@@ -79,7 +79,7 @@ export default function RegistrationPending() {
             : `It has been ${waitedDays} day${waitedDays === 1 ? '' : 's'} since you registered.`;
         const followUp =
           waitedDays != null && waitedDays > FOLLOW_UP_DAYS
-            ? `It has been over ${FOLLOW_UP_DAYS} days. Please email mahesh.gandhi@vanikcouncil.uk.`
+            ? `It has been over ${FOLLOW_UP_DAYS} days. Please email matrimonial@vanikcouncil.uk.`
             : '';
         setStatusModalMessage(
           ['Your account is still under review.', daysLabel, followUp].filter(Boolean).join('\n\n')
@@ -124,7 +124,7 @@ export default function RegistrationPending() {
           </p>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
             Need help? Contact{' '}
-            <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.
+            <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
           </p>
           {syncError && (
             <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 14 }}>

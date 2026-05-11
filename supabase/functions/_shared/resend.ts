@@ -1,4 +1,6 @@
+/** Outbound transactional message. Prefer `sendTransactionalMail`; it parses `to` lists. */
 export type EmailPayload = {
+  /** One address, or several separated by commas/semicolons (parsed by sendTransactionalMail). */
   to: string;
   subject: string;
   html: string;
@@ -9,14 +11,14 @@ function fromAddress(): string {
   const fromName = Deno.env.get('RESEND_FROM_NAME')?.trim() || 'Vanik Matrimonial Register';
   if (!fromEmail) {
     // Backward-compatible fallback so existing environments keep working.
-    return 'Vanik Matrimonial Register <mahesh.gandhi@vanikcouncil.uk>';
+    return 'Vanik Matrimonial Register <matrimonial@vanikcouncil.uk>';
   }
   return `${fromName} <${fromEmail}>`;
 }
 
 export async function sendResendEmail(
   apiKey: string,
-  payload: EmailPayload
+  payload: { to: string[]; subject: string; html: string }
 ): Promise<{ id: string | null; error: string | null }> {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -26,7 +28,7 @@ export async function sendResendEmail(
     },
     body: JSON.stringify({
       from: fromAddress(),
-      to: [payload.to],
+      to: payload.to,
       subject: payload.subject,
       html: payload.html,
     }),

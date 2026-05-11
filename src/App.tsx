@@ -17,6 +17,7 @@ import AdminSettings from './pages/admin/AdminSettings';
 import DemoBrowse from './pages/DemoBrowse';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
+import AppFeedback from './pages/AppFeedback';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import MemberBrowse from './pages/MemberBrowse';
@@ -65,6 +66,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/app-feedback" element={<AppFeedback />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/demo" element={<DemoBrowse />} />

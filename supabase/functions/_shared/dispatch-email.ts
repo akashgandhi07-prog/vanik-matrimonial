@@ -19,7 +19,18 @@ export type EmailType =
   | 'matched_congratulations'
   | 'photo_update_rejected'
   | 'admin_pending_reminder'
-  | 'account_freeze_reminder';
+  | 'account_freeze_reminder'
+  | 'website_feedback_submission';
+
+function escapeHtmlEmail(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function feedbackEmailSection(title: string, text: string): string {
+  const body = escapeHtmlEmail(text.trim() || '—');
+  const t = escapeHtmlEmail(title);
+  return `<div style="margin-bottom:18px;"><div style="font-size:13px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${t}</div><div style="font-size:14px;line-height:1.55;color:#0f172a;white-space:pre-wrap">${body}</div></div>`;
+}
 
 export type DispatchParams = {
   type: EmailType;
@@ -80,7 +91,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your profile has been archived and is no longer visible on the register. This may follow a long period without renewal, or a request to close your account.</p>
         <p>To return, sign in and renew online if card payments are enabled: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
-        <p>Or contact <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
+        <p>Or contact <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>`;
       break;
     }
     case 'registration_received': {
@@ -119,7 +130,7 @@ export async function dispatchEmail(
           <li>We ask for a short piece of feedback after each introduction - this is for admin and safeguarding purposes only and is never shared with the other person.</li>
         </ul>
         <p>If you have any questions, simply reply to this email.</p>
-        <p>With good wishes,<br/><br/>The register team<br/><br/><a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
+        <p>With good wishes,<br/><br/>The register team<br/><br/><a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>`;
       break;
     }
        case 'registration_rejected': {
@@ -160,7 +171,7 @@ export async function dispatchEmail(
       subject = 'Your profile was viewed';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your profile was recently viewed and your contact details have been shared with a <strong>${reqGender}</strong> member of the register.</p>
-        <p>If you have any concerns, please contact us at <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a>.</p>`;
+        <p>If you have any concerns, please contact us at <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>`;
       break;
     }
     case 'feedback_reminder_21': {
@@ -194,7 +205,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
         <p>You can renew online here: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
-        <p>Alternatively, email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
+        <p>Alternatively, email us: <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>`;
       break;
     }
     case 'membership_expired': {
@@ -204,7 +215,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your membership has now expired and your profile is hidden from the register.</p>
         <p>To renew online (£10/year): <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
-        <p>Or email us: <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>`;
+        <p>Or email us: <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>`;
       break;
     }
     case 'admin_daily_digest': {
@@ -261,8 +272,37 @@ export async function dispatchEmail(
         <p>About a month ago you chose to <strong>freeze your account</strong>, so your profile stays hidden from browse and saved lists. This is just a gentle reminder that you are still frozen.</p>
         <p>If you are ready to be visible again, sign in and open <strong>My profile</strong>, then turn off &quot;Freeze my account&quot;.</p>
         <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Sign in</a></p>
-        <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:mahesh.gandhi@vanikcouncil.uk">mahesh.gandhi@vanikcouncil.uk</a></p>
+        <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'website_feedback_submission': {
+      const ex = extraData as Record<string, string | null | undefined>;
+      subject = 'Website feedback received – Vanik Matrimonial Register';
+      const iso = escapeHtmlEmail(String(ex.submitted_iso ?? ''));
+      let reporterBlock = '';
+      if (ex.profile_id) {
+        const name = escapeHtmlEmail(String(ex.member_name ?? 'Member'));
+        const refRaw = stripHtml(String(ex.member_ref ?? ''), 80);
+        const ref = refRaw ? ` (ref ${escapeHtmlEmail(refRaw)})` : '';
+        const memberEmailRaw = stripHtml(String(ex.membership_email ?? ''), 200);
+        const em = memberEmailRaw ? escapeHtmlEmail(memberEmailRaw) : '(not held)';
+        reporterBlock = `<p><strong>From:</strong> Signed-in member – ${name}${ref}<br/><strong>Membership email:</strong> ${em}</p>`;
+      } else {
+        const rawRe = stripHtml(String(ex.reporter_email ?? ''), 254);
+        const em = rawRe ? escapeHtmlEmail(rawRe) : 'Anonymous visitor (no contact email)';
+        reporterBlock = `<p><strong>From:</strong> ${em}</p>`;
+      }
+      const idEsc = escapeHtmlEmail(String(ex.feedback_id ?? ''));
+      inner = `<p>A new <strong>Website &amp; app</strong> feedback submission was saved in the admin area.</p>
+        <p><strong>Record ID:</strong> ${idEsc}<br/><strong>Submitted (UTC):</strong> ${iso}</p>
+        ${reporterBlock}
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0" />
+        ${feedbackEmailSection('How to improve the app', String(ex.how_improve ?? ''))}
+        ${feedbackEmailSection('Things that are good', String(ex.things_good ?? ''))}
+        ${feedbackEmailSection('Things that are bad', String(ex.things_bad ?? ''))}
+        ${feedbackEmailSection('Suggestions for the future', String(ex.suggestions_future ?? ''))}
+        <p style="margin-top:24px;color:#64748b;font-size:13px;">This email was generated when someone submitted the Feedback form on the Vanik Matrimonial Register.</p>`;
       break;
     }
     default:

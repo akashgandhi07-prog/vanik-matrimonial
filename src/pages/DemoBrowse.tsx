@@ -198,7 +198,7 @@ export default function DemoBrowse() {
       <div className="layout-max">
         <div style={{ marginBottom: 14 }}>
           <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Browse Profiles</h1>
-          <p style={{ marginTop: 0, color: 'var(--color-text-secondary)', maxWidth: 620 }}>
+          <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>
             Browse the profiles currently on the register. Photos and contact details are only shared after you become a
             member and make a request. Use the filters below to narrow your search.
           </p>

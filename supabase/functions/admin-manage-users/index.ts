@@ -92,6 +92,226 @@ function contactQuotaFromRequests(
   };
 }
 
+function csvEscapeCell(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (/[\r\n",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/** PostgREST default limit can truncate bulk exports/listings — fetch every matching row. */
+const ADMIN_PROFILE_PAGE_SIZE = 600;
+
+// deno-lint-ignore no-explicit-any Supabase chained filter builder has no narrow public type here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- aligned with Deno pragma above
+async function fetchAllFilteredProfileRows(admin: any, f: string, selectCols: string): Promise<{ rows: Record<string, unknown>[]; error: string | null }> {
+  const lapseCutoff = new Date(Date.now() - 365 * 864e5).toISOString();
+  const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
+  const nowIso = new Date().toISOString();
+  const expires60Until = new Date(Date.now() + 60 * 864e5).toISOString();
+  const out: Record<string, unknown>[] = [];
+  let offset = 0;
+  for (;;) {
+    let q = admin.from('profiles').select(selectCols);
+    if (f === 'pending') q = q.eq('status', 'pending_approval');
+    else if (f === 'active') q = q.eq('status', 'active');
+    else if (f === 'expired') q = q.eq('status', 'expired');
+    else if (f === 'rejected') q = q.eq('status', 'rejected');
+    else if (f === 'archived') q = q.eq('status', 'archived');
+    else if (f === 'matched') q = q.eq('status', 'matched');
+    else if (f === 'lapsed90') q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
+    else if (f === 'rejected30') q = q.eq('status', 'rejected').gte('updated_at', since30);
+    else if (f === 'photo_pending') q = q.not('pending_photo_url', 'is', null);
+    else if (f === 'expires60') {
+      q = q
+        .eq('status', 'active')
+        .not('membership_expires_at', 'is', null)
+        .gte('membership_expires_at', nowIso)
+        .lte('membership_expires_at', expires60Until);
+    } else if (f !== 'all') return { rows: [], error: 'Invalid filter' };
+
+    q = f === 'pending'
+      ? q.order('created_at', { ascending: true })
+      : q.order('created_at', { ascending: false });
+
+    const { data, error } = await q.range(offset, offset + ADMIN_PROFILE_PAGE_SIZE - 1);
+    if (error) return { rows: [], error: error.message };
+    const chunk = (data ?? []) as Record<string, unknown>[];
+    out.push(...chunk);
+    if (chunk.length < ADMIN_PROFILE_PAGE_SIZE) break;
+    offset += ADMIN_PROFILE_PAGE_SIZE;
+  }
+  return { rows: out, error: null };
+}
+
+/** Canonical column ids for `export_members_csv` (order preserved in output). Keep in sync with AdminMembers `MEMBER_EXPORT_COLUMN_OPTS`. */
+const EXPORT_MEMBERS_CSV_COLUMNS = [
+  'profile_id',
+  'reference_number',
+  'full_name',
+  'first_name',
+  'surname',
+  'email',
+  'mobile_phone',
+  'gender',
+  'seeking_gender',
+  'age',
+  'date_of_birth',
+  'diet',
+  'religion',
+  'community',
+  'education',
+  'job_title',
+  'height_cm',
+  'weight_kg',
+  'nationality',
+  'place_of_birth',
+  'town_country_of_origin',
+  'future_settlement_plans',
+  'hobbies',
+  'home_address_line1',
+  'home_address_city',
+  'home_address_postcode',
+  'home_address_country',
+  'father_name',
+  'mother_name',
+  'status',
+  'photo_status',
+  'show_on_register',
+  'browse_paused',
+  'browse_paused_at',
+  'membership_expires_at',
+  'last_request_at',
+  'rejection_reason',
+  'coupon_used',
+  'id_document_uploaded',
+  'pending_photo_change',
+  'profile_created_at',
+  'profile_updated_at',
+  'private_record_created_at',
+  'contact_request_weekly_bonus',
+  'contact_request_monthly_bonus',
+  'account_freeze_reminder_sent_at',
+  'staff_admin_notes',
+  'id_document_deleted_at',
+  'auth_user_id',
+] as const;
+
+type ExportMemberColumn = (typeof EXPORT_MEMBERS_CSV_COLUMNS)[number];
+
+const EXPORT_MEMBERS_CSV_COLUMN_SET = new Set<string>(EXPORT_MEMBERS_CSV_COLUMNS);
+
+const EXPORT_NEEDS_MEMBER_PRIVATE = new Set<string>([
+  'full_name',
+  'surname',
+  'email',
+  'mobile_phone',
+  'date_of_birth',
+  'home_address_line1',
+  'home_address_city',
+  'home_address_postcode',
+  'home_address_country',
+  'father_name',
+  'mother_name',
+  'coupon_used',
+  'id_document_uploaded',
+  'private_record_created_at',
+  'contact_request_weekly_bonus',
+  'contact_request_monthly_bonus',
+  'id_document_deleted_at',
+]);
+
+const EXPORT_NEEDS_ADMIN_PROFILE_NOTES = new Set<string>(['staff_admin_notes']);
+
+type PrivExportRow = {
+  profile_id: string;
+  surname: string | null;
+  date_of_birth: string | null;
+  email: string | null;
+  mobile_phone: string | null;
+  home_address_line1: string | null;
+  home_address_city: string | null;
+  home_address_postcode: string | null;
+  home_address_country: string | null;
+  father_name: string | null;
+  mother_name: string | null;
+  coupon_used: string | null;
+  id_document_url: string | null;
+  created_at: string | null;
+  contact_request_weekly_bonus: number | null;
+  contact_request_monthly_bonus: number | null;
+  id_document_deleted_at: string | null;
+};
+
+function buildMemberExportValueMap(
+  p: Record<string, unknown>,
+  priv: PrivExportRow | undefined,
+  staffNotesBody: string | undefined,
+): Record<ExportMemberColumn, unknown> {
+  const firstName = (p.first_name as string | null | undefined) ?? '';
+  const surname = priv?.surname ?? '';
+  const fullName = `${firstName} ${surname}`.trim();
+  const idDoc = (priv?.id_document_url ?? '').trim();
+  const pendingPh = (p.pending_photo_url as string | null | undefined) ?? '';
+  return {
+    profile_id: p.id ?? '',
+    reference_number: p.reference_number ?? '',
+    full_name: fullName,
+    first_name: firstName,
+    surname,
+    email: priv?.email ?? '',
+    mobile_phone: priv?.mobile_phone ?? '',
+    gender: p.gender ?? '',
+    seeking_gender: p.seeking_gender ?? '',
+    age: p.age ?? '',
+    date_of_birth: priv?.date_of_birth ?? '',
+    diet: p.diet ?? '',
+    religion: p.religion ?? '',
+    community: p.community ?? '',
+    education: p.education ?? '',
+    job_title: p.job_title ?? '',
+    height_cm: p.height_cm ?? '',
+    weight_kg: p.weight_kg ?? '',
+    nationality: p.nationality ?? '',
+    place_of_birth: p.place_of_birth ?? '',
+    town_country_of_origin: p.town_country_of_origin ?? '',
+    future_settlement_plans: p.future_settlement_plans ?? '',
+    hobbies: p.hobbies ?? '',
+    home_address_line1: priv?.home_address_line1 ?? '',
+    home_address_city: priv?.home_address_city ?? '',
+    home_address_postcode: priv?.home_address_postcode ?? '',
+    home_address_country: priv?.home_address_country ?? '',
+    father_name: priv?.father_name ?? '',
+    mother_name: priv?.mother_name ?? '',
+    status: p.status ?? '',
+    photo_status: p.photo_status ?? '',
+    show_on_register: p.show_on_register ?? '',
+    browse_paused: p.browse_paused ?? '',
+    browse_paused_at: p.browse_paused_at ?? '',
+    membership_expires_at: p.membership_expires_at ?? '',
+    last_request_at: p.last_request_at ?? '',
+    rejection_reason: p.rejection_reason ?? '',
+    coupon_used: priv?.coupon_used ?? '',
+    id_document_uploaded: idDoc ? 'yes' : 'no',
+    pending_photo_change: pendingPh.trim() ? 'yes' : 'no',
+    profile_created_at: p.created_at ?? '',
+    profile_updated_at: p.updated_at ?? '',
+    private_record_created_at: priv?.created_at ?? '',
+    contact_request_weekly_bonus:
+      priv?.contact_request_weekly_bonus === null || priv?.contact_request_weekly_bonus === undefined
+        ? ''
+        : priv.contact_request_weekly_bonus,
+    contact_request_monthly_bonus:
+      priv?.contact_request_monthly_bonus === null || priv?.contact_request_monthly_bonus === undefined
+        ? ''
+        : priv.contact_request_monthly_bonus,
+    account_freeze_reminder_sent_at: p.account_freeze_reminder_sent_at ?? '',
+    staff_admin_notes: staffNotesBody ?? '',
+    id_document_deleted_at: priv?.id_document_deleted_at ?? '',
+    auth_user_id: p.auth_user_id ?? '',
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeadersFor(req) });
@@ -135,62 +355,42 @@ Deno.serve(async (req) => {
 
   if (action === 'list_profiles') {
     const f = typeof body.filter === 'string' ? body.filter : 'all';
-    const lapseCutoff = new Date(Date.now() - 365 * 864e5).toISOString();
-    const since30 = new Date(Date.now() - 30 * 864e5).toISOString();
-    const nowIso = new Date().toISOString();
-    const expires60Until = new Date(Date.now() + 60 * 864e5).toISOString();
-
-    let q = admin.from('profiles').select('*');
-    if (f === 'pending') q = q.eq('status', 'pending_approval');
-    else if (f === 'active') q = q.eq('status', 'active');
-    else if (f === 'expired') q = q.eq('status', 'expired');
-    else if (f === 'rejected') q = q.eq('status', 'rejected');
-    else if (f === 'archived') q = q.eq('status', 'archived');
-    else if (f === 'matched') q = q.eq('status', 'matched');
-    else if (f === 'lapsed90') {
-      q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
-    } else if (f === 'rejected30') {
-      q = q.eq('status', 'rejected').gte('updated_at', since30);
-    } else if (f === 'photo_pending') {
-      q = q.not('pending_photo_url', 'is', null);
-    } else if (f === 'expires60') {
-      q = q
-        .eq('status', 'active')
-        .not('membership_expires_at', 'is', null)
-        .gte('membership_expires_at', nowIso)
-        .lte('membership_expires_at', expires60Until);
-    } else if (f !== 'all') {
-      return jsonResponse({ error: 'Invalid filter' }, req, 400);
+    const { rows, error: fetchErr } = await fetchAllFilteredProfileRows(admin, f, '*');
+    if (fetchErr) {
+      return jsonResponse(
+        { error: fetchErr === 'Invalid filter' ? 'Invalid filter' : fetchErr },
+        req,
+        fetchErr === 'Invalid filter' ? 400 : 500
+      );
     }
-
-    if (f === 'pending') q = q.order('created_at', { ascending: true });
-    else q = q.order('created_at', { ascending: false });
-    const { data: profiles, error: pErr } = await q;
-    if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
-    const rows = profiles ?? [];
+    const profiles = rows;
     const emails: Record<string, string> = {};
     let pendingPreviews:
       | Record<string, { photo: string | null; photos: string[]; id_document: string | null; id_is_image: boolean }>
       | undefined;
-    if (rows.length > 0) {
-      const ids = rows.map((p: { id: string }) => p.id);
-      const { data: priv, error: mErr } = await admin
-        .from('member_private')
-        .select('profile_id, email, id_document_url')
-        .in('profile_id', ids);
-      if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+    if (profiles.length > 0) {
+      const ids = profiles.map((p: { id: string }) => p.id);
       const idDocByProfile = new Map<string, string | null>();
-      for (const r of priv ?? []) {
-        const row = r as { profile_id: string; email: string | null; id_document_url: string | null };
-        if (row.profile_id) {
-          emails[row.profile_id] = row.email ?? '';
-          idDocByProfile.set(row.profile_id, row.id_document_url ?? null);
+      const chunkSize = 600;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const idChunk = ids.slice(i, i + chunkSize);
+        const { data: priv, error: mErr } = await admin
+          .from('member_private')
+          .select('profile_id, email, id_document_url')
+          .in('profile_id', idChunk);
+        if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+        for (const r of priv ?? []) {
+          const row = r as { profile_id: string; email: string | null; id_document_url: string | null };
+          if (row.profile_id) {
+            emails[row.profile_id] = row.email ?? '';
+            idDocByProfile.set(row.profile_id, row.id_document_url ?? null);
+          }
         }
       }
       if (f === 'pending') {
         pendingPreviews = {};
         const ttl = 1800;
-        for (const p of rows as { id: string; photo_url: string | null; photo_paths?: string[] | null }[]) {
+        for (const p of profiles as { id: string; photo_url: string | null; photo_paths?: string[] | null }[]) {
           const photoSignedList: string[] = [];
           let idSigned: string | null = null;
           const photoPaths = Array.isArray(p.photo_paths)
@@ -220,7 +420,112 @@ Deno.serve(async (req) => {
         }
       }
     }
-    return jsonResponse({ profiles: rows, emails, pending_previews: pendingPreviews }, req);
+    return jsonResponse({ profiles, emails, pending_previews: pendingPreviews }, req);
+  }
+
+  if (action === 'export_members_csv') {
+    const f = typeof body.filter === 'string' ? body.filter : 'all';
+    const rawCols = Array.isArray(body.columns) ? body.columns : null;
+    let selectedColumns: ExportMemberColumn[];
+    if (!rawCols || rawCols.length === 0) {
+      selectedColumns = [...EXPORT_MEMBERS_CSV_COLUMNS];
+    } else {
+      const requested = new Set(
+        rawCols.filter((x): x is string => typeof x === 'string' && EXPORT_MEMBERS_CSV_COLUMN_SET.has(x))
+      );
+      if (requested.size === 0) {
+        return jsonResponse(
+          { error: 'columns must contain at least one valid id (see export field list)' },
+          req,
+          400
+        );
+      }
+      selectedColumns = EXPORT_MEMBERS_CSV_COLUMNS.filter((c) => requested.has(c));
+    }
+
+    const profileSelect =
+      'id, reference_number, first_name, gender, seeking_gender, age, education, job_title, height_cm, weight_kg, diet, religion, community, nationality, place_of_birth, town_country_of_origin, future_settlement_plans, hobbies, photo_status, status, show_on_register, browse_paused, browse_paused_at, account_freeze_reminder_sent_at, membership_expires_at, last_request_at, rejection_reason, created_at, updated_at, auth_user_id, pending_photo_url';
+
+    const { rows: profRows, error: pErr } = await fetchAllFilteredProfileRows(admin, f, profileSelect);
+    if (pErr) {
+      return jsonResponse(
+        { error: pErr === 'Invalid filter' ? 'Invalid filter' : pErr },
+        req,
+        pErr === 'Invalid filter' ? 400 : 500,
+      );
+    }
+
+    const needsPrivate = selectedColumns.some((c) => EXPORT_NEEDS_MEMBER_PRIVATE.has(c));
+    const needsNotes = selectedColumns.some((c) => EXPORT_NEEDS_ADMIN_PROFILE_NOTES.has(c));
+
+    const privateByProfile = new Map<string, PrivExportRow>();
+    if (needsPrivate && profRows.length > 0) {
+      const ids = profRows.map((p) => String(p.id ?? '')).filter(Boolean);
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data: priv, error: mErr } = await admin
+          .from('member_private')
+          .select(
+            'profile_id, surname, date_of_birth, email, mobile_phone, home_address_line1, home_address_city, home_address_postcode, home_address_country, father_name, mother_name, coupon_used, id_document_url, created_at, contact_request_weekly_bonus, contact_request_monthly_bonus, id_document_deleted_at'
+          )
+          .in('profile_id', chunk);
+        if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
+        for (const r of priv ?? []) {
+          const row = r as PrivExportRow;
+          if (row.profile_id) privateByProfile.set(row.profile_id, row);
+        }
+      }
+    }
+
+    const notesByProfile = new Map<string, string>();
+    if (needsNotes && profRows.length > 0) {
+      const ids = profRows.map((p) => String(p.id ?? '')).filter(Boolean);
+      const chunkSize = 500;
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize);
+        const { data: noteRows, error: nErr } = await admin
+          .from('admin_profile_notes')
+          .select('profile_id, body')
+          .in('profile_id', chunk);
+        if (nErr) return jsonResponse({ error: nErr.message }, req, 500);
+        for (const r of noteRows ?? []) {
+          const nr = r as { profile_id: string; body: string | null };
+          if (nr.profile_id) notesByProfile.set(nr.profile_id, nr.body ?? '');
+        }
+      }
+    }
+
+    const lines: string[] = [
+      selectedColumns.map((h) => csvEscapeCell(h)).join(','),
+    ];
+    for (const p of profRows) {
+      const pid = String(p.id ?? '');
+      const priv = pid ? privateByProfile.get(pid) : undefined;
+      const staffNotes = pid ? notesByProfile.get(pid) : undefined;
+      const valueMap = buildMemberExportValueMap(p, priv, staffNotes);
+      lines.push(selectedColumns.map((c) => csvEscapeCell(valueMap[c])).join(','));
+    }
+
+    const csv = lines.join('\n');
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: null,
+      action_type: 'export_members_csv',
+      notes:
+        `filter=${f} cols=${selectedColumns.join('|')} rows=${profRows.length}`.slice(0, 30000),
+    });
+
+    return jsonResponse(
+      {
+        csv,
+        row_count: profRows.length,
+        filter: f,
+        columns: selectedColumns,
+      },
+      req
+    );
   }
 
   if (action === 'delete_members_permanent') {
@@ -679,6 +984,34 @@ Deno.serve(async (req) => {
     return jsonResponse({ feedback: feedbackRows, profiles }, req);
   }
 
+  if (action === 'list_website_feedback') {
+    const { data: rows, error: wErr } = await admin
+      .from('website_feedback')
+      .select(
+        'id, profile_id, reporter_email, how_improve, things_good, things_bad, suggestions_future, submitted_at'
+      )
+      .order('submitted_at', { ascending: false });
+    if (wErr) return jsonResponse({ error: wErr.message }, req, 500);
+    const list = rows ?? [];
+    const pidSet = new Set<string>();
+    for (const r of list as { profile_id?: string | null }[]) {
+      if (r.profile_id) pidSet.add(r.profile_id);
+    }
+    const profiles: Record<string, { id: string; first_name: string; reference_number: string | null }> = {};
+    if (pidSet.size > 0) {
+      const { data: profs, error: pErr } = await admin
+        .from('profiles')
+        .select('id, first_name, reference_number')
+        .in('id', [...pidSet]);
+      if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
+      for (const p of profs ?? []) {
+        const row = p as { id: string; first_name: string; reference_number: string | null };
+        profiles[row.id] = row;
+      }
+    }
+    return jsonResponse({ website_feedback: list, profiles }, req);
+  }
+
   if (action === 'settings_stats') {
     const statuses = [
       'pending_approval',
@@ -809,7 +1142,7 @@ Deno.serve(async (req) => {
 
       if (profIn.diet !== undefined) {
         const d = String(profIn.diet);
-        if (!['Veg', 'Non-veg', 'Vegan'].includes(d)) {
+        if (!['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'].includes(d)) {
           return jsonResponse({ error: 'Invalid diet' }, req, 400);
         }
         profilePatch.diet = d;

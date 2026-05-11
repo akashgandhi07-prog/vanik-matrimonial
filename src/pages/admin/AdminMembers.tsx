@@ -70,6 +70,65 @@ function filterLabel(f: (typeof FILTERS)[number]): string {
   return f;
 }
 
+/** Field ids for CSV export — must stay aligned with `EXPORT_MEMBERS_CSV_COLUMNS` in `admin-manage-users` (`export_members_csv`). */
+const MEMBER_EXPORT_COLUMN_OPTS = [
+  { id: 'profile_id', label: 'Profile ID' },
+  { id: 'reference_number', label: 'Reference number' },
+  { id: 'full_name', label: 'Full name' },
+  { id: 'first_name', label: 'First name' },
+  { id: 'surname', label: 'Surname' },
+  { id: 'email', label: 'Email' },
+  { id: 'mobile_phone', label: 'Mobile phone' },
+  { id: 'gender', label: 'Gender' },
+  { id: 'seeking_gender', label: 'Seeking (gender)' },
+  { id: 'age', label: 'Age' },
+  { id: 'date_of_birth', label: 'Date of birth' },
+  { id: 'diet', label: 'Diet' },
+  { id: 'religion', label: 'Religion' },
+  { id: 'community', label: 'Community' },
+  { id: 'education', label: 'Education' },
+  { id: 'job_title', label: 'Job title' },
+  { id: 'height_cm', label: 'Height (cm)' },
+  { id: 'weight_kg', label: 'Weight (kg)' },
+  { id: 'nationality', label: 'Nationality' },
+  { id: 'place_of_birth', label: 'Place of birth' },
+  { id: 'town_country_of_origin', label: 'Town / country of origin' },
+  { id: 'future_settlement_plans', label: 'Future settlement plans' },
+  { id: 'hobbies', label: 'Hobbies' },
+  { id: 'home_address_line1', label: 'Address line 1' },
+  { id: 'home_address_city', label: 'City' },
+  { id: 'home_address_postcode', label: 'Postcode' },
+  { id: 'home_address_country', label: 'Country' },
+  { id: 'father_name', label: "Father's name" },
+  { id: 'mother_name', label: "Mother's name" },
+  { id: 'status', label: 'Status' },
+  { id: 'photo_status', label: 'Photo status' },
+  { id: 'show_on_register', label: 'Show on register' },
+  { id: 'browse_paused', label: 'Browse paused' },
+  { id: 'browse_paused_at', label: 'Browse paused at' },
+  { id: 'membership_expires_at', label: 'Membership expires' },
+  { id: 'last_request_at', label: 'Last contact request' },
+  { id: 'rejection_reason', label: 'Rejection reason' },
+  { id: 'coupon_used', label: 'Coupon used' },
+  { id: 'id_document_uploaded', label: 'ID document uploaded (yes/no)' },
+  { id: 'pending_photo_change', label: 'Pending photo change (yes/no)' },
+  { id: 'profile_created_at', label: 'Profile created at' },
+  { id: 'profile_updated_at', label: 'Profile updated at' },
+  { id: 'private_record_created_at', label: 'Private record created at' },
+  { id: 'contact_request_weekly_bonus', label: 'Contact quota bonus (weekly)' },
+  { id: 'contact_request_monthly_bonus', label: 'Contact quota bonus (monthly)' },
+  { id: 'account_freeze_reminder_sent_at', label: 'Account freeze reminder sent at' },
+  { id: 'staff_admin_notes', label: 'Staff notes (internal)' },
+  { id: 'id_document_deleted_at', label: 'ID document deleted at' },
+  { id: 'auth_user_id', label: 'Auth user ID' },
+] as const;
+
+function initialMemberExportColSelection(): Record<string, boolean> {
+  const o: Record<string, boolean> = {};
+  for (const c of MEMBER_EXPORT_COLUMN_OPTS) o[c.id] = true;
+  return o;
+}
+
 export default function AdminMembers() {
   const [supportOnly, setSupportOnly] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,6 +149,14 @@ export default function AdminMembers() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [reportExportBusy, setReportExportBusy] = useState<'all' | 'filter' | null>(null);
+  const [exportColsSelected, setExportColsSelected] = useState(initialMemberExportColSelection);
+
+  const selectedExportColumnIds = useMemo(
+    () => MEMBER_EXPORT_COLUMN_OPTS.filter((c) => exportColsSelected[c.id]).map((c) => c.id),
+    [exportColsSelected]
+  );
+  const exportColumnsValid = selectedExportColumnIds.length > 0;
 
   const loadMembers = useCallback(async () => {
     setLoadError(null);
@@ -223,17 +290,6 @@ export default function AdminMembers() {
         ))}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => {
-            const next: Record<string, boolean> = {};
-            for (const m of filteredMembers) next[m.id] = true;
-            setSelectedIds(next);
-          }}
-        >
-          Select all in view
-        </button>
         <button type="button" className="btn btn-secondary" onClick={() => setSelectedIds({})}>
           Clear selection
         </button>
@@ -280,36 +336,130 @@ export default function AdminMembers() {
           </button>
         )}
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => {
-            const rows = filteredMembers;
-            const headers = ['reference', 'first_name', 'email', 'status', 'created_at', 'profile_id'];
-            const lines = [
-              headers.join(','),
-              ...rows.map((m) =>
-                [
-                  m.reference_number ?? '',
-                  `"${(m.first_name ?? '').replace(/"/g, '""')}"`,
-                  `"${(emailByProfileId[m.id] ?? '').replace(/"/g, '""')}"`,
-                  m.status,
-                  m.created_at ?? '',
-                  m.id,
-                ].join(',')
-              ),
-            ];
-            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `members-${filter}-${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(a.href);
+      <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Registration report (Excel / Sheets)</div>
+        <p className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+          Choose columns below (all are included by default). Exports include <strong>every member</strong> matching the
+          scope you download (not just the current page of the table). Downloads open in Excel; use{' '}
+          <strong>Data → PivotTable</strong> for summaries by religion, diet, gender, status, etc.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setExportColsSelected(initialMemberExportColSelection())}
+          >
+            Select all columns
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              const o: Record<string, boolean> = {};
+              for (const c of MEMBER_EXPORT_COLUMN_OPTS) o[c.id] = false;
+              setExportColsSelected(o);
+            }}
+          >
+            Clear all columns
+          </button>
+          {!exportColumnsValid && (
+            <span style={{ color: 'var(--color-danger)', fontSize: 13 }}>Select at least one column to export.</span>
+          )}
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: '6px 14px',
+            marginBottom: 12,
+            maxHeight: 280,
+            overflowY: 'auto',
+            padding: 8,
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            background: 'var(--color-surface)',
           }}
         >
-          Download CSV (current table view)
-        </button>
+          {MEMBER_EXPORT_COLUMN_OPTS.map((c) => (
+            <label
+              key={c.id}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}
+            >
+              <input
+                type="checkbox"
+                checked={!!exportColsSelected[c.id]}
+                onChange={(e) =>
+                  setExportColsSelected((s) => ({
+                    ...s,
+                    [c.id]: e.target.checked,
+                  }))
+                }
+              />
+              <span>{c.label}</span>
+            </label>
+          ))}
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={reportExportBusy !== null || !exportColumnsValid}
+            onClick={async () => {
+              setReportExportBusy('all');
+              try {
+                const res = (await invokeFunction('admin-manage-users', {
+                  action: 'export_members_csv',
+                  filter: 'all',
+                  columns: selectedExportColumnIds,
+                })) as { csv?: string; row_count?: number };
+                const csv = typeof res.csv === 'string' ? res.csv : '';
+                if (!csv) throw new Error('Empty export — deploy the latest admin-manage-users function.');
+                const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `vanik-members-report-all-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Export failed');
+              } finally {
+                setReportExportBusy(null);
+              }
+            }}
+          >
+            {reportExportBusy === 'all' ? 'Preparing…' : 'Download all members (CSV)'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            disabled={reportExportBusy !== null || filter === 'all' || !exportColumnsValid}
+            title={filter === 'all' ? 'Already includes everyone' : `Matches “${filterLabel(filter)}” only`}
+            onClick={async () => {
+              setReportExportBusy('filter');
+              try {
+                const res = (await invokeFunction('admin-manage-users', {
+                  action: 'export_members_csv',
+                  filter,
+                  columns: selectedExportColumnIds,
+                })) as { csv?: string; row_count?: number };
+                const csv = typeof res.csv === 'string' ? res.csv : '';
+                if (!csv) throw new Error('Empty export — deploy the latest admin-manage-users function.');
+                const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `vanik-members-report-${filter}-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Export failed');
+              } finally {
+                setReportExportBusy(null);
+              }
+            }}
+          >
+            {reportExportBusy === 'filter' ? 'Preparing…' : `Current filter: ${filterLabel(filter)}`}
+          </button>
+        </div>
       </div>
       <div className="table-scroll">
         <table
@@ -319,8 +469,25 @@ export default function AdminMembers() {
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
               <th style={{ padding: 8, width: 80, whiteSpace: 'nowrap' }}>Ref</th>
-              <th style={{ padding: 8, width: 44, whiteSpace: 'nowrap' }} title="Select for bulk actions">
-                Sel
+              <th style={{ padding: 8, width: 108, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Select</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}
+                    disabled={loading || filteredMembers.length === 0}
+                    onClick={() => {
+                      setSelectedIds((prev) => {
+                        const next = { ...prev };
+                        for (const m of filteredMembers) next[m.id] = true;
+                        return next;
+                      });
+                    }}
+                  >
+                    Select all
+                  </button>
+                </div>
               </th>
               {filter === 'pending' && (
                 <>

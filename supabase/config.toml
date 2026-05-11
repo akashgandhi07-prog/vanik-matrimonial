@@ -5,13 +5,26 @@ project_id = "vanik-matrimonial"
 enabled = true
 
 [auth]
-# Local CLI only. Hosted project: Dashboard → Authentication → URL Configuration — set Site URL to your
-# canonical origin (e.g. https://matrimonial.vanikcouncil.uk) and add Redirect URLs for that host, previews, and local dev.
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:5173/**", "https://*.vercel.app", "https://matrimonial.vanikcouncil.uk/**"]
+# Used by `supabase config push` to the hosted project — keep canonical production Site URL here.
+# For `supabase start` locally you can temporarily override URLs in Dashboard or maintain a branch-specific file.
+site_url = "https://matrimonial.vanikcouncil.uk"
+jwt_issuer = "https://foltwnahxqlijbwtkhih.supabase.co/auth/v1"
+jwt_expiry = 3600
+additional_redirect_urls = [
+  "https://matrimonial.vanikcouncil.uk/**",
+  "http://localhost:3000/**",
+  "http://localhost:5173/**",
+  "https://*.vercel.app/**",
+]
 
 [auth.email]
-enable_confirmations = true
+enable_confirmations = false
+max_frequency = "1m0s"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
 
 # Gateway JWT check (verify_jwt): when true, Supabase may return 401 "Invalid JWT" before your code runs
 # (e.g. legacy vs publishable keys, JWT signing changes). These handlers already validate Bearer tokens via
@@ -66,6 +79,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.feedback-flow]
+verify_jwt = false
+
+[functions.submit-website-feedback]
 verify_jwt = false
 
 [functions.resend-webhook]

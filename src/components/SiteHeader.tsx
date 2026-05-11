@@ -29,6 +29,24 @@ export function SiteHeader() {
           Vanik Matrimonial Register
         </Link>
         <nav className="public-nav" aria-label="Main">
+          <Link to="/app-feedback" className="public-nav-link public-nav-link--icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width={18}
+              height={18}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.25-8.57h.5a8.53 8.53 0 0 1 8.35 8.37z" />
+              <path d="M9 10h.01M15 10h.01M9.09 13.76a5 5 0 0 1 5.83 0" />
+            </svg>
+            Feedback
+          </Link>
           {!ready ? (
             <span className="public-nav-link" style={{ opacity: 0.6 }}>
               …

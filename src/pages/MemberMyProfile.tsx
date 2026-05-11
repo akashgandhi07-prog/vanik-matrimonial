@@ -231,40 +231,45 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     void loadPhotos();
   }, [p.id]);
 
-  async function newPhoto(file: File) {
-    if (photos.length >= 3) {
-      setPhotoError('Maximum 3 photos allowed.');
-      return;
-    }
+  async function uploadOneNewPhoto(file: File): Promise<void> {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) return;
+    if (!uid) throw new Error('Not signed in — please refresh and try again.');
     const reject = rejectReasonIfNotJpegOrPng(file);
-    if (reject) {
-      setPhotoError(reject);
-      return;
-    }
+    if (reject) throw new Error(reject);
+    const compressed = await imageCompression(file, {
+      maxSizeMB: 0.2,
+      maxWidthOrHeight: 800,
+      useWebWorker: true,
+    });
+    const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
+    const path = `${p.gender}/${uid}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
+      upsert: true,
+      contentType: compressed.type || 'image/jpeg',
+    });
+    if (upErr) throw new Error(upErr.message);
+    await invokeFunction('member-manage-photos', { action: 'add', storage_path: path });
+  }
+
+  async function addPhotosFromFileInput(files: File[]) {
+    const list = Array.from(files).slice(0, 3);
+    if (list.length === 0) return;
     setPhotoSaving(true);
     setPhotoError('');
+    let added = false;
     try {
-      const compressed = await imageCompression(file, {
-        maxSizeMB: 0.2,
-        maxWidthOrHeight: 800,
-        useWebWorker: true,
-      });
-      const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
-      const path = `${p.gender}/${uid}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('profile-photos').upload(path, compressed, {
-        upsert: true,
-        contentType: compressed.type || 'image/jpeg',
-      });
-      if (upErr) {
-        setPhotoError(upErr.message);
-        return;
+      let count = photos.length;
+      for (const file of list) {
+        if (count >= 3) break;
+        await uploadOneNewPhoto(file);
+        count += 1;
+        added = true;
+        await loadPhotos();
       }
-      await invokeFunction('member-manage-photos', { action: 'add', storage_path: path });
-      await loadPhotos();
-      void loadAll();
+      if (added) void loadAll();
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Could not upload photo.');
     } finally {
       setPhotoSaving(false);
     }
@@ -312,14 +317,167 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     }
   }
 
+  const primaryPhoto = useMemo(
+    () => photos.find((x) => x.is_primary) ?? photos[0] ?? null,
+    [photos]
+  );
+
   return (
     <div className="member-my-profile-grid">
       <div className="card">
         <h3 style={{ marginTop: 0 }}>How others see you</h3>
-        <ProfileThumb profileId={p.id} firstName={p.first_name} />
+        <ProfileThumb
+          key={primaryPhoto ? `${primaryPhoto.id}:${primaryPhoto.storage_path}` : `${p.id}:thumb`}
+          profileId={p.id}
+          firstName={p.first_name}
+        />
         <p style={{ marginTop: 12 }}>
           {p.first_name}, {p.age}
         </p>
+
+        <h3 style={{ margin: '20px 0 0', fontSize: 17 }}>Your photos</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 12px', lineHeight: 1.5 }}>
+          Manage pictures here — the large preview above updates when you change which photo is main.
+        </p>
+        <ul
+          style={{
+            fontSize: 13,
+            color: 'var(--color-text-secondary)',
+            margin: '0 0 12px',
+            paddingLeft: 20,
+            lineHeight: 1.5,
+          }}
+        >
+          <li style={{ marginBottom: 8 }}>
+            <strong>Up to 3 photos in total.</strong> If you only have your main picture so far, you may upload{' '}
+            <strong>two more</strong> (for 3 altogether). The site never stores more than three.
+          </li>
+          <li style={{ marginBottom: 8 }}>
+            <strong>Replace any slot.</strong> Use <strong>Remove</strong> on a photo you want to drop, then upload again —
+            or free a slot first if you are already at three.
+          </li>
+          <li style={{ marginBottom: 0 }}>
+            <strong>Change order or the main image.</strong> Drag rows to reorder the gallery. Use <strong>Set main</strong>{' '}
+            so the right picture is the one others see in browse and as the first image in your profile.
+          </li>
+        </ul>
+        <label className="label" htmlFor="mp-photo-file">
+          Add or replace a photo (JPG or PNG)
+        </label>
+        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
+          Use a clear photo of your face only. Group photos are not accepted.
+        </p>
+        <input
+          id="mp-photo-file"
+          type="file"
+          accept="image/jpeg,image/png"
+          multiple
+          disabled={photoSaving}
+          onChange={(e) => {
+            const picked = e.target.files;
+            e.currentTarget.value = '';
+            void addPhotosFromFileInput(Array.from(picked ?? []));
+          }}
+        />
+        {photoSaving && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
+            Uploading and compressing photo…
+          </p>
+        )}
+        {photoError && (
+          <p style={{ fontSize: 13, color: 'var(--color-danger)', margin: '4px 0 0' }}>{photoError}</p>
+        )}
+        {photos.length > 0 && (
+          <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+            {photos.map((photo, idx) => {
+              const thumbSize = photo.is_primary ? 132 : 76;
+              const additionalIdx = !photo.is_primary
+                ? nonPrimaryOrdered.findIndex((x) => x.id === photo.id) + 1
+                : 0;
+              return (
+                <div
+                  key={photo.id}
+                  draggable
+                  onDragStart={() => setDragPhotoIndex(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragPhotoIndex != null) void movePhoto(dragPhotoIndex, idx);
+                    setDragPhotoIndex(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    border: photo.is_primary ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+                    borderRadius: 10,
+                    padding: photo.is_primary ? 12 : 8,
+                    background: photo.is_primary ? 'var(--color-surface-muted)' : undefined,
+                  }}
+                >
+                  {photo.signed_url ? (
+                    <img
+                      src={photo.signed_url}
+                      alt={photo.is_primary ? 'Main profile photo' : `Additional photo ${additionalIdx}`}
+                      style={{
+                        width: thumbSize,
+                        height: thumbSize,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        flexShrink: 0,
+                        boxShadow: photo.is_primary ? '0 1px 4px rgba(0,0,0,0.12)' : undefined,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: thumbSize,
+                        height: thumbSize,
+                        borderRadius: 8,
+                        background: 'var(--color-surface-muted)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: photo.is_primary ? 600 : 400 }}>
+                      {photo.is_primary ? 'Main photo' : `Additional photo ${additionalIdx}`}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      {photo.is_primary
+                        ? 'Shown on your card in browse and as the first image in your profile.'
+                        : 'Shown only in your full profile gallery.'}
+                    </p>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      Drag this row to reorder.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+                    {!photo.is_primary && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={photoSaving}
+                        onClick={() => void setPrimary(photo.id)}
+                      >
+                        Set main
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={photoSaving}
+                      onClick={() => void removePhoto(photo.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {p.status === 'active' && (
           <>
             <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
@@ -520,148 +678,6 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             )}
           </div>
         </div>
-
-        <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
-
-        <h3>Profile photos</h3>
-        <ul
-          style={{
-            fontSize: 13,
-            color: 'var(--color-text-secondary)',
-            margin: '0 0 12px',
-            paddingLeft: 20,
-            lineHeight: 1.5,
-          }}
-        >
-          <li style={{ marginBottom: 8 }}>
-            <strong>Up to 3 photos in total.</strong> If you only have your main picture so far, you may upload{' '}
-            <strong>two more</strong> (for 3 altogether). The site never stores more than three.
-          </li>
-          <li style={{ marginBottom: 8 }}>
-            <strong>Replace any slot.</strong> Use <strong>Remove</strong> on a photo you want to drop, then upload again —
-            or free a slot first if you are already at three.
-          </li>
-          <li style={{ marginBottom: 0 }}>
-            <strong>Change order or the main image.</strong> Drag rows to reorder the gallery. Use <strong>Set main</strong>{' '}
-            so the right picture is the one others see in browse and as the first image in your profile.
-          </li>
-        </ul>
-        <label className="label" htmlFor="mp-photo-file">
-          Add or replace a photo (JPG or PNG)
-        </label>
-        <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
-          Use a clear photo of your face only. Group photos are not accepted.
-        </p>
-        <input
-          id="mp-photo-file"
-          type="file"
-          accept="image/jpeg,image/png"
-          multiple
-          disabled={photoSaving}
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            files.slice(0, 3).forEach((f) => void newPhoto(f));
-            e.currentTarget.value = '';
-          }}
-        />
-        {photoSaving && (
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '4px 0 0' }}>
-            Uploading and compressing photo…
-          </p>
-        )}
-        {photoError && (
-          <p style={{ fontSize: 13, color: 'var(--color-danger)', margin: '4px 0 0' }}>{photoError}</p>
-        )}
-        {photos.length > 0 && (
-          <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
-            {photos.map((photo, idx) => {
-              const thumbSize = photo.is_primary ? 132 : 76;
-              const additionalIdx = !photo.is_primary
-                ? nonPrimaryOrdered.findIndex((x) => x.id === photo.id) + 1
-                : 0;
-              return (
-                <div
-                  key={photo.id}
-                  draggable
-                  onDragStart={() => setDragPhotoIndex(idx)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    if (dragPhotoIndex != null) void movePhoto(dragPhotoIndex, idx);
-                    setDragPhotoIndex(null);
-                  }}
-                  style={{
-                    display: 'flex',
-                    gap: 12,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    border: photo.is_primary ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
-                    borderRadius: 10,
-                    padding: photo.is_primary ? 12 : 8,
-                    background: photo.is_primary ? 'var(--color-surface-muted)' : undefined,
-                  }}
-                >
-                  {photo.signed_url ? (
-                    <img
-                      src={photo.signed_url}
-                      alt={photo.is_primary ? 'Main profile photo' : `Additional photo ${additionalIdx}`}
-                      style={{
-                        width: thumbSize,
-                        height: thumbSize,
-                        objectFit: 'cover',
-                        borderRadius: 8,
-                        flexShrink: 0,
-                        boxShadow: photo.is_primary ? '0 1px 4px rgba(0,0,0,0.12)' : undefined,
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: thumbSize,
-                        height: thumbSize,
-                        borderRadius: 8,
-                        background: 'var(--color-surface-muted)',
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-                  <div style={{ flex: 1, minWidth: 160 }}>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: photo.is_primary ? 600 : 400 }}>
-                      {photo.is_primary ? 'Main photo' : `Additional photo ${additionalIdx}`}
-                    </p>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      {photo.is_primary
-                        ? 'Shown on your card in browse and as the first image in your profile.'
-                        : 'Shown only in your full profile gallery.'}
-                    </p>
-                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      Drag this row to reorder.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
-                    {!photo.is_primary && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={photoSaving}
-                        onClick={() => void setPrimary(photo.id)}
-                      >
-                        Set main
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={photoSaving}
-                      onClick={() => void removePhoto(photo.id)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
 
         <hr style={{ margin: '24px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
 

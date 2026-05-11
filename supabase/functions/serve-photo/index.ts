@@ -72,8 +72,9 @@ Deno.serve(async (req) => {
 
   const { data: photoRows } = await admin
     .from('profile_photos')
-    .select('storage_path')
+    .select('storage_path, is_primary')
     .eq('profile_id', profileId)
+    .order('is_primary', { ascending: false })
     .order('position', { ascending: true });
 
   const pathsFromTable =

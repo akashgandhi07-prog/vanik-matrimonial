@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:demo": "node scripts/seed_demo_accounts.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

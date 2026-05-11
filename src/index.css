@@ -358,6 +358,10 @@ textarea:focus {
   transition: color 0.15s ease, background 0.15s ease;
 }
 
+.public-nav-link--icon {
+  gap: 7px;
+}
+
 .public-nav-link:hover {
   color: var(--color-text);
   background: #f1f5f9;

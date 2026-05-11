@@ -1179,7 +1179,6 @@ export default function Register() {
                     type="text"
                     autoComplete="off"
                     spellCheck={false}
-                    placeholder="e.g. VIP2026"
                     value={form.coupon_code}
                     onChange={(e) => {
                       const v = e.target.value.toUpperCase();
