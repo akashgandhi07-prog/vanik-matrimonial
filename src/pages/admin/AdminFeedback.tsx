@@ -329,7 +329,8 @@ export default function AdminFeedback() {
           </div>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, maxWidth: 720, margin: '0 0 16px' }}>
             Optional feedback submitted from the <strong>Feedback</strong> link in the site header. Also emailed to{' '}
-            <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a> when mail is configured.
+            <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a> and{' '}
+            <a href="mailto:vanikcouncil1@gmail.com">vanikcouncil1@gmail.com</a> when mail is configured.
           </p>
 
           {websiteError && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{websiteError}</p>}

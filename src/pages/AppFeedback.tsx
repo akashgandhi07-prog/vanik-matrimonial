@@ -82,9 +82,11 @@ export default function AppFeedback() {
           </nav>
           <h1 style={{ marginTop: 0 }}>Feedback</h1>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 15 }}>
-            Your suggestions help us improve the Vanik Matrimonial Register. Submissions go to the register team (
+            Your suggestions help us improve the Vanik Matrimonial Register. Submissions go to the register team at{' '}
             <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>
-            ){signedInNotice ? ' and will be linked to your member account internally' : ''}. Nothing you write here appears
+            {' '}and{' '}
+            <a href="mailto:vanikcouncil1@gmail.com">vanikcouncil1@gmail.com</a>
+            {signedInNotice ? ' and will be linked to your member account internally' : ''}. Nothing you write here appears
             on your public profile or in search results.
           </p>
 

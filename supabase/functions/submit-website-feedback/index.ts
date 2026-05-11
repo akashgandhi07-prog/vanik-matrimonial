@@ -3,8 +3,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+import { normalizeMailRecipients } from '../_shared/transactional-mail.ts';
 
-const TO_EMAIL = 'matrimonial@vanikcouncil.uk';
+/** Both register inboxes for website feedback; optional `ADMIN_NOTIFY_EMAIL` adds more without duplicating. */
+function websiteFeedbackRecipientList(): string {
+  const fixed = 'matrimonial@vanikcouncil.uk,vanikcouncil1@gmail.com';
+  const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL')?.trim();
+  const raw = notify ? `${fixed},${notify}` : fixed;
+  return normalizeMailRecipients(raw).join(',');
+}
 const FIELD_MAX = 4000;
 const EMAIL_MAX = 254;
 
@@ -113,7 +120,7 @@ Deno.serve(async (req) => {
 
   const mail = await dispatchEmail(admin, {
     type: 'website_feedback_submission',
-    recipientEmail: TO_EMAIL,
+    recipientEmail: websiteFeedbackRecipientList(),
     extraData: {
       feedback_id: inserted.id as string,
       submitted_iso: submitted_at,
