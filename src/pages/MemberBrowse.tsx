@@ -297,27 +297,26 @@ export default function MemberBrowse() {
             <span id="browse-seeking-label" className="member-filter-section-label">
               Show profiles of
             </span>
-            <div
-              className="member-filter-chip-row"
-              role="group"
-              aria-labelledby="browse-seeking-label"
-              style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}
-            >
+            <div className="member-filter-chip-row" role="group" aria-labelledby="browse-seeking-label">
               {(['Male', 'Female', 'Both'] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
-                  className={effectiveSeeking(profile) === g ? 'btn btn-primary' : 'btn btn-secondary'}
+                  className={
+                    effectiveSeeking(profile) === g
+                      ? 'member-filter-chip member-filter-chip--selected member-filter-chip--exclusive'
+                      : 'member-filter-chip'
+                  }
+                  aria-pressed={effectiveSeeking(profile) === g}
                   disabled={seekUpdating}
-                  style={{ padding: '6px 12px', fontSize: 13 }}
                   onClick={() => void persistSeeking(g)}
                 >
                   {g === 'Both' ? 'Everyone' : `${g}s`}
                 </button>
               ))}
             </div>
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-              Saved on your account. You can also change this under My profile.
+            <p className="member-filter-hint--browse">
+              Saved to your account. You can change this in My profile anytime.
             </p>
             {seekError && (
               <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger)' }} role="alert">
@@ -328,9 +327,12 @@ export default function MemberBrowse() {
 
           <div className="member-browse-filters-ranges" aria-label="Range filters">
             <div className="member-filter-section">
-              <span id="browse-age-label" className="member-filter-section-label">
-                Age
-              </span>
+              <div className="member-filter-range-heading">
+                <span id="browse-age-label" className="member-filter-section-label member-filter-section-label--inline">
+                  Age
+                </span>
+                <span className="member-filter-range-heading__filler" aria-hidden="true" />
+              </div>
               <div role="group" aria-labelledby="browse-age-label">
                 <DualRangeSlider
                   min={AGE_MIN}

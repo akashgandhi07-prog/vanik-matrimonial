@@ -258,34 +258,36 @@ export default function DemoBrowse() {
               <span id="demo-seeking-label" className="member-filter-section-label">
                 Show profiles of
               </span>
-              <div
-                className="member-filter-chip-row"
-                role="group"
-                aria-labelledby="demo-seeking-label"
-                style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}
-              >
+              <div className="member-filter-chip-row" role="group" aria-labelledby="demo-seeking-label">
                 {(['Male', 'Female', 'Both'] as const).map((g) => (
                   <button
                     key={g}
                     type="button"
-                    className={browseSeeking === g ? 'btn btn-primary' : 'btn btn-secondary'}
-                    style={{ padding: '6px 12px', fontSize: 13 }}
+                    className={
+                      browseSeeking === g
+                        ? 'member-filter-chip member-filter-chip--selected member-filter-chip--exclusive'
+                        : 'member-filter-chip'
+                    }
+                    aria-pressed={browseSeeking === g}
                     onClick={() => setBrowseSeeking(g)}
                   >
                     {g === 'Both' ? 'Everyone' : `${g}s`}
                   </button>
                 ))}
               </div>
-              <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
-                Same choices as members see after login. Here it only affects this page for now.
+              <p className="member-filter-hint--browse">
+                Same options as after login; on this page it only affects the demo browse list.
               </p>
             </div>
 
             <div className="member-browse-filters-ranges" aria-label="Range filters">
               <div className="member-filter-section">
-                <span id="demo-age-label" className="member-filter-section-label">
-                  Age
-                </span>
+                <div className="member-filter-range-heading">
+                  <span id="demo-age-label" className="member-filter-section-label member-filter-section-label--inline">
+                    Age
+                  </span>
+                  <span className="member-filter-range-heading__filler" aria-hidden="true" />
+                </div>
                 <div role="group" aria-labelledby="demo-age-label">
                   <DualRangeSlider
                     min={AGE_MIN}

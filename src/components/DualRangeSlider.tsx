@@ -58,9 +58,14 @@ export function DualRangeSlider({
 
   return (
     <div className="member-dual-range">
-      <div className="member-dual-range__value-row" aria-hidden>
-        <span className="member-dual-range__value">{formatValue(low)}</span>
-        <span className="member-dual-range__value">{formatValue(high)}</span>
+      <div className="member-dual-range__meta" aria-hidden>
+        <span className="member-dual-range__edge">{minLabel}</span>
+        <span className="member-dual-range__range-label">
+          <span className="member-dual-range__value">{formatValue(low)}</span>
+          <span className="member-dual-range__sep">–</span>
+          <span className="member-dual-range__value">{formatValue(high)}</span>
+        </span>
+        <span className="member-dual-range__edge">{maxLabel}</span>
       </div>
       <div className="member-dual-range__sliders">
         <div className="member-dual-range__track-bg" />
@@ -90,10 +95,6 @@ export function DualRangeSlider({
           onChange={onHighChange}
           aria-label={highAriaLabel}
         />
-      </div>
-      <div className="member-dual-range__bound-row">
-        <span className="member-dual-range__bound">{minLabel}</span>
-        <span className="member-dual-range__bound">{maxLabel}</span>
       </div>
     </div>
   );

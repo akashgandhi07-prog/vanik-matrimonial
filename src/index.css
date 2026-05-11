@@ -944,9 +944,9 @@ textarea:focus-visible {
 
 /* Browse - compact filter panel */
 .member-browse-filters {
-  margin-bottom: 12px;
-  padding: 12px 14px 14px;
-  border-radius: 10px;
+  margin-bottom: 16px;
+  padding: 16px 18px 18px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -958,8 +958,8 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -993,7 +993,7 @@ textarea:focus-visible {
 
 .member-browse-filters-grid {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   grid-template-columns: 1fr;
 }
 
@@ -1001,14 +1001,14 @@ textarea:focus-visible {
   margin-bottom: 0;
 }
 
-/* Age + height: equal columns, visually paired (no stray empty half-row) */
+/* Age + height: equal columns, same breakpoint as diet/religion */
 .member-browse-filters-ranges {
   display: grid;
-  gap: 18px 16px;
+  gap: 16px 20px;
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 480px) {
+@media (min-width: 640px) {
   .member-browse-filters-ranges {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1017,11 +1017,33 @@ textarea:focus-visible {
 /* Dual-thumb range (age + height filters) */
 .member-filter-range-heading {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  margin-bottom: 4px;
+  gap: 10px 12px;
+  margin-bottom: 8px;
+  min-height: 36px;
+}
+
+@media (min-width: 640px) {
+  .member-filter-range-heading {
+    min-height: 32px;
+    margin-bottom: 6px;
+  }
+}
+
+.member-browse-filters-ranges .member-filter-range-heading__filler {
+  flex: 0 0 auto;
+  width: 5.85rem;
+  height: 1px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .member-browse-filters-ranges .member-filter-range-heading__filler {
+    width: 5.5rem;
+  }
 }
 
 .member-browse-filters .member-filter-section-label--inline {
@@ -1078,53 +1100,86 @@ textarea:focus-visible {
 .member-dual-range {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   min-width: 0;
   touch-action: pan-y;
 }
 
-.member-dual-range__value-row {
+/* One row: scale ends + selected range (avoids stacked number clutter) */
+.member-dual-range__meta {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  padding: 0 2px;
-  min-height: 1.25rem;
-}
-
-.member-dual-range__value {
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text);
-  letter-spacing: -0.01em;
-}
-
-.member-dual-range__bound-row {
-  display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 10px;
   padding: 0 2px;
-  margin-top: 2px;
 }
 
-.member-dual-range__bound {
+.member-dual-range__edge {
+  flex: 0 1 auto;
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-secondary);
+  opacity: 0.92;
+  line-height: 1.2;
+}
+
+.member-dual-range__range-label {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: min(100%, 11rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.member-dual-range__sep {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  opacity: 0.85;
+  user-select: none;
+}
+
+.member-dual-range__value {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 639px) {
+  .member-dual-range__meta {
+    row-gap: 6px;
+  }
+
+  .member-dual-range__range-label {
+    order: -1;
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .member-dual-range__edge:first-child {
+    margin-right: auto;
+  }
+
+  .member-dual-range__edge:last-child {
+    margin-left: auto;
+  }
 }
 
 .member-dual-range__sliders {
   position: relative;
-  height: 48px;
-  margin: 0 4px;
+  height: 44px;
+  margin: 0 2px;
 }
 
 @media (min-width: 640px) {
   .member-dual-range__sliders {
-    height: 40px;
+    height: 38px;
     margin: 0 2px;
   }
 }
@@ -1239,8 +1294,11 @@ textarea:focus-visible {
 /* Diet + religion: use width on larger screens */
 .member-browse-filters-chips-row {
   display: grid;
-  gap: 12px 16px;
+  gap: 14px 20px;
   grid-template-columns: 1fr;
+  padding-top: 2px;
+  margin-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 
 @media (min-width: 640px) {
@@ -1272,8 +1330,8 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -1296,16 +1354,64 @@ textarea:focus-visible {
 }
 
 .member-browse-filters .member-filter-chip-group {
-  gap: 5px;
+  gap: 6px;
 }
 
 .member-browse-filters .member-filter-chip {
-  padding: 4px 10px;
-  min-height: 30px;
+  padding: 5px 11px;
+  min-height: 32px;
   font-size: 12px;
   font-weight: 600;
   border-radius: 999px;
   border-width: 1px;
+}
+
+/* Multi-select chips: calmer “on” state so an all-selected row isn’t a solid block */
+.member-browse-filters .member-filter-chip--selected {
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+  color: color-mix(in srgb, var(--color-primary) 92%, var(--color-text));
+  box-shadow: none;
+}
+
+.member-browse-filters .member-filter-chip--selected:hover {
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-primary) 65%, var(--color-border));
+  color: color-mix(in srgb, var(--color-primary) 95%, var(--color-text));
+}
+
+/* Gender (single choice): keep a clear active state */
+.member-browse-filters .member-filter-chip--exclusive.member-filter-chip--selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(30, 58, 95, 0.2);
+}
+
+.member-browse-filters .member-filter-chip--exclusive.member-filter-chip--selected:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: #fff;
+}
+
+.member-browse-filters .member-filter-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.member-browse-filters .member-filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.member-browse-filters .member-filter-hint--browse {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  max-width: 42rem;
 }
 
 .member-browse-filters .member-filter-range-row {
