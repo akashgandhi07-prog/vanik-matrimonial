@@ -168,19 +168,34 @@ export default function AppFeedback() {
                 </label>
 
                 {!signedInNotice && ready && (
-                  <label style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>
-                    Your email{' '}
-                    <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(optional)</span>
+                  <label
+                    htmlFor="feedback-reporter-email"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'stretch',
+                      gap: 8,
+                      fontSize: 14,
+                    }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontWeight: 600 }}>
+                      Your email <span className="badge badge-muted">optional</span>
+                    </span>
                     <input
+                      id="feedback-reporter-email"
                       type="email"
                       autoComplete="email"
                       value={form.reporter_email}
                       onChange={(e) => set('reporter_email', e.target.value)}
                       placeholder="your@example.com"
-                      style={{ marginTop: 8, width: '100%', maxWidth: 400, boxSizing: 'border-box' }}
+                      aria-describedby="feedback-email-help"
+                      style={{ width: '100%', boxSizing: 'border-box' }}
                     />
-                    <span style={{ display: 'block', fontWeight: 400, fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 6 }}>
-                      If you are happy for us to reply, leave a contact email. You can skip this if you prefer to stay anonymous.
+                    <span
+                      id="feedback-email-help"
+                      style={{ fontWeight: 400, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}
+                    >
+                      Add an email if you’d like us to reply; leave it empty to stay anonymous.
                     </span>
                   </label>
                 )}
