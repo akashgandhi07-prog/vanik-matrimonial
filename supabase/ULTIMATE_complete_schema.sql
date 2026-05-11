@@ -86,6 +86,12 @@ CREATE TABLE IF NOT EXISTS public.member_private (
   id_document_url text,
   id_document_deleted_at timestamptz,
   coupon_used text REFERENCES public.coupons (code),
+  consent_contact boolean,
+  consent_age boolean,
+  consent_privacy_terms boolean,
+  consent_privacy_policy_version text,
+  consent_recorded_at timestamptz,
+  registration_submitter_ip_hash text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

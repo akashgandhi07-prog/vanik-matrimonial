@@ -70,7 +70,7 @@ function filterLabel(f: (typeof FILTERS)[number]): string {
   return f;
 }
 
-/** Field ids for CSV export — must stay aligned with `EXPORT_MEMBERS_CSV_COLUMNS` in `admin-manage-users` (`export_members_csv`). */
+/** Field ids for CSV export must stay aligned with `EXPORT_MEMBERS_CSV_COLUMNS` in `admin-manage-users` (`export_members_csv`). */
 const MEMBER_EXPORT_COLUMN_OPTS = [
   { id: 'profile_id', label: 'Profile ID' },
   { id: 'reference_number', label: 'Reference number' },
@@ -413,7 +413,7 @@ export default function AdminMembers() {
                   columns: selectedExportColumnIds,
                 })) as { csv?: string; row_count?: number };
                 const csv = typeof res.csv === 'string' ? res.csv : '';
-                if (!csv) throw new Error('Empty export — deploy the latest admin-manage-users function.');
+                if (!csv) throw new Error('Empty export. Deploy the latest admin-manage-users function.');
                 const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
@@ -443,7 +443,7 @@ export default function AdminMembers() {
                   columns: selectedExportColumnIds,
                 })) as { csv?: string; row_count?: number };
                 const csv = typeof res.csv === 'string' ? res.csv : '';
-                if (!csv) throw new Error('Empty export — deploy the latest admin-manage-users function.');
+                if (!csv) throw new Error('Empty export. Deploy the latest admin-manage-users function.');
                 const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);

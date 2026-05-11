@@ -72,7 +72,7 @@ export default function AdminEmailExport() {
       await navigator.clipboard.writeText(formatted);
       alert('Copied to clipboard.');
     } catch {
-      alert('Could not copy — select the text manually or try Download.');
+      alert('Could not copy. Select the text manually or try Download.');
     }
   }
 
@@ -177,7 +177,7 @@ export default function AdminEmailExport() {
                 value={separator}
                 onChange={(e) => setSeparator(e.target.value as Separator)}
               >
-                <option value=";">Semicolon (;) — Outlook</option>
+                <option value=";">Semicolon (;) for Outlook</option>
                 <option value=",">Comma (,)</option>
                 <option value={'\n'}>New line</option>
               </select>

@@ -119,7 +119,7 @@ export default function MembershipExpired() {
         const after = await snapshot();
         if (subscriptionRenewed(before, after)) {
           if (!cancelled) {
-            setNotice('Renewal complete — opening your member area…');
+            setNotice('Renewal complete. Opening your member area…');
             navigate('/dashboard/browse', { replace: true });
           }
           return;

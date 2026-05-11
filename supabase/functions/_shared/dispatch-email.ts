@@ -27,7 +27,7 @@ function escapeHtmlEmail(s: string): string {
 }
 
 function feedbackEmailSection(title: string, text: string): string {
-  const body = escapeHtmlEmail(text.trim() || '—');
+  const body = escapeHtmlEmail(text.trim() || '-');
   const t = escapeHtmlEmail(title);
   return `<div style="margin-bottom:18px;"><div style="font-size:13px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">${t}</div><div style="font-size:14px;line-height:1.55;color:#0f172a;white-space:pre-wrap">${body}</div></div>`;
 }
@@ -278,7 +278,7 @@ export async function dispatchEmail(
     }
     case 'website_feedback_submission': {
       const ex = extraData as Record<string, string | null | undefined>;
-      subject = 'Website feedback received – Vanik Matrimonial Register';
+      subject = 'Website feedback received - Vanik Matrimonial Register';
       const iso = escapeHtmlEmail(String(ex.submitted_iso ?? ''));
       let reporterBlock = '';
       if (ex.profile_id) {
@@ -287,7 +287,7 @@ export async function dispatchEmail(
         const ref = refRaw ? ` (ref ${escapeHtmlEmail(refRaw)})` : '';
         const memberEmailRaw = stripHtml(String(ex.membership_email ?? ''), 200);
         const em = memberEmailRaw ? escapeHtmlEmail(memberEmailRaw) : '(not held)';
-        reporterBlock = `<p><strong>From:</strong> Signed-in member – ${name}${ref}<br/><strong>Membership email:</strong> ${em}</p>`;
+        reporterBlock = `<p><strong>From:</strong> Signed-in member - ${name}${ref}<br/><strong>Membership email:</strong> ${em}</p>`;
       } else {
         const rawRe = stripHtml(String(ex.reporter_email ?? ''), 254);
         const em = rawRe ? escapeHtmlEmail(rawRe) : 'Anonymous visitor (no contact email)';

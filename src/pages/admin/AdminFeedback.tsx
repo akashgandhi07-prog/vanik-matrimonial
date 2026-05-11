@@ -81,7 +81,7 @@ function sectionBlock(title: string, text: string | null) {
           whiteSpace: 'pre-wrap',
         }}
       >
-        {text?.trim() ? text : '—'}
+        {text?.trim() ? text : '-'}
       </div>
     </div>
   );
@@ -275,7 +275,7 @@ export default function AdminFeedback() {
                         : null;
                       const fromLabel = from
                         ? `${from.first_name}${from.reference_number ? ` (${from.reference_number})` : ''}`
-                        : '—';
+                        : '-';
                       return (
                         <tr
                           key={row.id}

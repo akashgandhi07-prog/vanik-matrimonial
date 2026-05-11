@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     purpose?: Purpose;
     renewal_success_path?: string;
     renewal_cancel_path?: string;
-    /** Browser origin (e.g. https://hostname) — must be allowlisted; see checkoutRedirectBase. */
+    /** Browser origin (e.g. https://hostname): must be allowlisted; see checkoutRedirectBase. */
     client_origin?: string;
   };
   try {

@@ -101,10 +101,10 @@ export default function AppFeedback() {
                 border: '1px solid rgba(22,163,74,0.25)',
               }}
             >
-              <p style={{ margin: 0, fontWeight: 600 }}>Thank you — your feedback has been received.</p>
+              <p style={{ margin: 0, fontWeight: 600 }}>Thank you. Your feedback has been received.</p>
               {!sentOk && (
                 <p style={{ margin: '12px 0 0', fontSize: 14, color: 'var(--color-text-secondary)' }}>
-                  We saved your submission. The confirmation email could not be sent just now — the register team may
+                  We saved your submission. The confirmation email could not be sent just now; the register team may
                   still read your comments in admin.
                 </p>
               )}

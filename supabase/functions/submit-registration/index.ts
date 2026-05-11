@@ -5,7 +5,9 @@ import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { letterHtml } from '../_shared/resend.ts';
 import { isTransactionalMailConfigured, sendTransactionalMail } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
+import { resolvedPrivacyPolicyVersionId } from '../_shared/privacy-policy-version.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+import { hashRegistrationSubmitIp } from '../_shared/registration-consent-ip-hash.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
 
 async function checkRateLimit(
@@ -113,6 +115,16 @@ Deno.serve(async (req) => {
   } catch {
     return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
+
+  const consentContact = body.consent_contact === true;
+  const consentAge = body.consent_age === true;
+  const consentPrivacyTerms = body.consent_privacy_terms === true;
+  if (!consentContact || !consentAge || !consentPrivacyTerms) {
+    return jsonResponse({ error: 'All required declarations and consents must be accepted.' }, req, 400);
+  }
+
+  const policyVersionAtSubmit = resolvedPrivacyPolicyVersionId();
+  const consentIpSecret = Deno.env.get('REGISTRATION_CONSENT_IP_HMAC_SECRET') ?? undefined;
 
   const { data: existing } = await admin
     .from('profiles')
@@ -225,6 +237,9 @@ Deno.serve(async (req) => {
     status: 'pending_approval' as const,
   };
 
+  const consentRecordedAt = new Date().toISOString();
+  const registrationSubmitIpHash = await hashRegistrationSubmitIp(ip, consentIpSecret);
+
   const privatePayload = {
     surname,
     date_of_birth: dob,
@@ -238,6 +253,12 @@ Deno.serve(async (req) => {
     mother_name: stripHtml(String(body.mother_name ?? ''), 120),
     id_document_url: idPath,
     coupon_used: couponValid ? couponRaw : null,
+    consent_contact: consentContact,
+    consent_age: consentAge,
+    consent_privacy_terms: consentPrivacyTerms,
+    consent_privacy_policy_version: policyVersionAtSubmit,
+    consent_recorded_at: consentRecordedAt,
+    registration_submitter_ip_hash: registrationSubmitIpHash,
   };
 
   let profileId: string;

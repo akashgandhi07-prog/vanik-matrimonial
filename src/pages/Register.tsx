@@ -610,6 +610,9 @@ export default function Register() {
         diet: form.diet,
         hobbies: sanitizeText(form.hobbies, 400),
         stripe_checkout_session_id: stripeCheckoutSessionId ?? '',
+        consent_contact: form.consent_contact,
+        consent_age: form.consent_age,
+        consent_privacy_terms: form.consent_privacy,
       };
       const res = (await invokeFunction('submit-registration', payload)) as {
         reference_number?: string;
@@ -1559,7 +1562,7 @@ export default function Register() {
                   Profile photos (up to 3) <span aria-hidden="true">*</span>
                 </label>
                 <p id="reg-photo-hint" className="field-hint">
-                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos</strong>—group
+                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos</strong>; group
                   shots or unclear images will be rejected. <strong>JPG or PNG only.</strong> Visible to other members
                   after approval. Images are compressed before upload. Drag and drop to reorder.
                 </p>
@@ -1568,8 +1571,8 @@ export default function Register() {
                   className="field-hint"
                   style={{ marginTop: 6, marginBottom: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}
                 >
-                  Your photos are only shown to someone after they have requested full details for your
-                  profile—not on the initial browse list.
+                  Your photos are only shown to someone after they have requested full details for your profile, not on the
+                  initial browse list.
                 </p>
                 <input
                   id="reg-photo"

@@ -4,7 +4,7 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
-/** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6–v8 and some valid DB ids. */
+/** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Stable `code` for clients; `error` duplicates `code` for older callers. */

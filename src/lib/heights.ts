@@ -10,10 +10,18 @@ export const HEIGHT_OPTIONS: { label: string; cm: number }[] = (() => {
   return out;
 })();
 
+/** Min/max cm represented in profile height options (same range as the registration picker). */
+export const HEIGHT_CM_MIN = HEIGHT_OPTIONS[0]!.cm;
+export const HEIGHT_CM_MAX = HEIGHT_OPTIONS[HEIGHT_OPTIONS.length - 1]!.cm;
+
 export function cmToFeetInches(cm: number | null | undefined): string {
   if (cm == null) return '-';
   const inches = Math.round(cm / 2.54);
   const ft = Math.floor(inches / 12);
   const inch = inches % 12;
   return `${ft}'${inch}"`;
+}
+
+export function formatHeightForFilter(cm: number, unit: 'cm' | 'ft'): string {
+  return unit === 'cm' ? `${cm} cm` : cmToFeetInches(cm);
 }

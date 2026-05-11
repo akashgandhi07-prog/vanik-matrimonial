@@ -204,11 +204,11 @@ export default function AdminSettings() {
             </li>
             <li>
               <strong>Functions project host:</strong>{' '}
-              <code style={{ fontSize: 13 }}>{mailStatus.edge_supabase_host ?? '—'}</code>
+              <code style={{ fontSize: 13 }}>{mailStatus.edge_supabase_host ?? '-'}</code>
             </li>
             <li>
               <strong>This build’s VITE_SUPABASE_URL host:</strong>{' '}
-              <code style={{ fontSize: 13 }}>{viteHost ?? '—'}</code>
+              <code style={{ fontSize: 13 }}>{viteHost ?? '-'}</code>
             </li>
           </ul>
           {hostMismatch && (

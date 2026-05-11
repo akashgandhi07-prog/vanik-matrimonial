@@ -296,7 +296,7 @@ export default function MemberRequests() {
         )}
         <p style={{ margin: 0, fontWeight: 500 }}>No requests yet</p>
         <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-          Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit — up to 3 at a time,
+          Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit, up to 3 at a time,
           within your 7-day and monthly limits shown there.
         </p>
       </div>
@@ -336,7 +336,7 @@ export default function MemberRequests() {
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <strong>Limits:</strong> up to <strong>{weeklyCap}</strong> new {weeklyCap === 1 ? 'person' : 'people'} per rolling 7 days, and{' '}
         <strong>{monthlyCap}</strong> distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (UTC). Outstanding
-        feedback can block new requests — see the Feedback column below.
+        feedback can block new requests; see the Feedback column below.
       </p>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <details>

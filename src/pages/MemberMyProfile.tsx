@@ -234,7 +234,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   async function uploadOneNewPhoto(file: File): Promise<void> {
     const { data: s } = await supabase.auth.getSession();
     const uid = s.session?.user.id;
-    if (!uid) throw new Error('Not signed in — please refresh and try again.');
+    if (!uid) throw new Error('Not signed in. Please refresh and try again.');
     const reject = rejectReasonIfNotJpegOrPng(file);
     if (reject) throw new Error(reject);
     const compressed = await imageCompression(file, {
@@ -337,7 +337,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
 
         <h3 style={{ margin: '20px 0 0', fontSize: 17 }}>Your photos</h3>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 12px', lineHeight: 1.5 }}>
-          Manage pictures here — the large preview above updates when you change which photo is main.
+          Manage pictures here. The large preview above updates when you change which photo is main.
         </p>
         <ul
           style={{
@@ -353,7 +353,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             <strong>two more</strong> (for 3 altogether). The site never stores more than three.
           </li>
           <li style={{ marginBottom: 8 }}>
-            <strong>Replace any slot.</strong> Use <strong>Remove</strong> on a photo you want to drop, then upload again —
+            <strong>Replace any slot.</strong> Use <strong>Remove</strong> on a photo you want to drop, then upload again,
             or free a slot first if you are already at three.
           </li>
           <li style={{ marginBottom: 0 }}>

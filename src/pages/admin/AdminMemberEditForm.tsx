@@ -48,6 +48,12 @@ export type MemberPrivateFull = {
   coupon_used: string | null;
   contact_request_weekly_bonus?: number | null;
   contact_request_monthly_bonus?: number | null;
+  consent_contact?: boolean | null;
+  consent_age?: boolean | null;
+  consent_privacy_terms?: boolean | null;
+  consent_privacy_policy_version?: string | null;
+  consent_recorded_at?: string | null;
+  registration_submitter_ip_hash?: string | null;
 };
 
 function isoToDatetimeLocal(iso: string | null | undefined): string {

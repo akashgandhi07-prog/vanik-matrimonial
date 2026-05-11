@@ -216,6 +216,50 @@ export default function AdminMemberDetail() {
           {profile.reference_number} · {profile.status}
           {profile.show_on_register ? ' · on register' : ''}
         </p>
+
+        <div className="card" style={{ marginTop: 20 }}>
+          <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Registration consent record</h2>
+          {priv.consent_recorded_at == null &&
+          priv.consent_contact == null &&
+          priv.consent_age == null &&
+          priv.consent_privacy_terms == null ? (
+            <p style={{ marginBottom: 0, color: 'var(--color-text-secondary)' }}>
+              No structured consent audit is stored for this member (typically records created before consent fields were
+              introduced). Evidence of membership terms may exist elsewhere in council records.
+            </p>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--color-text-secondary)' }}>
+              <li>
+                <strong>Recorded (UTC):</strong>{' '}
+                {priv.consent_recorded_at
+                  ? new Date(priv.consent_recorded_at).toISOString().replace('T', ' ').slice(0, 19)
+                  : '-'}
+              </li>
+              <li>
+                <strong>Privacy / terms version:</strong> {priv.consent_privacy_policy_version ?? '-'}
+              </li>
+              <li>
+                <strong>Contact sharing declaration:</strong>{' '}
+                {priv.consent_contact === true ? 'Yes' : priv.consent_contact === false ? 'No' : '-'}
+              </li>
+              <li>
+                <strong>18+ declaration:</strong>{' '}
+                {priv.consent_age === true ? 'Yes' : priv.consent_age === false ? 'No' : '-'}
+              </li>
+              <li>
+                <strong>Privacy policy &amp; terms accepted:</strong>{' '}
+                {priv.consent_privacy_terms === true ? 'Yes' : priv.consent_privacy_terms === false ? 'No' : '-'}
+              </li>
+              <li>
+                <strong>Submit IP (one-way hash):</strong>{' '}
+                {priv.registration_submitter_ip_hash
+                  ? `${priv.registration_submitter_ip_hash.slice(0, 14)}… (${priv.registration_submitter_ip_hash.length} hex chars)`
+                  : 'Not stored (feature off or unknown IP)'}
+              </li>
+            </ul>
+          )}
+        </div>
+
         <p style={{ marginTop: 12 }}>
           {!supportOnly && (
             <button
@@ -324,7 +368,7 @@ export default function AdminMemberDetail() {
             }}
           >
             <label className="label" style={{ display: 'block', marginBottom: 0 }}>
-              Extra 7-day slots (0–50)
+              Extra 7-day slots (0-50)
               <input
                 type="number"
                 min={0}
@@ -340,7 +384,7 @@ export default function AdminMemberDetail() {
               />
             </label>
             <label className="label" style={{ display: 'block', marginBottom: 0 }}>
-              Extra month slots (0–50)
+              Extra month slots (0-50)
               <input
                 type="number"
                 min={0}

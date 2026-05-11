@@ -64,7 +64,7 @@ export function transactionalMailRuntimeStatus(): {
 export function transactionalMailMissingReason(): string {
   if (isTransactionalMailConfigured()) return '';
   const s = transactionalMailRuntimeStatus();
-  return `Edge sees smtp_user=${s.smtp_user_present} smtp_pass=${s.smtp_pass_present} resend=${s.resend_present} (functions project host: ${s.edge_supabase_host ?? 'unknown'}). If the dashboard shows SMTP secrets but this is false, your browser app may be calling a different Supabase project—check VITE_SUPABASE_URL matches that host.`;
+  return `Edge sees smtp_user=${s.smtp_user_present} smtp_pass=${s.smtp_pass_present} resend=${s.resend_present} (functions project host: ${s.edge_supabase_host ?? 'unknown'}). If the dashboard shows SMTP secrets but this is false, your browser app may be calling a different Supabase project; check VITE_SUPABASE_URL matches that host.`;
 }
 
 /** Base64 body with 76-char lines; avoids denomailer's quoted-printable (=20 before line breaks). */
@@ -150,7 +150,7 @@ export async function sendTransactionalMail(
     if (r.error && /not verified|verify your domain/i.test(r.error)) {
       return {
         id: null,
-        error: `${r.error} — If you use Gmail for transactional mail, set Edge secrets SMTP_USER + SMTP_PASS (same app password as Auth SMTP), redeploy functions, and remove RESEND_API_KEY so Resend is not used.`,
+        error: `${r.error}. If you use Gmail for transactional mail, set Edge secrets SMTP_USER + SMTP_PASS (same app password as Auth SMTP), redeploy functions, and remove RESEND_API_KEY so Resend is not used.`,
       };
     }
     return r;

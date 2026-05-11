@@ -99,7 +99,7 @@ function csvEscapeCell(v: unknown): string {
   return s;
 }
 
-/** PostgREST default limit can truncate bulk exports/listings — fetch every matching row. */
+/** PostgREST default limit can truncate bulk exports/listings; fetch every matching row. */
 const ADMIN_PROFILE_PAGE_SIZE = 600;
 
 // deno-lint-ignore no-explicit-any Supabase chained filter builder has no narrow public type here.
@@ -541,7 +541,7 @@ Deno.serve(async (req) => {
       : [];
     const profileIds = [...new Set(rawIds.map((x) => x.trim()).filter(Boolean))];
     if (profileIds.length === 0 || profileIds.length > 80) {
-      return jsonResponse({ error: 'profile_ids required: 1–80 unique UUIDs' }, req, 400);
+      return jsonResponse({ error: 'profile_ids required: 1-80 unique UUIDs' }, req, 400);
     }
 
     const deleted: string[] = [];
@@ -1341,7 +1341,7 @@ Deno.serve(async (req) => {
     const wB = parseBonus(body.contact_request_weekly_bonus);
     const mB = parseBonus(body.contact_request_monthly_bonus);
     if (wB === null || mB === null) {
-      return jsonResponse({ error: `Bonuses must be integers 0–${CONTACT_QUOTA_BONUS_MAX}` }, req, 400);
+      return jsonResponse({ error: `Bonuses must be integers 0-${CONTACT_QUOTA_BONUS_MAX}` }, req, 400);
     }
     const { data: beforeRow, error: be } = await admin
       .from('member_private')
@@ -1645,7 +1645,7 @@ Deno.serve(async (req) => {
     if (!codeRaw) return jsonResponse({ error: 'code required' }, req, 400);
     if (codeRaw.length < 10 || !/^[A-Z0-9]+$/.test(codeRaw)) {
       return jsonResponse(
-        { error: 'Coupon code must be at least 10 characters (A–Z, 0–9 only)' },
+        { error: 'Coupon code must be at least 10 characters (A-Z, 0-9 only)' },
         req,
         400
       );

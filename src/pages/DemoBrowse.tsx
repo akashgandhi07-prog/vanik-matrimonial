@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
-import { cmToFeetInches, HEIGHT_OPTIONS } from '../lib/heights';
+import { DualRangeSlider } from '../components/DualRangeSlider';
+import {
+  cmToFeetInches,
+  formatHeightForFilter,
+  HEIGHT_CM_MAX,
+  HEIGHT_CM_MIN,
+} from '../lib/heights';
 import { EdgeFunctionHttpError, getAccessToken, postFunctionOptionalAuth } from '../lib/supabase';
 
 type DemoProfile = {
@@ -19,6 +25,8 @@ type DemoProfile = {
   gender: string | null;
 };
 
+const AGE_MIN = 18;
+const AGE_MAX = 80;
 const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
 const DIET_ALL = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
@@ -87,6 +95,7 @@ export default function DemoBrowse() {
   const [error, setError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<DemoProfile[]>([]);
   const [browseSeeking, setBrowseSeeking] = useState<'Male' | 'Female' | 'Both'>('Both');
+  const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
 
@@ -275,91 +284,72 @@ export default function DemoBrowse() {
             <div className="member-browse-filters-ranges" aria-label="Range filters">
               <div className="member-filter-section">
                 <span id="demo-age-label" className="member-filter-section-label">
-                  Age range
+                  Age
                 </span>
-                <div className="member-filter-range-row" role="group" aria-labelledby="demo-age-label">
-                  <input
-                    type="number"
-                    className="member-filter-num-input"
-                    min={18}
-                    max={80}
-                    inputMode="numeric"
-                    value={draftFilters.ageRange[0]}
-                    onChange={(e) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        ageRange: [Number(e.target.value), prev.ageRange[1]],
-                      }))
-                    }
-                    aria-label="Minimum age"
-                  />
-                  <span className="member-filter-range-to" aria-hidden>
-                    to
-                  </span>
-                  <input
-                    type="number"
-                    className="member-filter-num-input"
-                    min={18}
-                    max={80}
-                    inputMode="numeric"
-                    value={draftFilters.ageRange[1]}
-                    onChange={(e) =>
-                      setDraftFilters((prev) => ({
-                        ...prev,
-                        ageRange: [prev.ageRange[0], Number(e.target.value)],
-                      }))
-                    }
-                    aria-label="Maximum age"
+                <div role="group" aria-labelledby="demo-age-label">
+                  <DualRangeSlider
+                    min={AGE_MIN}
+                    max={AGE_MAX}
+                    step={1}
+                    value={draftFilters.ageRange}
+                    onChange={(ageRange) => setDraftFilters((prev) => ({ ...prev, ageRange }))}
+                    formatValue={(n) => String(n)}
+                    minLabel={String(AGE_MIN)}
+                    maxLabel="80+"
+                    lowAriaLabel="Minimum age"
+                    highAriaLabel="Maximum age"
                   />
                 </div>
               </div>
 
               <div className="member-filter-section">
-                <span id="demo-height-label" className="member-filter-section-label">
-                  Height range
-                </span>
-                <div className="member-filter-range-row" role="group" aria-labelledby="demo-height-label">
-                  <div className="member-filter-range-field">
-                    <select
-                      className="member-filter-select"
-                      value={draftFilters.heightRange[0]}
-                      onChange={(e) =>
-                        setDraftFilters((prev) => ({
-                          ...prev,
-                          heightRange: [Number(e.target.value), prev.heightRange[1]],
-                        }))
-                      }
-                      aria-label="Minimum height"
-                    >
-                      {HEIGHT_OPTIONS.filter((o) => o.cm <= draftFilters.heightRange[1]).map((o) => (
-                        <option key={o.cm} value={o.cm}>
-                          {cmToFeetInches(o.cm)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <span className="member-filter-range-to" aria-hidden>
-                    to
+                <div className="member-filter-range-heading">
+                  <span
+                    id="demo-height-label"
+                    className="member-filter-section-label member-filter-section-label--inline"
+                  >
+                    Height
                   </span>
-                  <div className="member-filter-range-field">
-                    <select
-                      className="member-filter-select"
-                      value={draftFilters.heightRange[1]}
-                      onChange={(e) =>
-                        setDraftFilters((prev) => ({
-                          ...prev,
-                          heightRange: [prev.heightRange[0], Number(e.target.value)],
-                        }))
+                  <div className="member-unit-toggle" role="group" aria-label="Height unit">
+                    <button
+                      type="button"
+                      className={
+                        heightUnit === 'cm'
+                          ? 'member-unit-toggle__btn member-unit-toggle__btn--active'
+                          : 'member-unit-toggle__btn'
                       }
-                      aria-label="Maximum height"
+                      aria-pressed={heightUnit === 'cm'}
+                      onClick={() => setHeightUnit('cm')}
                     >
-                      {HEIGHT_OPTIONS.filter((o) => o.cm >= draftFilters.heightRange[0]).map((o) => (
-                        <option key={o.cm} value={o.cm}>
-                          {cmToFeetInches(o.cm)}
-                        </option>
-                      ))}
-                    </select>
+                      cm
+                    </button>
+                    <button
+                      type="button"
+                      className={
+                        heightUnit === 'ft'
+                          ? 'member-unit-toggle__btn member-unit-toggle__btn--active'
+                          : 'member-unit-toggle__btn'
+                      }
+                      aria-pressed={heightUnit === 'ft'}
+                      onClick={() => setHeightUnit('ft')}
+                    >
+                      ft
+                    </button>
                   </div>
+                </div>
+                <div role="group" aria-labelledby="demo-height-label">
+                  <DualRangeSlider
+                    min={HEIGHT_CM_MIN}
+                    max={HEIGHT_CM_MAX}
+                    step={1}
+                    value={draftFilters.heightRange}
+                    onChange={(heightRange) => setDraftFilters((prev) => ({ ...prev, heightRange }))}
+                    formatValue={(cm) => formatHeightForFilter(cm, heightUnit)}
+                    minLabel={formatHeightForFilter(HEIGHT_CM_MIN, heightUnit)}
+                    maxLabel={formatHeightForFilter(HEIGHT_CM_MAX, heightUnit)}
+                    lowAriaLabel="Minimum height"
+                    highAriaLabel="Maximum height"
+                  />
                 </div>
               </div>
             </div>
