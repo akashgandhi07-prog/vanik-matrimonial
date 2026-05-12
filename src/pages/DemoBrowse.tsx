@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { BrowseCardSkeleton } from '../components/BrowseCardSkeleton';
 import { PublicLayout } from '../components/Layout';
 import { DualRangeSlider } from '../components/DualRangeSlider';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import {
   cmToFeetInches,
   formatHeightForFilter,
@@ -98,6 +100,17 @@ export default function DemoBrowse() {
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
+  const isMobileFilters = useMediaQuery('(max-width: 639px)');
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMobileFilters || !filtersSheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobileFilters, filtersSheetOpen]);
 
   const loadProfiles = useCallback(async () => {
     setLoading(true);
@@ -193,6 +206,11 @@ export default function DemoBrowse() {
     setAppliedFilters(cloneFilters(draftFilters));
   }
 
+  function onApplyFiltersClick() {
+    applyFilters();
+    if (isMobileFilters) setFiltersSheetOpen(false);
+  }
+
   function clearFilters() {
     const defaults = defaultFilters();
     setDraftFilters(defaults);
@@ -248,7 +266,54 @@ export default function DemoBrowse() {
           </Link>
         </div>
 
-        <div className="member-browse-filters">
+        {isMobileFilters && (
+          <div className="member-filters-mobile-trigger-bar">
+            <button
+              type="button"
+              className="member-filters-mobile-trigger"
+              aria-expanded={filtersSheetOpen}
+              aria-controls="demo-browse-filters-panel"
+              onClick={() => setFiltersSheetOpen(true)}
+            >
+              <span className="member-filters-mobile-trigger-title">Filters</span>
+              <span className="member-filters-mobile-trigger-meta">
+                {filtered.length} profile{filtered.length === 1 ? '' : 's'}
+                {pendingFilterChanges ? ' · unsaved changes' : ''}
+                {!pendingFilterChanges ? ' · tap to edit' : ''}
+              </span>
+            </button>
+          </div>
+        )}
+        {isMobileFilters && filtersSheetOpen ? (
+          <button
+            type="button"
+            className="member-filters-sheet-backdrop"
+            aria-label="Close filters"
+            onClick={() => setFiltersSheetOpen(false)}
+          />
+        ) : null}
+        <div
+          id="demo-browse-filters-panel"
+          className={[
+            'member-browse-filters',
+            isMobileFilters && filtersSheetOpen ? 'member-browse-filters--mobile-sheet' : '',
+            isMobileFilters && !filtersSheetOpen ? 'member-browse-filters--mobile-collapsed' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {isMobileFilters && filtersSheetOpen ? (
+            <div className="member-filters-sheet-toolbar">
+              <h2 className="member-filters-sheet-toolbar-title">Filters</h2>
+              <button
+                type="button"
+                className="btn btn-secondary member-filters-sheet-done"
+                onClick={() => setFiltersSheetOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          ) : null}
           <div className="member-browse-filters-head">
             <h2 className="member-browse-filters-title">Filters</h2>
           </div>
@@ -283,7 +348,10 @@ export default function DemoBrowse() {
             <div className="member-browse-filters-ranges" aria-label="Range filters">
               <div className="member-filter-section">
                 <div className="member-filter-range-heading">
-                  <span id="demo-age-label" className="member-filter-section-label member-filter-section-label--inline">
+                  <span
+                    id="demo-age-label"
+                    className="member-filter-section-label member-filter-section-label--inline member-filter-section-label--field"
+                  >
                     Age
                   </span>
                   <span className="member-filter-range-heading__filler" aria-hidden="true" />
@@ -308,7 +376,7 @@ export default function DemoBrowse() {
                 <div className="member-filter-range-heading">
                   <span
                     id="demo-height-label"
-                    className="member-filter-section-label member-filter-section-label--inline"
+                    className="member-filter-section-label member-filter-section-label--inline member-filter-section-label--field"
                   >
                     Height
                   </span>
@@ -358,7 +426,7 @@ export default function DemoBrowse() {
 
             <div className="member-browse-filters-chips-row" aria-label="Preference filters">
               <div className="member-filter-section">
-                <span id="demo-diet-label" className="member-filter-section-label">
+                <span id="demo-diet-label" className="member-filter-section-label member-filter-section-label--field">
                   Diet
                 </span>
                 <div className="member-filter-chip-group" role="group" aria-labelledby="demo-diet-label">
@@ -386,7 +454,7 @@ export default function DemoBrowse() {
               </div>
 
               <div className="member-filter-section">
-                <span id="demo-religion-label" className="member-filter-section-label">
+                <span id="demo-religion-label" className="member-filter-section-label member-filter-section-label--field">
                   Religion
                 </span>
                 <div className="member-filter-chip-group" role="group" aria-labelledby="demo-religion-label">
@@ -417,7 +485,14 @@ export default function DemoBrowse() {
             </div>
           </div>
 
-          <div className="member-browse-filters-footer">
+          <div
+            className={[
+              'member-browse-filters-footer',
+              isMobileFilters && filtersSheetOpen ? 'member-browse-filters-footer--sheet-sticky' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             <button type="button" className="member-filter-clear" disabled={!filtersActive} onClick={clearFilters}>
               Reset
             </button>
@@ -440,7 +515,7 @@ export default function DemoBrowse() {
                 type="button"
                 className="btn btn-primary"
                 disabled={!pendingFilterChanges}
-                onClick={applyFilters}
+                onClick={onApplyFiltersClick}
               >
                 Apply filters
               </button>
@@ -451,21 +526,34 @@ export default function DemoBrowse() {
         <section className="member-browse-grid">
           <div className="member-browse-result-line">
             <span>
-              {filtered.length === 0
-                ? profiles.length === 0
-                  ? 'No profiles to show yet.'
-                  : 'No profiles match these filters.'
-                : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
+              {loading ? (
+                <span role="status">Loading profiles…</span>
+              ) : filtered.length === 0 ? (
+                profiles.length === 0 ? (
+                  'No profiles to show yet.'
+                ) : (
+                  'No profiles match these filters.'
+                )
+              ) : (
+                `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`
+              )}
             </span>
           </div>
 
-          {loading && <p>Loading profiles…</p>}
           {error && (
             <div className="member-browse-empty">
               <p className="member-browse-empty-title">Could not load profiles</p>
               <p className="member-browse-empty-desc">{error}</p>
             </div>
           )}
+
+          {loading && !error ? (
+            <div className="member-browse-cards">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <BrowseCardSkeleton key={`demo-sk-${i}`} />
+              ))}
+            </div>
+          ) : null}
 
           {!loading && !error && (
             <div className="member-browse-cards">

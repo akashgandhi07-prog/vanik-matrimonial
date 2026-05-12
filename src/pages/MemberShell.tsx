@@ -1,18 +1,40 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useSearchParams } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { MemberAuthGate, MemberDataProvider, useMemberArea } from '../member/memberContext';
+
+const DASHBOARD_BROWSE_TIP_KEY = 'vanik_dashboard_browse_tip_v1';
 
 function daysBetween(a: Date, b: Date) {
   return Math.ceil((b.getTime() - a.getTime()) / 86400000);
 }
 
 function MemberLayoutBody() {
+  const location = useLocation();
   const { profile, loadAll } = useMemberArea();
   const [searchParams, setSearchParams] = useSearchParams();
   const [renewalPaidNotice, setRenewalPaidNotice] = useState(false);
+  const [browseTipDismissed, setBrowseTipDismissed] = useState(() => {
+    try {
+      return typeof localStorage !== 'undefined' && Boolean(localStorage.getItem(DASHBOARD_BROWSE_TIP_KEY));
+    } catch {
+      return false;
+    }
+  });
+
+  const showBrowseTip = location.pathname === '/dashboard/browse' && !browseTipDismissed;
+
+  function dismissBrowseTip() {
+    try {
+      localStorage.setItem(DASHBOARD_BROWSE_TIP_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setBrowseTipDismissed(true);
+  }
 
   useEffect(() => {
     if (searchParams.get('checkout') !== 'success') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Stripe return URL triggers one-shot toast before params are stripped
     setRenewalPaidNotice(true);
     const next = new URLSearchParams(searchParams);
     next.delete('checkout');
@@ -108,6 +130,32 @@ function MemberLayoutBody() {
       )}
 
       <div className="layout-max member-dashboard-main" style={{ marginTop: 16 }}>
+        {showBrowseTip && (
+          <div
+            className="member-dashboard-tip card"
+            role="status"
+            style={{
+              marginBottom: 14,
+              padding: '12px 14px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 12,
+              justifyContent: 'space-between',
+              border: '1px solid rgba(30, 58, 95, 0.18)',
+              background: 'rgba(248, 250, 252, 0.95)',
+              fontSize: 14,
+              lineHeight: 1.45,
+            }}
+          >
+            <span style={{ flex: '1 1 220px', margin: 0 }}>
+              <strong>Quick tip:</strong> Tap <strong>+ Request</strong> to add people to your tray, then submit one batch to ask for contact details (weekly and monthly limits apply).
+            </span>
+            <button type="button" className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={dismissBrowseTip}>
+              Got it
+            </button>
+          </div>
+        )}
         <Outlet />
       </div>
     </div>

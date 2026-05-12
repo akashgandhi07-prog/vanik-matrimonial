@@ -64,6 +64,8 @@ type MemberCtx = {
   profile: ProfileRow | null;
   privateRow: MemberPrivateRow | null;
   loading: boolean;
+  /** True while reloading browse data after the initial dashboard load (does not block the auth gate). */
+  refreshing: boolean;
   candidates: ProfileRow[];
   bookmarks: string[];
   requests: {
@@ -95,6 +97,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [privateRow, setPrivateRow] = useState<MemberPrivateRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [candidates, setCandidates] = useState<ProfileRow[]>([]);
   const [bookmarks, setBookmarks] = useState<string[]>([]);
   const [requests, setRequests] = useState<
@@ -110,10 +113,13 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
   const loadChainRef = useRef(Promise.resolve());
+  /** After the first loadAll completes, subsequent runs use `refreshing` instead of blocking `loading`. */
+  const initialLoadDoneRef = useRef(false);
 
   const loadAll = useCallback(async () => {
     const run = async () => {
-      setLoading(true);
+      if (initialLoadDoneRef.current) setRefreshing(true);
+      else setLoading(true);
       try {
         // Prefer getSession() right after sign-in - it reads the session the client just stored; getUser()
         // can lag behind navigation and yield no user, which incorrectly sent people to /register.
@@ -313,7 +319,12 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         console.error("member loadAll:", e);
       } finally {
-        setLoading(false);
+        if (!initialLoadDoneRef.current) {
+          initialLoadDoneRef.current = true;
+          setLoading(false);
+        } else {
+          setRefreshing(false);
+        }
       }
     };
 
@@ -353,6 +364,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         void loadAll();
       }
       if (event === "SIGNED_OUT") {
+        initialLoadDoneRef.current = false;
         // Clear stale member state immediately so the auth gate redirects correctly
         setUser(null);
         setProfile(null);
@@ -406,6 +418,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       profile,
       privateRow,
       loading,
+      refreshing,
       candidates,
       bookmarks,
       requests,
@@ -420,6 +433,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       profile,
       privateRow,
       loading,
+      refreshing,
       candidates,
       bookmarks,
       requests,

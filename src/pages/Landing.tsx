@@ -50,15 +50,20 @@ export default function Landing() {
                 inside your member dashboard when you ask for them. Nothing is displayed publicly.
               </p>
 
-              <div className="landing-actions">
-                <Link to="/register" className="btn btn-primary">
-                  Apply to join
+              <div className="landing-actions landing-actions--primary">
+                <Link to="/demo" className="btn btn-secondary landing-cta-demo">
+                  Try demo browse
                 </Link>
+                <Link to="/register" className="btn btn-primary landing-cta-register">
+                  Register — £10/year
+                </Link>
+              </div>
+              <p className="landing-cta-note">
+                Registration unlocks saved profiles, batched contact requests, and your full member dashboard after our team approves your application.
+              </p>
+              <div className="landing-actions landing-actions--secondary">
                 <Link to="/login" className="btn btn-secondary">
                   Member login
-                </Link>
-                <Link to="/demo" className="btn btn-secondary">
-                  Browse Profiles
                 </Link>
               </div>
 

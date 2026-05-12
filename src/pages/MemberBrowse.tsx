@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { BrowseCardSkeleton } from '../components/BrowseCardSkeleton';
 import { DualRangeSlider } from '../components/DualRangeSlider';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ProfileModal } from '../member/ProfileModal';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
@@ -82,8 +84,19 @@ function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
 
 export default function MemberBrowse() {
   const navigate = useNavigate();
-  const { profile, privateRow, candidates, bookmarks, toggleBookmark, requests, feedbackKeys, loadAll, notice, clearNotice } =
-    useMemberArea();
+  const {
+    profile,
+    privateRow,
+    candidates,
+    bookmarks,
+    toggleBookmark,
+    requests,
+    feedbackKeys,
+    loadAll,
+    notice,
+    clearNotice,
+    refreshing,
+  } = useMemberArea();
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
@@ -98,6 +111,17 @@ export default function MemberBrowse() {
   const [seekUpdating, setSeekUpdating] = useState(false);
   const [seekError, setSeekError] = useState<string | null>(null);
   const [traySubmitting, setTraySubmitting] = useState(false);
+  const isMobileFilters = useMediaQuery('(max-width: 639px)');
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMobileFilters || !filtersSheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobileFilters, filtersSheetOpen]);
 
   async function persistSeeking(g: 'Male' | 'Female' | 'Both') {
     if (!profile || effectiveSeeking(profile) === g || seekUpdating) return;
@@ -164,6 +188,11 @@ export default function MemberBrowse() {
     if (draftFilters.ageRange[0] > draftFilters.ageRange[1]) return;
     if (draftFilters.heightRange[0] > draftFilters.heightRange[1]) return;
     setAppliedFilters(cloneFilters(draftFilters));
+  }
+
+  function onApplyFiltersClick() {
+    applyFilters();
+    if (isMobileFilters) setFiltersSheetOpen(false);
   }
   const draftFilterError =
     draftFilters.ageRange[0] > draftFilters.ageRange[1]
@@ -287,7 +316,56 @@ export default function MemberBrowse() {
 
   return (
     <div style={{ paddingBottom: trayPaddingBottom }}>
-      <div className="member-browse-filters">
+      {isMobileFilters && (
+        <div className="member-filters-mobile-trigger-bar">
+          <button
+            type="button"
+            className="member-filters-mobile-trigger"
+            aria-expanded={filtersSheetOpen}
+            aria-controls="member-browse-filters-panel"
+            onClick={() => setFiltersSheetOpen(true)}
+          >
+            <span className="member-filters-mobile-trigger-title">Filters</span>
+            <span className="member-filters-mobile-trigger-meta">
+              {filtered.length} profile{filtered.length === 1 ? '' : 's'}
+              {pendingFilterChanges ? ' · unsaved changes' : ''}
+              {!pendingFilterChanges ? ' · tap to edit' : ''}
+            </span>
+          </button>
+        </div>
+      )}
+      {isMobileFilters && filtersSheetOpen ? (
+        <button
+          type="button"
+          className="member-filters-sheet-backdrop"
+          aria-label="Close filters"
+          onClick={() => setFiltersSheetOpen(false)}
+        />
+      ) : null}
+      <div
+        id="member-browse-filters-panel"
+        className={[
+          'member-browse-filters',
+          isMobileFilters && filtersSheetOpen ? 'member-browse-filters--mobile-sheet' : '',
+          isMobileFilters && !filtersSheetOpen ? 'member-browse-filters--mobile-collapsed' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {isMobileFilters && filtersSheetOpen ? (
+          <div className="member-filters-sheet-toolbar">
+            <h2 id="member-filters-sheet-title" className="member-filters-sheet-toolbar-title">
+              Filters
+            </h2>
+            <button
+              type="button"
+              className="btn btn-secondary member-filters-sheet-done"
+              onClick={() => setFiltersSheetOpen(false)}
+            >
+              Done
+            </button>
+          </div>
+        ) : null}
         <div className="member-browse-filters-head">
           <h2 className="member-browse-filters-title">Filters</h2>
         </div>
@@ -328,7 +406,10 @@ export default function MemberBrowse() {
           <div className="member-browse-filters-ranges" aria-label="Range filters">
             <div className="member-filter-section">
               <div className="member-filter-range-heading">
-                <span id="browse-age-label" className="member-filter-section-label member-filter-section-label--inline">
+                <span
+                  id="browse-age-label"
+                  className="member-filter-section-label member-filter-section-label--inline member-filter-section-label--field"
+                >
                   Age
                 </span>
                 <span className="member-filter-range-heading__filler" aria-hidden="true" />
@@ -351,7 +432,10 @@ export default function MemberBrowse() {
 
             <div className="member-filter-section">
               <div className="member-filter-range-heading">
-                <span id="browse-height-label" className="member-filter-section-label member-filter-section-label--inline">
+                <span
+                  id="browse-height-label"
+                  className="member-filter-section-label member-filter-section-label--inline member-filter-section-label--field"
+                >
                   Height
                 </span>
                 <div className="member-unit-toggle" role="group" aria-label="Height unit">
@@ -402,7 +486,7 @@ export default function MemberBrowse() {
             <div className="member-filter-section">
               <span
                 id="browse-diet-label"
-                className="member-filter-section-label"
+                className="member-filter-section-label member-filter-section-label--field"
                 title="Turn a tag off to hide people in that group"
               >
                 Diet
@@ -434,7 +518,7 @@ export default function MemberBrowse() {
             </div>
 
             <div className="member-filter-section">
-              <span id="browse-religion-label" className="member-filter-section-label">
+              <span id="browse-religion-label" className="member-filter-section-label member-filter-section-label--field">
                 Religion
               </span>
               <div className="member-filter-chip-group" role="group" aria-labelledby="browse-religion-label">
@@ -465,7 +549,14 @@ export default function MemberBrowse() {
           </div>
         </div>
 
-        <div className="member-browse-filters-footer">
+        <div
+          className={[
+            'member-browse-filters-footer',
+            isMobileFilters && filtersSheetOpen ? 'member-browse-filters-footer--sheet-sticky' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           <button
             type="button"
             className="member-filter-clear"
@@ -493,7 +584,7 @@ export default function MemberBrowse() {
               type="button"
               className="btn btn-primary"
               disabled={!pendingFilterChanges || !!draftFilterError}
-              onClick={applyFilters}
+              onClick={onApplyFiltersClick}
             >
               Apply filters
             </button>
@@ -600,12 +691,18 @@ export default function MemberBrowse() {
       <section className="member-browse-grid">
         <div className="member-browse-result-line">
           <span>
-            {filtered.length === 0
-              ? candidates.length === 0
-                ? 'No profiles to show yet.'
-                : 'No profiles match these filters.'
-              : `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`}
-            {filtered.length > 0 ? (
+            {refreshing ? (
+              <span role="status">Updating profiles…</span>
+            ) : filtered.length === 0 ? (
+              candidates.length === 0 ? (
+                'No profiles to show yet.'
+              ) : (
+                'No profiles match these filters.'
+              )
+            ) : (
+              `${filtered.length} profile${filtered.length === 1 ? '' : 's'} match your filters`
+            )}
+            {!refreshing && filtered.length > 0 ? (
               <span style={{ display: 'block', marginTop: 6, fontSize: 12, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
                 Photos are not shown on these cards. After you request someone, their picture appears when you open them under{' '}
                 <Link to="/dashboard/requests">My requests</Link>.
@@ -624,7 +721,15 @@ export default function MemberBrowse() {
           )}
         </div>
         <div className="member-browse-cards">
-          {filtered.length === 0 && (
+          {refreshing ? (
+            <>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <BrowseCardSkeleton key={`browse-sk-${i}`} />
+              ))}
+            </>
+          ) : (
+            <>
+              {filtered.length === 0 && (
             <div className="member-browse-empty" style={{ gridColumn: '1 / -1' }}>
               <p className="member-browse-empty-title">
                 {candidates.length === 0 ? 'Nothing to browse yet' : 'No matching profiles'}
@@ -660,7 +765,7 @@ export default function MemberBrowse() {
                 </>
               )}
             </div>
-          )}
+              )}
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
@@ -750,7 +855,9 @@ export default function MemberBrowse() {
                 </div>
               );
             })}
-          </div>
+            </>
+          )}
+        </div>
         </section>
 
       {tray.length > 0 && (
@@ -825,7 +932,21 @@ export default function MemberBrowse() {
                 {submitError.type === 'monthly_limit' && (
                   <><strong>Month limit reached.</strong> You can request up to {monthlyCap} distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (your current allowance). Counts reset on the 1st (UTC).</>
                 )}
-                {submitError.type === 'generic' && submitError.message}
+                {submitError.type === 'generic' && (
+                  <>
+                    <p style={{ margin: 0 }}>{submitError.message}</p>
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={traySubmitting || feedbackBlocking || trayMax === 0}
+                        onClick={() => void submitTray()}
+                      >
+                        Retry request
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

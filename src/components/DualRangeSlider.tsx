@@ -68,33 +68,35 @@ export function DualRangeSlider({
         <span className="member-dual-range__edge">{maxLabel}</span>
       </div>
       <div className="member-dual-range__sliders">
-        <div className="member-dual-range__track-bg" />
-        <div
-          className="member-dual-range__track-fill"
-          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-        />
-        <input
-          type="range"
-          className="member-dual-range__input member-dual-range__input--low"
-          style={{ zIndex: zMin }}
-          min={min}
-          max={max}
-          step={step}
-          value={low}
-          onChange={onLowChange}
-          aria-label={lowAriaLabel}
-        />
-        <input
-          type="range"
-          className="member-dual-range__input member-dual-range__input--high"
-          style={{ zIndex: zMax }}
-          min={min}
-          max={max}
-          step={step}
-          value={high}
-          onChange={onHighChange}
-          aria-label={highAriaLabel}
-        />
+        <div className="member-dual-range__track-wrap">
+          <div className="member-dual-range__track-bg" />
+          <div
+            className="member-dual-range__track-fill"
+            style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+          />
+          <input
+            type="range"
+            className="member-dual-range__input member-dual-range__input--low"
+            style={{ zIndex: zMin }}
+            min={min}
+            max={max}
+            step={step}
+            value={low}
+            onChange={onLowChange}
+            aria-label={lowAriaLabel}
+          />
+          <input
+            type="range"
+            className="member-dual-range__input member-dual-range__input--high"
+            style={{ zIndex: zMax }}
+            min={min}
+            max={max}
+            step={step}
+            value={high}
+            onChange={onHighChange}
+            aria-label={highAriaLabel}
+          />
+        </div>
       </div>
     </div>
   );
