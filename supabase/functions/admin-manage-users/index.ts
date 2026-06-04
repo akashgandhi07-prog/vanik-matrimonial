@@ -18,6 +18,52 @@ type QueryErrorLike = {
   hint?: string | null;
 };
 
+function memberDisplayLabel(
+  first: string | null | undefined,
+  surname: string | null | undefined,
+  referenceNumber: string | null | undefined
+): string {
+  const full = `${String(first ?? '').trim()} ${String(surname ?? '').trim()}`.trim();
+  const ref = String(referenceNumber ?? '').trim();
+  if (full && ref) return `${full} (${ref})`;
+  if (full) return full;
+  if (ref) return ref;
+  return '';
+}
+
+async function snapshotFeedbackNamesForProfiles(admin: { from: (table: string) => unknown }, profileIds: string[]) {
+  if (profileIds.length === 0) return;
+  const chunkSize = 200;
+  for (let i = 0; i < profileIds.length; i += chunkSize) {
+    const chunk = profileIds.slice(i, i + chunkSize);
+    const [{ data: profs }, { data: privs }] = await Promise.all([
+      admin.from('profiles').select('id, first_name, reference_number').in('id', chunk),
+      admin.from('member_private').select('profile_id, surname').in('profile_id', chunk),
+    ]);
+    const surnameBy = new Map(
+      (privs ?? []).map((r) => {
+        const row = r as { profile_id: string; surname: string | null };
+        return [row.profile_id, row.surname] as const;
+      })
+    );
+    for (const p of profs ?? []) {
+      const row = p as { id: string; first_name: string; reference_number: string | null };
+      const label = memberDisplayLabel(row.first_name, surnameBy.get(row.id) ?? null, row.reference_number);
+      if (!label) continue;
+      await admin
+        .from('feedback')
+        .update({ candidate_display_name: label })
+        .eq('candidate_id', row.id)
+        .is('candidate_display_name', null);
+      await admin
+        .from('feedback')
+        .update({ requester_display_name: label })
+        .eq('requester_id', row.id)
+        .is('requester_display_name', null);
+    }
+  }
+}
+
 function normalizeQueryError(label: string, err: unknown): string | null {
   if (!err) return null;
   if (typeof err !== 'object') {
@@ -365,6 +411,7 @@ Deno.serve(async (req) => {
     }
     const profiles = rows;
     const emails: Record<string, string> = {};
+    const surnamesByProfile: Record<string, string> = {};
     let pendingPreviews:
       | Record<string, { photo: string | null; photos: string[]; id_document: string | null; id_is_image: boolean }>
       | undefined;
@@ -376,13 +423,19 @@ Deno.serve(async (req) => {
         const idChunk = ids.slice(i, i + chunkSize);
         const { data: priv, error: mErr } = await admin
           .from('member_private')
-          .select('profile_id, email, id_document_url')
+          .select('profile_id, email, surname, id_document_url')
           .in('profile_id', idChunk);
         if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
         for (const r of priv ?? []) {
-          const row = r as { profile_id: string; email: string | null; id_document_url: string | null };
+          const row = r as {
+            profile_id: string;
+            email: string | null;
+            surname: string | null;
+            id_document_url: string | null;
+          };
           if (row.profile_id) {
             emails[row.profile_id] = row.email ?? '';
+            surnamesByProfile[row.profile_id] = (row.surname ?? '').trim();
             idDocByProfile.set(row.profile_id, row.id_document_url ?? null);
           }
         }
@@ -420,7 +473,17 @@ Deno.serve(async (req) => {
         }
       }
     }
-    return jsonResponse({ profiles, emails, pending_previews: pendingPreviews }, req);
+    const profilesWithNames = profiles.map((p) => {
+      const row = p as { id: string; first_name?: string | null };
+      const first = (row.first_name ?? '').trim();
+      const surname = surnamesByProfile[row.id] ?? '';
+      const full_name = `${first} ${surname}`.trim() || first;
+      return { ...p, full_name };
+    });
+    return jsonResponse(
+      { profiles: profilesWithNames, emails, pending_previews: pendingPreviews },
+      req
+    );
   }
 
   if (action === 'export_members_csv') {
@@ -631,6 +694,7 @@ Deno.serve(async (req) => {
 
       await admin.from('admin_actions').update({ target_profile_id: null }).in('target_profile_id', okProfileIds);
       await admin.from('email_log').update({ recipient_profile_id: null }).in('recipient_profile_id', okProfileIds);
+      await snapshotFeedbackNamesForProfiles(admin, okProfileIds);
       await admin.from('requests').update({ requester_id: null }).in('requester_id', okProfileIds);
       await admin.from('feedback').update({ candidate_id: null }).in('candidate_id', okProfileIds);
       await admin.from('feedback').update({ requester_id: null }).in('requester_id', okProfileIds);
@@ -959,29 +1023,78 @@ Deno.serve(async (req) => {
     const { data: fb, error: fErr } = await admin
       .from('feedback')
       .select(
-        'id, request_id, candidate_id, requester_id, made_contact, recommend_retain, notes, is_flagged, submitted_at'
+        'id, request_id, candidate_id, requester_id, candidate_display_name, requester_display_name, made_contact, recommend_retain, notes, is_flagged, submitted_at'
       )
       .order('submitted_at', { ascending: false });
     if (fErr) return jsonResponse({ error: fErr.message }, req, 500);
     const feedbackRows = fb ?? [];
-    const profileIds = new Set<string>();
-    for (const r of feedbackRows as { candidate_id: string; requester_id: string | null }[]) {
-      profileIds.add(r.candidate_id);
-      if (r.requester_id) profileIds.add(r.requester_id);
-    }
-    const profiles: Record<string, { id: string; first_name: string; reference_number: string | null }> = {};
-    if (profileIds.size > 0) {
-      const { data: profs, error: pErr } = await admin
-        .from('profiles')
-        .select('id, first_name, reference_number')
-        .in('id', [...profileIds]);
-      if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
-      for (const p of profs ?? []) {
-        const row = p as { id: string; first_name: string; reference_number: string | null };
-        profiles[row.id] = row;
+    const requestIds = [
+      ...new Set(
+        feedbackRows
+          .map((r) => (r as { request_id?: string | null }).request_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      ),
+    ];
+    const requestsById = new Map<string, { requester_id: string | null; candidate_ids: string[] | null }>();
+    const reqChunk = 400;
+    for (let i = 0; i < requestIds.length; i += reqChunk) {
+      const chunk = requestIds.slice(i, i + reqChunk);
+      const { data: reqs, error: rqErr } = await admin
+        .from('requests')
+        .select('id, requester_id, candidate_ids')
+        .in('id', chunk);
+      if (rqErr) return jsonResponse({ error: rqErr.message }, req, 500);
+      for (const r of reqs ?? []) {
+        const row = r as { id: string; requester_id: string | null; candidate_ids: string[] | null };
+        requestsById.set(row.id, row);
       }
     }
-    return jsonResponse({ feedback: feedbackRows, profiles }, req);
+
+    const profileIds = new Set<string>();
+    for (const r of feedbackRows as {
+      candidate_id: string | null;
+      requester_id: string | null;
+      request_id: string | null;
+    }[]) {
+      const req = r.request_id ? requestsById.get(r.request_id) : undefined;
+      const cands = req?.candidate_ids ?? [];
+      const resolvedCandidate =
+        r.candidate_id ?? (cands.length === 1 ? cands[0] : null);
+      const resolvedRequester = r.requester_id ?? req?.requester_id ?? null;
+      if (resolvedCandidate) profileIds.add(resolvedCandidate);
+      if (resolvedRequester) profileIds.add(resolvedRequester);
+    }
+
+    const profiles: Record<
+      string,
+      { id: string; first_name: string; reference_number: string | null; full_name: string }
+    > = {};
+    const surnameByProfile = new Map<string, string | null>();
+    const idList = [...profileIds];
+    const profChunk = 400;
+    for (let i = 0; i < idList.length; i += profChunk) {
+      const chunk = idList.slice(i, i + profChunk);
+      const [{ data: profs, error: pErr }, { data: privs, error: privErr }] = await Promise.all([
+        admin.from('profiles').select('id, first_name, reference_number').in('id', chunk),
+        admin.from('member_private').select('profile_id, surname').in('profile_id', chunk),
+      ]);
+      if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
+      if (privErr) return jsonResponse({ error: privErr.message }, req, 500);
+      for (const pr of privs ?? []) {
+        const row = pr as { profile_id: string; surname: string | null };
+        surnameByProfile.set(row.profile_id, row.surname);
+      }
+      for (const p of profs ?? []) {
+        const row = p as { id: string; first_name: string; reference_number: string | null };
+        const full_name = memberDisplayLabel(
+          row.first_name,
+          surnameByProfile.get(row.id) ?? null,
+          row.reference_number
+        );
+        profiles[row.id] = { ...row, full_name: full_name || row.first_name };
+      }
+    }
+    return jsonResponse({ feedback: feedbackRows, profiles, requests: Object.fromEntries(requestsById) }, req);
   }
 
   if (action === 'list_website_feedback') {

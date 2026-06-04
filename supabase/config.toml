@@ -5,7 +5,7 @@ project_id = "vanik-matrimonial"
 enabled = true
 
 [auth]
-# Used by `supabase config push` to the hosted project — keep canonical production Site URL here.
+# Used by `supabase config push` to the hosted project: keep canonical production Site URL here.
 # For `supabase start` locally you can temporarily override URLs in Dashboard or maintain a branch-specific file.
 site_url = "https://matrimonial.vanikcouncil.uk"
 jwt_issuer = "https://foltwnahxqlijbwtkhih.supabase.co/auth/v1"

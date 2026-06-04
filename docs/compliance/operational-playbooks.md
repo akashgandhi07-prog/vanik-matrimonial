@@ -1,4 +1,4 @@
-# Operational GDPR playbooks — Vanik Council
+# Operational GDPR playbooks - Vanik Council
 
 Council staff procedures. Adjust to your delegated roles and archiving policy.
 
@@ -6,7 +6,7 @@ Council staff procedures. Adjust to your delegated roles and archiving policy.
 
 ## 1. Subject access request (SAR)
 
-1. **Verify identity** using a proportional method (registered email confirmation, postal match, attendance at verified office session — council policy decides).
+1. **Verify identity** using a proportional method (registered email confirmation, postal match, attendance at verified office session - council policy decides).
 2. **Locate data**: admin member record (profile + `member_private`), photos, Stripe membership rows reachable via tooling, logs in `email_log`, `admin_actions`, contact requests (`requests`) and feedback tied to profile [CONFIRM completeness].
 3. **Collate**: provide a coherent package (typically within one month; up to three months allowed for complex cases with explanation).
 4. **Redact** third-party data that is not the requester’s unless fair to include.
@@ -16,17 +16,17 @@ Council staff procedures. Adjust to your delegated roles and archiving policy.
 
 ## 2. Erasure (“right to be forgotten”)
 
-**Not absolute** — balance against contract, legal obligation, and substantial public interest/safeguarding.
+**Not absolute** - balance against contract, legal obligation, and substantial public interest/safeguarding.
 
 1. Verify identity.
 2. Legal check: can we erase entirely or must we retain a minimal record (e.g. safeguarding incident)?
-3. **Technical erasure** (super admin): use permanent delete tooling that removes auth user, profile cascade, storage objects (photos, ID if any), and nulls foreign keys to logs where implemented — see `admin-manage-users` `delete_members_permanent`.
+3. **Technical erasure** (super admin): use permanent delete tooling that removes auth user, profile cascade, storage objects (photos, ID if any), and nulls foreign keys to logs where implemented - see `admin-manage-users` `delete_members_permanent`.
 4. **Processor follow-up**: confirm Stripe data handling per their retention (may require separate account closure request).
 5. Confirm erasure to the individual unless silence is required for security.
 
 ---
 
-## 3. Personal data breach — 72-hour ICO clock
+## 3. Personal data breach - 72-hour ICO clock
 
 1. **Contain** (revoke sessions, rotate keys if compromised, block affected admin accounts).
 2. **Assess risk** to individuals (confidentiality, integrity, availability); document facts and timeline.

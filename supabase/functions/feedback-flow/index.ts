@@ -133,10 +133,47 @@ Deno.serve(async (req) => {
     requesterId = myId;
   }
 
+  const [{ data: candProf }, { data: candPriv }, { data: reqProf }, { data: reqPriv }] = await Promise.all([
+    admin.from('profiles').select('first_name, reference_number').eq('id', candidateId).single(),
+    admin.from('member_private').select('surname').eq('profile_id', candidateId).maybeSingle(),
+    requesterId
+      ? admin.from('profiles').select('first_name, reference_number').eq('id', requesterId).single()
+      : Promise.resolve({ data: null }),
+    requesterId
+      ? admin.from('member_private').select('surname').eq('profile_id', requesterId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const label = (
+    first: string | null | undefined,
+    surname: string | null | undefined,
+    ref: string | null | undefined
+  ) => {
+    const full = `${String(first ?? '').trim()} ${String(surname ?? '').trim()}`.trim();
+    const r = String(ref ?? '').trim();
+    if (full && r) return `${full} (${r})`;
+    return full || r || '';
+  };
+
+  const candidate_display_name = label(
+    candProf?.first_name,
+    (candPriv as { surname?: string | null } | null)?.surname,
+    candProf?.reference_number
+  );
+  const requester_display_name = requesterId
+    ? label(
+        reqProf?.first_name,
+        (reqPriv as { surname?: string | null } | null)?.surname,
+        reqProf?.reference_number
+      )
+    : null;
+
   const { error: insErr } = await admin.from('feedback').insert({
     request_id: requestId,
     candidate_id: candidateId,
     requester_id: requesterId,
+    candidate_display_name: candidate_display_name || null,
+    requester_display_name: requester_display_name || null,
     made_contact,
     recommend_retain,
     notes: notes || null,

@@ -12,6 +12,7 @@ type Profile = {
   id: string;
   reference_number: string | null;
   first_name: string;
+  full_name?: string;
   gender: string;
   status: string;
   community: string | null;
@@ -60,6 +61,12 @@ function daysWaiting(createdAt: string | undefined): number | null {
   const t = new Date(createdAt).getTime();
   if (Number.isNaN(t)) return null;
   return Math.max(0, Math.floor((Date.now() - t) / 864e5));
+}
+
+function memberDisplayName(m: Pick<Profile, 'first_name' | 'full_name'>): string {
+  const full = m.full_name?.trim();
+  if (full) return full;
+  return m.first_name.trim();
 }
 
 function filterLabel(f: (typeof FILTERS)[number]): string {
@@ -245,7 +252,7 @@ export default function AdminMembers() {
       const q = search.toLowerCase();
       return (
         (m.reference_number?.toLowerCase().includes(q) ?? false) ||
-        m.first_name.toLowerCase().includes(q) ||
+        memberDisplayName(m).toLowerCase().includes(q) ||
         (emailByProfileId[m.id]?.toLowerCase().includes(q) ?? false)
       );
     });
@@ -545,7 +552,7 @@ export default function AdminMembers() {
                         type="checkbox"
                         checked={!!selectedIds[m.id]}
                         onChange={(e) => setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))}
-                        aria-label={`Select ${m.first_name}`}
+                        aria-label={`Select ${memberDisplayName(m)}`}
                       />
                     </td>
                     {filter === 'pending' && (
@@ -592,7 +599,7 @@ export default function AdminMembers() {
                     )}
                     <td style={{ padding: 8 }}>
                       <span
-                        title={m.first_name}
+                        title={memberDisplayName(m)}
                         style={{
                           display: 'inline-block',
                           maxWidth: '100%',
@@ -602,7 +609,7 @@ export default function AdminMembers() {
                           verticalAlign: 'bottom',
                         }}
                       >
-                        {m.first_name}
+                        {memberDisplayName(m)}
                       </span>
                     </td>
                     <td style={{ padding: 8, maxWidth: 280 }}>

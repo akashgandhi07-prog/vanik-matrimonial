@@ -9,7 +9,7 @@
  *
  * Usage: node scripts/seed_demo_accounts.mjs
  * Env:   SEED_DEMO_PASSWORD (default: VanikDemo2026!)
- *       SEED_DEMO_PHOTOS_ONLY=1  — only uploads profile photos for existing vanik-demo-* accounts (pairs with DB migration seed).
+ *       SEED_DEMO_PHOTOS_ONLY=1  - only uploads profile photos for existing vanik-demo-* accounts (pairs with DB migration seed).
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -186,7 +186,7 @@ async function seedPhotosOnlyForEmail(email, gender, idx) {
   const { data: mp, error } = await admin.from('member_private').select('profile_id').eq('email', email).maybeSingle();
   if (error) throw error;
   if (!mp?.profile_id) {
-    console.log(`Photos skip — no member_private row for ${email}`);
+    console.log(`Photos skip - no member_private row for ${email}`);
     return;
   }
   const pid = mp.profile_id;
@@ -210,7 +210,7 @@ async function seedPhotosOnlyForEmail(email, gender, idx) {
   if (pErr) throw pErr;
   const authUserId = viewer?.auth_user_id;
   if (!authUserId) {
-    console.warn(`Photos skip — no auth_user_id for profile ${pid}`);
+    console.warn(`Photos skip - no auth_user_id for profile ${pid}`);
     return;
   }
   await upsertDemoProfilePhotos(email, pid, authUserId, gender, idx);

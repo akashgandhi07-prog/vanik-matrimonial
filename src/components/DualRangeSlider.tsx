@@ -62,7 +62,7 @@ export function DualRangeSlider({
         <span className="member-dual-range__edge">{minLabel}</span>
         <span className="member-dual-range__range-label">
           <span className="member-dual-range__value">{formatValue(low)}</span>
-          <span className="member-dual-range__sep">–</span>
+          <span className="member-dual-range__sep">-</span>
           <span className="member-dual-range__value">{formatValue(high)}</span>
         </span>
         <span className="member-dual-range__edge">{maxLabel}</span>

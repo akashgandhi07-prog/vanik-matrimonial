@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { invokeFunction } from '../../lib/supabase';
 
 type FeedbackRow = {
   id: string;
   request_id: string;
-  candidate_id: string;
+  candidate_id: string | null;
   requester_id: string | null;
+  candidate_display_name: string | null;
+  requester_display_name: string | null;
   made_contact: string | null;
   recommend_retain: string | null;
   notes: string | null;
@@ -14,15 +17,22 @@ type FeedbackRow = {
   submitted_at: string;
 };
 
+type RequestSummary = {
+  requester_id: string | null;
+  candidate_ids: string[] | null;
+};
+
 type ProfileSummary = {
   id: string;
   first_name: string;
   reference_number: string | null;
+  full_name?: string;
 };
 
 type GroupedFeedback = {
   candidate: ProfileSummary;
   rows: FeedbackRow[];
+  profileId: string | null;
 };
 
 type WebsiteFeedbackRow = {
@@ -51,6 +61,53 @@ function fmtDateTimeUtc(iso: string): string {
   } catch {
     return fmtDate(iso);
   }
+}
+
+function resolveCandidateId(row: FeedbackRow, requests: Record<string, RequestSummary>): string | null {
+  if (row.candidate_id) return row.candidate_id;
+  const req = row.request_id ? requests[row.request_id] : undefined;
+  const ids = req?.candidate_ids ?? [];
+  return ids.length === 1 ? ids[0] : null;
+}
+
+function resolveRequesterId(row: FeedbackRow, requests: Record<string, RequestSummary>): string | null {
+  if (row.requester_id) return row.requester_id;
+  const req = row.request_id ? requests[row.request_id] : undefined;
+  return req?.requester_id ?? null;
+}
+
+function memberLabel(
+  profileId: string | null,
+  displayName: string | null | undefined,
+  profiles: Record<string, ProfileSummary>
+): { label: string; profileId: string | null } {
+  if (profileId && profiles[profileId]) {
+    const p = profiles[profileId];
+    const label =
+      p.full_name?.trim() ||
+      `${p.first_name}${p.reference_number ? ` (${p.reference_number})` : ''}`.trim();
+    if (label) return { label, profileId };
+  }
+  const snap = displayName?.trim();
+  if (snap) return { label: snap, profileId };
+  return { label: 'Unknown member', profileId: null };
+}
+
+function MemberProfileLink({
+  profileId,
+  label,
+}: {
+  profileId: string | null;
+  label: string;
+}) {
+  if (profileId) {
+    return (
+      <Link to={`/admin/members/${profileId}`} style={{ fontWeight: 600 }}>
+        {label}
+      </Link>
+    );
+  }
+  return <span style={{ fontWeight: 600 }}>{label}</span>;
 }
 
 function truncate(s: string | null, len: number): string {
@@ -93,6 +150,7 @@ export default function AdminFeedback() {
   /* --- Introduction feedback --- */
   const [feedback, setFeedback] = useState<FeedbackRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ProfileSummary>>({});
+  const [requests, setRequests] = useState<Record<string, RequestSummary>>({});
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
   const [introLoading, setIntroLoading] = useState(false);
   const [introError, setIntroError] = useState<string | null>(null);
@@ -104,9 +162,11 @@ export default function AdminFeedback() {
       const res = (await invokeFunction('admin-manage-users', { action: 'list_feedback' })) as {
         feedback?: FeedbackRow[];
         profiles?: Record<string, ProfileSummary>;
+        requests?: Record<string, RequestSummary>;
       };
       setFeedback((res.feedback ?? []) as FeedbackRow[]);
       setProfiles(res.profiles ?? {});
+      setRequests(res.requests ?? {});
     } catch (ex) {
       setIntroError(ex instanceof Error ? ex.message : 'Failed to load feedback');
     } finally {
@@ -121,26 +181,47 @@ export default function AdminFeedback() {
   const grouped = useMemo<GroupedFeedback[]>(() => {
     const map = new Map<string, FeedbackRow[]>();
     for (const row of feedback) {
-      const list = map.get(row.candidate_id) ?? [];
+      const resolvedId = resolveCandidateId(row, requests);
+      const groupKey =
+        resolvedId ??
+        (row.candidate_display_name?.trim()
+          ? `name:${row.candidate_display_name.trim()}`
+          : '__unknown__');
+      const list = map.get(groupKey) ?? [];
       list.push(row);
-      map.set(row.candidate_id, list);
+      map.set(groupKey, list);
     }
 
     const result: GroupedFeedback[] = [];
-    for (const [candidateId, rows] of map.entries()) {
+    for (const [groupKey, rows] of map.entries()) {
       const visibleRows = showFlaggedOnly
         ? rows.filter((r) => r.is_flagged || r.recommend_retain === 'no')
         : rows;
       if (visibleRows.length === 0) continue;
-      const candidate = profiles[candidateId] ?? {
-        id: candidateId,
-        first_name: candidateId,
-        reference_number: null,
-      };
-      result.push({ candidate, rows: visibleRows });
+      const sample = visibleRows[0];
+      const resolvedId = resolveCandidateId(sample, requests);
+      const { label, profileId } = memberLabel(
+        resolvedId,
+        sample.candidate_display_name,
+        profiles
+      );
+      const candidate: ProfileSummary = profileId
+        ? (profiles[profileId] ?? {
+            id: profileId,
+            first_name: label,
+            reference_number: null,
+            full_name: label,
+          })
+        : {
+            id: groupKey,
+            first_name: label,
+            reference_number: null,
+            full_name: label,
+          };
+      result.push({ candidate, rows: visibleRows, profileId });
     }
-    return result;
-  }, [feedback, profiles, showFlaggedOnly]);
+    return result.sort((a, b) => a.candidate.first_name.localeCompare(b.candidate.first_name));
+  }, [feedback, profiles, requests, showFlaggedOnly]);
 
   /* --- Website / app feedback --- */
   const [websiteRows, setWebsiteRows] = useState<WebsiteFeedbackRow[]>([]);
@@ -228,7 +309,11 @@ export default function AdminFeedback() {
             <p style={{ color: '#6b7280' }}>No introduction feedback entries found.</p>
           )}
 
-          {grouped.map(({ candidate, rows }) => (
+          {grouped.map(({ candidate, rows, profileId }) => {
+            const candidateLabel =
+              candidate.full_name?.trim() ||
+              `${candidate.first_name}${candidate.reference_number ? ` (${candidate.reference_number})` : ''}`.trim();
+            return (
             <div key={candidate.id} className="card" style={{ marginBottom: 24 }}>
               <h3 style={{ marginTop: 0, marginBottom: 12, fontSize: '1rem' }}>
                 <span
@@ -244,11 +329,23 @@ export default function AdminFeedback() {
                 >
                   Candidate (feedback subject)
                 </span>
-                {candidate.first_name}
-                {candidate.reference_number ? ` (${candidate.reference_number})` : ''}
+                <MemberProfileLink profileId={profileId} label={candidateLabel || 'Unknown candidate'} />
                 <span style={{ fontSize: 13, fontWeight: 400, color: '#6b7280', marginLeft: 8 }}>
                   {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
                 </span>
+                {!profileId && (
+                  <span
+                    style={{
+                      display: 'block',
+                      marginTop: 6,
+                      fontSize: 12,
+                      fontWeight: 400,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    Profile removed; name kept for audit only.
+                  </span>
+                )}
               </h3>
 
               <div className="table-scroll">
@@ -266,16 +363,12 @@ export default function AdminFeedback() {
                   <tbody>
                     {rows.map((row) => {
                       const highlight = row.is_flagged || row.recommend_retain === 'no';
-                      const from = row.requester_id
-                        ? profiles[row.requester_id] ?? {
-                            id: row.requester_id,
-                            first_name: row.requester_id,
-                            reference_number: null,
-                          }
-                        : null;
-                      const fromLabel = from
-                        ? `${from.first_name}${from.reference_number ? ` (${from.reference_number})` : ''}`
-                        : '-';
+                      const requesterProfileId = resolveRequesterId(row, requests);
+                      const { label: fromLabel, profileId: fromProfileId } = memberLabel(
+                        requesterProfileId,
+                        row.requester_display_name,
+                        profiles
+                      );
                       return (
                         <tr
                           key={row.id}
@@ -287,7 +380,9 @@ export default function AdminFeedback() {
                           <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
                             {fmtDate(row.submitted_at)}
                           </td>
-                          <td style={{ padding: '6px 8px' }}>{fromLabel}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <MemberProfileLink profileId={fromProfileId} label={fromLabel} />
+                          </td>
                           <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                           <td style={{ padding: '6px 8px' }}>
                             <span
@@ -317,7 +412,8 @@ export default function AdminFeedback() {
                 </table>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <div role="tabpanel">

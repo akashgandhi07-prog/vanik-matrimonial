@@ -1,6 +1,6 @@
-# DPIA screening — matrimonial register
+# DPIA screening - matrimonial register
 
-UK GDPR Articles 35–36 expect a Data Protection Impact Assessment when processing is likely to result in **high risk** to rights and freedoms.
+UK GDPR Articles 35-36 expect a Data Protection Impact Assessment when processing is likely to result in **high risk** to rights and freedoms.
 
 ## When to escalate to full DPIA
 
@@ -29,5 +29,5 @@ Row-level visibility rules (`profiles` SELECT policies); age gate; transactional
 
 Record one of:
 
-- **DPIA not required** — reasons: [fill]
-- **DPIA initiated** — reference: [fill], owner: [fill], ICO consultation if high residual risk without mitigation
+- **DPIA not required** - reasons: [fill]
+- **DPIA initiated** - reference: [fill], owner: [fill], ICO consultation if high residual risk without mitigation

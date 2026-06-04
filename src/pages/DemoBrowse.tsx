@@ -222,10 +222,10 @@ export default function DemoBrowse() {
     <PublicLayout>
       <div className="layout-max">
         <div style={{ marginBottom: 14 }}>
-          <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Browse Profiles</h1>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Demo browse profiles</h1>
           <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>
-            Browse the profiles currently on the register. Photos and contact details are only shared after you become a
-            member and make a request. Use the filters below to narrow your search.
+            Preview how member browse works. Use the filters below to narrow the list. Register and get approved to see
+            full profiles, photos, and contact details.
           </p>
         </div>
 
@@ -539,6 +539,11 @@ export default function DemoBrowse() {
               )}
             </span>
           </div>
+
+          <p className="demo-browse-disclaimer" role="note">
+            These are redacted example profiles to give you an idea of the different people on the register. More
+            information is available once you register and your application is approved.
+          </p>
 
           {error && (
             <div className="member-browse-empty">

@@ -335,7 +335,51 @@ textarea:focus {
   line-height: 1.2;
 }
 
+.vanik-council-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vanik-council-logo__mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.vanik-council-logo__img {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: min(200px, 42vw);
+  object-fit: contain;
+}
+
+.vanik-council-logo__register {
+  font-weight: 700;
+  font-size: 1.0625rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+@media (max-width: 520px) {
+  .vanik-council-logo__register {
+    font-size: 0.9rem;
+  }
+
+  .vanik-council-logo__img {
+    height: 32px;
+  }
+}
+
 .public-logo:hover {
+  color: var(--color-primary);
+}
+
+.public-logo:hover .vanik-council-logo__register {
   color: var(--color-primary);
 }
 
@@ -1119,7 +1163,7 @@ textarea:focus-visible {
   touch-action: pan-y;
 }
 
-/* Symmetric row: min | current range | max — same width logic for age and height */
+/* Symmetric row: min | current range | max: same width logic for age and height */
 .member-dual-range__meta {
   display: grid;
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr) minmax(0, max-content);
@@ -1951,6 +1995,17 @@ textarea:focus-visible {
   font-weight: 500;
 }
 
+.demo-browse-disclaimer {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
 @media (max-width: 520px) {
   .member-browse-card-actions {
     flex-direction: column;
@@ -2757,8 +2812,31 @@ textarea:focus-visible {
   flex-shrink: 0;
 }
 
+.admin-sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
 .admin-sidebar-title {
   display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.admin-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
 }
 
 .admin-mobile-title {
@@ -2823,7 +2901,7 @@ textarea:focus-visible {
   }
 }
 
-/* Landing — primary vs secondary CTAs */
+/* Landing: primary vs secondary CTAs */
 .landing-actions--primary {
   margin-top: 28px;
 }
@@ -2911,7 +2989,7 @@ textarea:focus-visible {
   }
 }
 
-/* Mobile browse filters — compact trigger + bottom sheet */
+/* Mobile browse filters: compact trigger + bottom sheet */
 .member-filters-mobile-trigger-bar {
   display: none;
 }
@@ -3037,7 +3115,7 @@ textarea:focus-visible {
   }
 }
 
-/* Narrow header — menu drawer */
+/* Narrow header: menu drawer */
 .public-nav-menu-btn {
   display: inline-flex;
   align-items: center;

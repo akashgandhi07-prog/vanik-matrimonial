@@ -1,9 +1,9 @@
 -- Twenty demo matrimonial accounts (auth + profiles + member_private).
--- Mirrors scripts/seed_demo_accounts.mjs (deterministic UUIDs — RFC v5 SHA-1 over emails; namespace 886313e1-…628fb).
+-- Mirrors scripts/seed_demo_accounts.mjs (deterministic UUIDs - RFC v5 SHA-1 over emails; namespace 886313e1-…628fb).
 --
 -- Demo password (email auth): VanikDemo2026!
 --
--- Bucket photos must be seeded separately — after migrate/push run once:
+-- Bucket photos must be seeded separately - after migrate/push run once:
 --   SEED_DEMO_PHOTOS_ONLY=1 npm run seed:demo
 --
 -- Idempotent: skips all SQL below if auth user vanik-demo-male-01@example.com already exists.

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSiteSession } from './SessionContext';
+import { VanikCouncilLogo } from './VanikCouncilLogo';
 
 export function SiteHeader() {
   const { user, greetingName, isAdmin, ready, refresh } = useSiteSession();
@@ -101,7 +102,7 @@ export function SiteHeader() {
     <header className="public-header">
       <div className="layout-max layout-max--header public-header-inner">
         <Link to="/" className="public-logo">
-          Vanik Matrimonial Register
+          <VanikCouncilLogo showRegisterName />
         </Link>
         {narrowNav ? (
           <>

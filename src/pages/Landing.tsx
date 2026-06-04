@@ -52,10 +52,10 @@ export default function Landing() {
 
               <div className="landing-actions landing-actions--primary">
                 <Link to="/demo" className="btn btn-secondary landing-cta-demo">
-                  Try demo browse
+                  Demo browse profiles
                 </Link>
                 <Link to="/register" className="btn btn-primary landing-cta-register">
-                  Register — £10/year
+                  Register (£10/year)
                 </Link>
               </div>
               <p className="landing-cta-note">
