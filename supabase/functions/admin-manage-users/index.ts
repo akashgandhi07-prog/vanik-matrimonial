@@ -876,7 +876,11 @@ Deno.serve(async (req) => {
         .eq('status', 'active')
         .lte('membership_expires_at', monthEnd.toISOString())
         .gte('membership_expires_at', nowIso),
-      admin.from('feedback').select('id', { count: 'exact', head: true }).eq('is_flagged', true),
+      admin
+        .from('feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_flagged', true)
+        .is('archived_at', null),
       admin
         .from('profiles')
         .select('id', { count: 'exact', head: true })
@@ -1019,13 +1023,64 @@ Deno.serve(async (req) => {
     return jsonResponse({ requests: rows, names }, req);
   }
 
+  if (action === 'manage_feedback') {
+    const kind = body.kind === 'website' ? 'website' : 'introduction';
+    const op =
+      body.op === 'archive' || body.op === 'delete' || body.op === 'restore' ? body.op : null;
+    if (!op) {
+      return jsonResponse({ error: 'op must be archive, delete, or restore' }, req, 400);
+    }
+    const rawIds = Array.isArray(body.ids)
+      ? body.ids.filter((x): x is string => typeof x === 'string')
+      : [];
+    const ids = [...new Set(rawIds.map((x) => x.trim()).filter(Boolean))];
+    if (ids.length === 0 || ids.length > 100) {
+      return jsonResponse({ error: 'ids required: 1-100 unique UUIDs' }, req, 400);
+    }
+    const table = kind === 'website' ? 'website_feedback' : 'feedback';
+    const now = new Date().toISOString();
+
+    if (op === 'delete') {
+      const { error } = await admin.from(table).delete().in('id', ids);
+      if (error) return jsonResponse({ error: error.message }, req, 500);
+    } else if (op === 'archive') {
+      const { error } = await admin
+        .from(table)
+        .update({ archived_at: now })
+        .in('id', ids)
+        .is('archived_at', null);
+      if (error) return jsonResponse({ error: error.message }, req, 500);
+    } else {
+      const { error } = await admin
+        .from(table)
+        .update({ archived_at: null })
+        .in('id', ids)
+        .not('archived_at', 'is', null);
+      if (error) return jsonResponse({ error: error.message }, req, 500);
+    }
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: null,
+      action_type: `feedback_${op}`,
+      notes: `kind=${kind} count=${ids.length}`.slice(0, 30000),
+    });
+
+    return jsonResponse({ ok: true, affected: ids.length }, req);
+  }
+
   if (action === 'list_feedback') {
-    const { data: fb, error: fErr } = await admin
+    const includeArchived = body.include_archived === true;
+    let fbQuery = admin
       .from('feedback')
       .select(
-        'id, request_id, candidate_id, requester_id, candidate_display_name, requester_display_name, made_contact, recommend_retain, notes, is_flagged, submitted_at'
+        'id, request_id, candidate_id, requester_id, candidate_display_name, requester_display_name, made_contact, recommend_retain, notes, is_flagged, submitted_at, archived_at'
       )
       .order('submitted_at', { ascending: false });
+    if (!includeArchived) {
+      fbQuery = fbQuery.is('archived_at', null);
+    }
+    const { data: fb, error: fErr } = await fbQuery;
     if (fErr) return jsonResponse({ error: fErr.message }, req, 500);
     const feedbackRows = fb ?? [];
     const requestIds = [
@@ -1098,12 +1153,17 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'list_website_feedback') {
-    const { data: rows, error: wErr } = await admin
+    const includeArchived = body.include_archived === true;
+    let wQuery = admin
       .from('website_feedback')
       .select(
-        'id, profile_id, reporter_email, how_improve, things_good, things_bad, suggestions_future, submitted_at'
+        'id, profile_id, reporter_email, how_improve, things_good, things_bad, suggestions_future, submitted_at, archived_at'
       )
       .order('submitted_at', { ascending: false });
+    if (!includeArchived) {
+      wQuery = wQuery.is('archived_at', null);
+    }
+    const { data: rows, error: wErr } = await wQuery;
     if (wErr) return jsonResponse({ error: wErr.message }, req, 500);
     const list = rows ?? [];
     const pidSet = new Set<string>();

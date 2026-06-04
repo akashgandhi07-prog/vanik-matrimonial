@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
   const { count: flagged } = await admin
     .from('feedback')
     .select('id', { count: 'exact', head: true })
-    .eq('is_flagged', true);
+    .eq('is_flagged', true)
+    .is('archived_at', null);
 
   const metrics = {
     pending: pending ?? 0,
