@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { VanikCouncilLogo } from '../../components/VanikCouncilLogo';
 import { MfaEnroll } from './MfaEnroll';
 import { useAdminGuard } from './useAdminGuard';
 
@@ -39,10 +38,7 @@ export default function AdminLayout() {
     <div className="admin-layout">
       {!wide && (
         <div className="admin-mobile-bar">
-          <div className="admin-brand">
-            <VanikCouncilLogo href="https://www.vanikcouncil.uk" />
-            <strong className="admin-mobile-title">Admin</strong>
-          </div>
+          <strong className="admin-mobile-title">Admin</strong>
           <div className="admin-mobile-nav">
             <NavLink to="/admin" end className={navCls}>
               Overview
@@ -99,10 +95,7 @@ export default function AdminLayout() {
         </div>
       )}
       {wide && <aside id="admin-sidebar" className="admin-sidebar">
-        <div className="admin-sidebar-brand">
-          <VanikCouncilLogo href="https://www.vanikcouncil.uk" />
-          <strong className="admin-sidebar-title">Admin</strong>
-        </div>
+        <strong className="admin-sidebar-title">Admin</strong>
         <NavLink to="/admin" end className={navCls}>
           Overview
         </NavLink>
