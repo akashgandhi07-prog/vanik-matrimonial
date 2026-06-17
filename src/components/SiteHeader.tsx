@@ -77,22 +77,7 @@ export function SiteHeader() {
   );
 
   const feedbackLink = (
-    <Link to="/app-feedback" className="public-nav-link public-nav-link--icon" onClick={() => setMenuOpen(false)}>
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={18}
-        height={18}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <circle cx={12} cy={12} r={9} />
-        <path d="M9 9h.01M15 9h.01M8 14s1.5 2 4 2 4-2 4-2" />
-      </svg>
+    <Link to="/app-feedback" className="public-nav-link" onClick={() => setMenuOpen(false)}>
       Feedback
     </Link>
   );
@@ -101,7 +86,20 @@ export function SiteHeader() {
     <header className="public-header">
       <div className="layout-max layout-max--header public-header-inner">
         <Link to="/" className="public-logo">
-          Vanik Matrimonial Register
+          <span className="public-logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="8" fill="#7b2e3b" />
+              <path
+                d="M9.5 9.5 16 22.5 22.5 9.5"
+                fill="none"
+                stroke="#c79433"
+                strokeWidth="3.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <span>Vanik Matrimonial Register</span>
         </Link>
         {narrowNav ? (
           <>

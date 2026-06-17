@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BrowseCardSkeleton } from '../components/BrowseCardSkeleton';
+import ProfileCard from '../components/ProfileCard';
 import { PublicLayout } from '../components/Layout';
 import { DualRangeSlider } from '../components/DualRangeSlider';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -230,39 +231,16 @@ export default function DemoBrowse() {
         </div>
 
         {/* CTA banner */}
-        <div
-          style={{
-            marginBottom: 24,
-            padding: '16px 20px',
-            borderRadius: 12,
-            background: 'var(--color-primary, #7c3aed)',
-            color: '#fff',
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            gap: 16,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <strong style={{ fontSize: 16 }}>Ready to get in touch?</strong>
-            <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.9 }}>
-              Membership is £10. Once your application is approved you can request contact details directly from this register.
+        <div className="demo-cta">
+          <div className="demo-cta-text">
+            <strong>Ready to get in touch?</strong>
+            <p>
+              Membership is £10. Once your application is approved you can request
+              contact details directly from this register.
             </p>
           </div>
-          <Link
-            to="/register"
-            className="btn"
-            style={{
-              background: '#fff',
-              color: 'var(--color-primary, #7c3aed)',
-              fontWeight: 700,
-              padding: '10px 20px',
-              borderRadius: 8,
-              whiteSpace: 'nowrap',
-              textDecoration: 'none',
-            }}
-          >
-            Apply - £10
+          <Link to="/register" className="btn btn-primary demo-cta-btn">
+            Apply for £10
           </Link>
         </div>
 
@@ -563,26 +541,17 @@ export default function DemoBrowse() {
           {!loading && !error && (
             <div className="member-browse-cards">
               {filtered.map((c) => (
-                <article key={c.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 14px 14px' }}>
-                    <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {[c.gender, c.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile'}
-                    </h3>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                      {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
-                    </p>
-                    {c.place_of_birth ? (
-                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Location</span>
-                        {' · '}
-                        {c.place_of_birth}
-                      </p>
-                    ) : null}
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      {[c.religion, c.nationality].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                </article>
+                <ProfileCard
+                  key={c.id}
+                  age={c.age}
+                  gender={c.gender}
+                  profession={c.job_title}
+                  height={c.height_cm != null ? cmToFeetInches(c.height_cm) : null}
+                  diet={c.diet}
+                  location={c.place_of_birth}
+                  religion={c.religion}
+                  nationality={c.nationality}
+                />
               ))}
             </div>
           )}

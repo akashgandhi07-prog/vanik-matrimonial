@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BrowseCardSkeleton } from '../components/BrowseCardSkeleton';
+import ProfileCard from '../components/ProfileCard';
 import { DualRangeSlider } from '../components/DualRangeSlider';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ProfileModal } from '../member/ProfileModal';
@@ -769,35 +770,35 @@ export default function MemberBrowse() {
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
+              const note = blocked ? (
+                'Opens their card in My requests (photo and contact details).'
+              ) : feedbackBlocking ? (
+                <span className="profile-card-note--warn">
+                  Request unavailable until pending feedback is submitted.
+                </span>
+              ) : trayMax === 0 ? (
+                <span className="profile-card-note--warn">
+                  Request unavailable while weekly/monthly quota is full.
+                </span>
+              ) : null;
               return (
-                <div
+                <ProfileCard
                   key={c.id}
-                  className="card"
-                  style={{ padding: 0, position: 'relative', cursor: 'pointer', overflow: 'hidden' }}
-                  onClick={() => setSelectedProfile(c)}
-                >
-                  <div style={{ padding: '12px 14px 14px' }}>
-                    <h3 style={{ margin: '0 0 4px', fontSize: 17 }}>
-                      {[c.gender, c.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile'}
-                    </h3>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                      {[c.job_title, cmToFeetInches(c.height_cm), c.diet].filter(Boolean).join(' · ')}
-                    </p>
-                    {c.place_of_birth ? (
-                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--color-text)' }}>Location</span>
-                        {' · '}
-                        {c.place_of_birth}
-                      </p>
-                    ) : null}
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                      {[c.religion, c.nationality].filter(Boolean).join(' · ')}
-                    </p>
-                    <div className="member-browse-card-actions" style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                  age={c.age}
+                  gender={c.gender}
+                  profession={c.job_title}
+                  height={c.height_cm != null ? cmToFeetInches(c.height_cm) : null}
+                  diet={c.diet}
+                  location={c.place_of_birth}
+                  religion={c.religion}
+                  nationality={c.nationality}
+                  onOpen={() => setSelectedProfile(c)}
+                  note={note}
+                  actions={
+                    <>
                       <button
                         type="button"
                         className="btn btn-secondary"
-                        style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
                         onClick={(e) => { e.stopPropagation(); void toggleBookmark(c.id); }}
                       >
                         {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
@@ -807,16 +808,7 @@ export default function MemberBrowse() {
                           to="/dashboard/requests"
                           state={{ focusProfileId: c.id }}
                           className="btn btn-primary"
-                          style={{
-                            flex: 1,
-                            padding: '7px 10px',
-                            fontSize: 13,
-                            textAlign: 'center',
-                            textDecoration: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                          style={{ textDecoration: 'none' }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           Already requested
@@ -825,34 +817,15 @@ export default function MemberBrowse() {
                         <button
                           type="button"
                           className="btn btn-primary"
-                          style={{ flex: 1, padding: '7px 10px', fontSize: 13 }}
                           disabled={!inTray && (atTrayCapacity || feedbackBlocking)}
                           onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
                         >
                           {inTray ? '✕ Remove' : '+ Request'}
                         </button>
                       )}
-                    </div>
-                    {blocked && (
-                      <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        Opens their card in My requests (photo and contact details).
-                      </p>
-                    )}
-                    {!blocked && (feedbackBlocking || trayMax === 0) && (
-                      <p
-                        style={{
-                          margin: '8px 0 0',
-                          fontSize: 12,
-                          color: 'var(--color-warning)',
-                        }}
-                      >
-                        {feedbackBlocking
-                          ? 'Request unavailable until pending feedback is submitted.'
-                          : 'Request unavailable while weekly/monthly quota is full.'}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                    </>
+                  }
+                />
               );
             })}
             </>
