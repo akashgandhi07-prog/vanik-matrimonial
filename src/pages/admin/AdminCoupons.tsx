@@ -31,12 +31,29 @@ function randomCode(len = 12) {
   return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function couponStatus(c: Coupon): { label: string; color: string } {
+  if (!c.is_active) return { label: 'Paused', color: 'var(--color-danger)' };
+  if (c.expires_at && new Date(c.expires_at) < new Date()) return { label: 'Expired', color: '#6b7280' };
+  if (c.max_uses != null && c.use_count >= c.max_uses) return { label: 'Used up', color: '#6b7280' };
+  return { label: 'Active', color: 'var(--color-success)' };
+}
+
 export default function AdminCoupons() {
   const [supportOnly, setSupportOnly] = useState(false);
   const [rows, setRows] = useState<Coupon[]>([]);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
   const [usageFilter, setUsageFilter] = useState<string>('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [editExpiry, setEditExpiry] = useState('');
   const [form, setForm] = useState({
     code: '',
     type: 'free' as 'free' | 'discount_percent',
@@ -106,13 +123,27 @@ export default function AdminCoupons() {
     }
   }
 
-  async function revoke(code: string) {
-    if (!confirm(`Revoke coupon ${code}?`)) return;
+  async function setActive(code: string, active: boolean) {
+    if (!active && !confirm(`Pause coupon ${code}? It cannot be used until resumed.`)) return;
     try {
-      await invokeFunction('admin-manage-users', { action: 'revoke_coupon', code });
+      await invokeFunction('admin-manage-users', { action: 'update_coupon', code, is_active: active });
       void load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to revoke');
+      alert(e instanceof Error ? e.message : `Failed to ${active ? 'resume' : 'pause'} coupon`);
+    }
+  }
+
+  async function saveExpiry(code: string) {
+    try {
+      await invokeFunction('admin-manage-users', {
+        action: 'update_coupon',
+        code,
+        expires_at: editExpiry ? new Date(editExpiry).toISOString() : null,
+      });
+      setEditingCode(null);
+      void load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to update expiry');
     }
   }
 
@@ -208,42 +239,90 @@ export default function AdminCoupons() {
               <th style={{ textAlign: 'left', padding: 8 }}>Type</th>
               <th style={{ textAlign: 'left', padding: 8 }}>Uses</th>
               <th style={{ textAlign: 'left', padding: 8 }}>Expires</th>
-              <th style={{ textAlign: 'left', padding: 8 }}>Active</th>
+              <th style={{ textAlign: 'left', padding: 8 }}>Status</th>
               <th style={{ textAlign: 'left', padding: 8 }} />
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
-              <tr key={c.code} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <td style={{ padding: 8 }}>
-                  <strong>{c.code}</strong>
-                </td>
-                <td style={{ padding: 8 }}>
-                  {c.type}
-                  {c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}
-                </td>
-                <td style={{ padding: 8 }}>
-                  {c.use_count}
-                  {c.max_uses != null ? ` / ${c.max_uses}` : ''}
-                </td>
-                <td style={{ padding: 8 }}>
-                  {c.expires_at ? new Date(c.expires_at).toLocaleString('en-GB') : '-'}
-                </td>
-                <td style={{ padding: 8 }}>{c.is_active ? 'Yes' : 'No'}</td>
-                <td style={{ padding: 8 }}>
-                  {c.is_active && (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={supportOnly}
-                      onClick={() => void revoke(c.code)}
-                    >
-                      Revoke
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {rows.map((c) => {
+              const status = couponStatus(c);
+              const editing = editingCode === c.code;
+              return (
+                <tr key={c.code} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <td style={{ padding: 8 }}>
+                    <strong>{c.code}</strong>
+                  </td>
+                  <td style={{ padding: 8 }}>
+                    {c.type}
+                    {c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}
+                  </td>
+                  <td style={{ padding: 8 }}>
+                    {c.use_count}
+                    {c.max_uses != null ? ` / ${c.max_uses}` : ''}
+                  </td>
+                  <td style={{ padding: 8 }}>
+                    {editing ? (
+                      <>
+                        <input
+                          type="datetime-local"
+                          value={editExpiry}
+                          onChange={(e) => setEditExpiry(e.target.value)}
+                          aria-label={`Expiry for ${c.code}`}
+                        />
+                        <div className="field-hint">Leave blank and save to remove the expiry.</div>
+                      </>
+                    ) : c.expires_at ? (
+                      new Date(c.expires_at).toLocaleString('en-GB')
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td style={{ padding: 8, color: status.color, fontWeight: 600 }}>{status.label}</td>
+                  <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                    {editing ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => void saveExpiry(c.code)}
+                        >
+                          Save
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setEditingCode(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={supportOnly}
+                          onClick={() => void setActive(c.code, !c.is_active)}
+                        >
+                          {c.is_active ? 'Pause' : 'Resume'}
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={supportOnly}
+                          onClick={() => {
+                            setEditingCode(c.code);
+                            setEditExpiry(toDatetimeLocal(c.expires_at));
+                          }}
+                        >
+                          Edit expiry
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

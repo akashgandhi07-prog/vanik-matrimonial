@@ -1870,6 +1870,54 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true }, req);
   }
 
+  if (action === 'update_coupon') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot update coupons' }, req, 403);
+    }
+    const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    if (!code) return jsonResponse({ error: 'code required' }, req, 400);
+    const { data: existing, error: exErr } = await admin
+      .from('coupons')
+      .select('code')
+      .eq('code', code)
+      .maybeSingle();
+    if (exErr) return jsonResponse({ error: exErr.message }, req, 500);
+    if (!existing) return jsonResponse({ error: 'Coupon not found' }, req, 404);
+
+    const patch: Record<string, unknown> = {};
+    const changes: string[] = [];
+    if (typeof body.is_active === 'boolean') {
+      patch.is_active = body.is_active;
+      changes.push(body.is_active ? 'resumed' : 'paused');
+    }
+    if ('expires_at' in body) {
+      if (body.expires_at === null || body.expires_at === '') {
+        patch.expires_at = null;
+        changes.push('expiry cleared');
+      } else if (typeof body.expires_at === 'string') {
+        const d = new Date(body.expires_at);
+        if (Number.isNaN(d.getTime())) {
+          return jsonResponse({ error: 'expires_at invalid' }, req, 400);
+        }
+        patch.expires_at = d.toISOString();
+        changes.push(`expiry set to ${d.toISOString()}`);
+      } else {
+        return jsonResponse({ error: 'expires_at invalid' }, req, 400);
+      }
+    }
+    if (Object.keys(patch).length === 0) {
+      return jsonResponse({ error: 'No changes provided' }, req, 400);
+    }
+    const { error: upErr } = await admin.from('coupons').update(patch).eq('code', code);
+    if (upErr) return jsonResponse({ error: upErr.message }, req, 500);
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      action_type: 'coupon_updated',
+      notes: `Coupon ${code}: ${changes.join(', ')}`,
+    });
+    return jsonResponse({ ok: true }, req);
+  }
+
   if (action === 'set_admin_role') {
     if (isSupportAdmin(userData.user)) {
       return jsonResponse({ error: 'Super admin only' }, req, 403);
