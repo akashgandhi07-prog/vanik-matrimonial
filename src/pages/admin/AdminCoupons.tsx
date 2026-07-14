@@ -18,6 +18,7 @@ type Coupon = {
   discount_percent: number | null;
   max_uses: number | null;
   use_count: number;
+  free_months: number | null;
   expires_at: string | null;
   is_active: boolean;
   notes: string | null;
@@ -59,6 +60,7 @@ export default function AdminCoupons() {
     type: 'free' as 'free' | 'discount_percent',
     discount_percent: '' as string,
     max_uses: '' as string,
+    free_months: '' as string,
     expires_at: '' as string,
     notes: '',
   });
@@ -99,6 +101,13 @@ export default function AdminCoupons() {
         return;
       }
     }
+    if (form.type === 'free' && form.free_months) {
+      const n = Number(form.free_months);
+      if (!Number.isFinite(n) || n < 1 || n > 36) {
+        alert('Free access duration must be between 1 and 36 months');
+        return;
+      }
+    }
     try {
       await invokeFunction('admin-manage-users', {
         action: 'create_coupon',
@@ -106,6 +115,7 @@ export default function AdminCoupons() {
         type: form.type,
         discount_percent: form.type === 'discount_percent' && form.discount_percent ? form.discount_percent : undefined,
         max_uses: form.max_uses || undefined,
+        free_months: form.type === 'free' && form.free_months ? form.free_months : undefined,
         expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : undefined,
         notes: form.notes.trim() || undefined,
       });
@@ -114,6 +124,7 @@ export default function AdminCoupons() {
         type: 'free',
         discount_percent: '',
         max_uses: '',
+        free_months: '',
         expires_at: '',
         notes: '',
       });
@@ -203,6 +214,22 @@ export default function AdminCoupons() {
               />
             </div>
           )}
+          {form.type === 'free' && (
+            <div>
+              <span className="label">Free access duration (months)</span>
+              <input
+                type="number"
+                min={1}
+                max={36}
+                placeholder="12"
+                value={form.free_months}
+                onChange={(e) => setForm((f) => ({ ...f, free_months: e.target.value }))}
+              />
+              <div className="field-hint">
+                How long the free membership lasts once approved. Leave blank for the standard 12 months.
+              </div>
+            </div>
+          )}
           <div>
             <span className="label">Max uses (optional)</span>
             <input
@@ -253,8 +280,9 @@ export default function AdminCoupons() {
                     <strong>{c.code}</strong>
                   </td>
                   <td style={{ padding: 8 }}>
-                    {c.type}
-                    {c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}
+                    {c.type === 'free'
+                      ? `free (${c.free_months ?? 12} months)`
+                      : `${c.type}${c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}`}
                   </td>
                   <td style={{ padding: 8 }}>
                     {c.use_count}

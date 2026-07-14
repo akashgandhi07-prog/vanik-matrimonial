@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
 
   const { data: row, error } = await admin
     .from('coupons')
-    .select('code, is_active, expires_at, max_uses, use_count, type')
+    .select('code, is_active, expires_at, max_uses, use_count, type, free_months')
     .eq('code', raw)
     .maybeSingle();
 
@@ -76,5 +76,5 @@ Deno.serve(async (req) => {
     return jsonResponse({ valid: false }, req);
   }
 
-  return jsonResponse({ valid: true, kind: row.type }, req);
+  return jsonResponse({ valid: true, kind: row.type, free_months: row.free_months ?? null }, req);
 });

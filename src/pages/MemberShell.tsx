@@ -49,6 +49,12 @@ function MemberLayoutBody() {
   const daysToExp = exp ? daysBetween(new Date(), exp) : null;
   const showAmber = daysToExp != null && daysToExp <= 30 && daysToExp > 7;
   const showRed = daysToExp != null && daysToExp <= 7 && daysToExp >= 0;
+  const expiryClose = daysToExp != null && daysToExp <= 14 && daysToExp >= 0;
+  const expDateLabel = exp
+    ? exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const daysLeftLabel =
+    daysToExp == null ? '' : daysToExp <= 0 ? 'today' : daysToExp === 1 ? 'in 1 day' : `in ${daysToExp} days`;
 
   const navCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'btn btn-primary' : 'btn btn-secondary';
@@ -61,10 +67,16 @@ function MemberLayoutBody() {
             <strong className="member-dashboard-header-title">Member area</strong>
             {exp && (
               <div className="member-dashboard-header-sub">
-                <span>
-                  Membership expires{' '}
-                  {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </span>
+                {expiryClose ? (
+                  <strong style={{ color: 'var(--color-danger)' }}>
+                    Membership expires {daysLeftLabel} — {expDateLabel}
+                  </strong>
+                ) : (
+                  <span>
+                    Membership expires{' '}
+                    {exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -85,17 +97,23 @@ function MemberLayoutBody() {
         </div>
         {showAmber && (
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">
-            <span>Your membership expires in {daysToExp} days. Renew to keep access.</span>
+            <span>
+              Your membership expires on <strong>{expDateLabel}</strong> ({daysLeftLabel}). To keep using
+              Vanik Council and stay visible to other members, renew for £10/year.
+            </span>
             <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
-              Renew online
+              Renew for £10
             </NavLink>
           </div>
         )}
         {showRed && (
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--urgent">
-            <span>Your membership expires in {daysToExp} days. After this date your profile will be hidden.</span>
+            <span>
+              Your membership expires <strong>{daysLeftLabel}</strong>, on <strong>{expDateLabel}</strong>. After
+              this date your profile will be hidden from other members. Renew for £10/year to keep your access.
+            </span>
             <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
-              Renew online
+              Renew for £10
             </NavLink>
           </div>
         )}

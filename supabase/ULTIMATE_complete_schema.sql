@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.coupons (
   discount_percent integer,
   max_uses integer,
   use_count integer NOT NULL DEFAULT 0,
+  free_months integer CHECK (free_months IS NULL OR (free_months >= 1 AND free_months <= 36)),
   expires_at timestamptz,
   is_active boolean NOT NULL DEFAULT true,
   notes text,

@@ -242,6 +242,7 @@ export default function Register() {
   const [stripeCheckoutSessionId, setStripeCheckoutSessionId] = useState<string | null>(null);
   const [stripeRedirectBusy, setStripeRedirectBusy] = useState(false);
   const [couponChecking, setCouponChecking] = useState(false);
+  const [couponFreeMonths, setCouponFreeMonths] = useState<number | null>(null);
   const [resubmitMode, setResubmitMode] = useState(false);
   const [resubmitReason, setResubmitReason] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -483,10 +484,15 @@ export default function Register() {
     }
     setCouponChecking(true);
     try {
-      const res = (await invokeFunction('validate-coupon', { code })) as { valid?: boolean };
+      const res = (await invokeFunction('validate-coupon', { code })) as {
+        valid?: boolean;
+        free_months?: number | null;
+      };
       update({ coupon_hint: res.valid ? 'valid' : 'invalid' });
+      setCouponFreeMonths(res.valid && typeof res.free_months === 'number' ? res.free_months : null);
     } catch {
       update({ coupon_hint: 'invalid' });
+      setCouponFreeMonths(null);
     } finally {
       setCouponChecking(false);
     }
@@ -1208,7 +1214,9 @@ export default function Register() {
                 </div>
                 {form.coupon_hint === 'valid' && (
                   <p style={{ color: 'var(--color-success)', fontSize: 14, margin: '6px 0 0' }}>
-                    Valid: membership free
+                    {couponFreeMonths != null
+                      ? `Valid: membership free for ${couponFreeMonths} month${couponFreeMonths === 1 ? '' : 's'}. After that, membership is £10/year.`
+                      : 'Valid: membership free'}
                   </p>
                 )}
                 {form.coupon_hint === 'invalid' && form.coupon_code.trim() && (

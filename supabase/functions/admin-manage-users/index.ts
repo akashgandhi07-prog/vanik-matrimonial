@@ -1839,6 +1839,17 @@ Deno.serve(async (req) => {
     if (maxUses != null && (!Number.isFinite(maxUses) || maxUses < 1)) {
       return jsonResponse({ error: 'max_uses invalid' }, req, 400);
     }
+    let freeMonths: number | null = null;
+    if (body.free_months != null && body.free_months !== '') {
+      const n = Math.floor(Number(body.free_months));
+      if (!Number.isFinite(n) || n < 1 || n > 36) {
+        return jsonResponse({ error: 'free_months must be 1-36' }, req, 400);
+      }
+      if (type !== 'free') {
+        return jsonResponse({ error: 'free_months only applies to free coupons' }, req, 400);
+      }
+      freeMonths = n;
+    }
     const expiresAt =
       typeof body.expires_at === 'string' && body.expires_at.trim()
         ? new Date(body.expires_at).toISOString()
@@ -1850,6 +1861,7 @@ Deno.serve(async (req) => {
       type,
       discount_percent: discountPercent,
       max_uses: maxUses,
+      free_months: freeMonths,
       expires_at: expiresAt,
       notes,
       is_active: true,
@@ -1878,7 +1890,7 @@ Deno.serve(async (req) => {
     if (!code) return jsonResponse({ error: 'code required' }, req, 400);
     const { data: existing, error: exErr } = await admin
       .from('coupons')
-      .select('code')
+      .select('code, type')
       .eq('code', code)
       .maybeSingle();
     if (exErr) return jsonResponse({ error: exErr.message }, req, 500);
@@ -1889,6 +1901,22 @@ Deno.serve(async (req) => {
     if (typeof body.is_active === 'boolean') {
       patch.is_active = body.is_active;
       changes.push(body.is_active ? 'resumed' : 'paused');
+    }
+    if ('free_months' in body) {
+      if (body.free_months === null || body.free_months === '') {
+        patch.free_months = null;
+        changes.push('free access reset to standard 12 months');
+      } else {
+        const n = Math.floor(Number(body.free_months));
+        if (!Number.isFinite(n) || n < 1 || n > 36) {
+          return jsonResponse({ error: 'free_months must be 1-36' }, req, 400);
+        }
+        if (existing.type !== 'free') {
+          return jsonResponse({ error: 'free_months only applies to free coupons' }, req, 400);
+        }
+        patch.free_months = n;
+        changes.push(`free access set to ${n} months`);
+      }
     }
     if ('expires_at' in body) {
       if (body.expires_at === null || body.expires_at === '') {

@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
   const { data: priv, error: pe } = await admin
     .from('member_private')
-    .select('id_document_url')
+    .select('id_document_url, coupon_used')
     .eq('profile_id', profileId)
     .single();
   if (pe || !priv) {
@@ -72,10 +72,18 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: upPriv.message }, req, 500);
   }
 
-  function addOneYear(from: Date): Date {
+  function addMonths(from: Date, months: number): Date {
     const d = new Date(from);
-    d.setFullYear(d.getFullYear() + 1);
+    const day = d.getUTCDate();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + months);
+    // Clamp to the target month's last day (e.g. 31 Jan + 1 month -> 28/29 Feb)
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, lastDay));
     return d;
+  }
+  function addOneYear(from: Date): Date {
+    return addMonths(from, 12);
   }
 
   const { data: prof, error: profFetchErr } = await admin
@@ -97,6 +105,22 @@ Deno.serve(async (req) => {
     .limit(1)
     .maybeSingle();
 
+  // Free coupons may grant a limited duration (coupons.free_months);
+  // paid registrations always get the standard 12 months.
+  let couponFreeMonths: number | null = null;
+  const couponCode = priv.coupon_used as string | null;
+  if (couponCode) {
+    const { data: cRow } = await admin
+      .from('coupons')
+      .select('type, free_months')
+      .eq('code', couponCode)
+      .maybeSingle();
+    const months = cRow?.free_months;
+    if (cRow?.type === 'free' && typeof months === 'number' && months >= 1) {
+      couponFreeMonths = Math.floor(months);
+    }
+  }
+
   let expires: Date;
   if (paidReg) {
     const raw = (paidReg.updated_at ?? paidReg.created_at) as string;
@@ -106,6 +130,8 @@ Deno.serve(async (req) => {
     if (expires <= now) {
       expires = addOneYear(now);
     }
+  } else if (couponFreeMonths != null) {
+    expires = addMonths(new Date(), couponFreeMonths);
   } else {
     expires = addOneYear(new Date());
   }
@@ -137,7 +163,11 @@ Deno.serve(async (req) => {
     admin_user_id: userData.user.id,
     target_profile_id: profileId,
     action_type: 'approved',
-    notes: stripHtml('Approved', 500),
+    notes: stripHtml(
+      `Approved. Membership until ${expires.toISOString().slice(0, 10)}` +
+        (couponFreeMonths != null ? ` (${couponFreeMonths} months free via coupon ${couponCode})` : ''),
+      500
+    ),
   });
 
   if (isTransactionalMailConfigured()) {
