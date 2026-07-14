@@ -55,6 +55,7 @@ export default function AdminCoupons() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editingCode, setEditingCode] = useState<string | null>(null);
   const [editExpiry, setEditExpiry] = useState('');
+  const [editFreeMonths, setEditFreeMonths] = useState('');
   const [form, setForm] = useState({
     code: '',
     type: 'free' as 'free' | 'discount_percent',
@@ -144,17 +145,28 @@ export default function AdminCoupons() {
     }
   }
 
-  async function saveExpiry(code: string) {
+  async function saveEdit(c: Coupon) {
+    if (c.type === 'free' && editFreeMonths) {
+      const n = Number(editFreeMonths);
+      if (!Number.isFinite(n) || n < 1 || n > 36) {
+        alert('Free access duration must be between 1 and 36 months');
+        return;
+      }
+    }
+    const payload: Record<string, unknown> = {
+      action: 'update_coupon',
+      code: c.code,
+      expires_at: editExpiry ? new Date(editExpiry).toISOString() : null,
+    };
+    if (c.type === 'free') {
+      payload.free_months = editFreeMonths ? Number(editFreeMonths) : null;
+    }
     try {
-      await invokeFunction('admin-manage-users', {
-        action: 'update_coupon',
-        code,
-        expires_at: editExpiry ? new Date(editExpiry).toISOString() : null,
-      });
+      await invokeFunction('admin-manage-users', payload);
       setEditingCode(null);
       void load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to update expiry');
+      alert(e instanceof Error ? e.message : 'Failed to update coupon');
     }
   }
 
@@ -280,9 +292,25 @@ export default function AdminCoupons() {
                     <strong>{c.code}</strong>
                   </td>
                   <td style={{ padding: 8 }}>
-                    {c.type === 'free'
-                      ? `free (${c.free_months ?? 12} months)`
-                      : `${c.type}${c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}`}
+                    {editing && c.type === 'free' ? (
+                      <>
+                        <input
+                          type="number"
+                          min={1}
+                          max={36}
+                          placeholder="12"
+                          value={editFreeMonths}
+                          onChange={(e) => setEditFreeMonths(e.target.value)}
+                          style={{ width: 80 }}
+                          aria-label={`Free access months for ${c.code}`}
+                        />
+                        <div className="field-hint">months free (blank = 12)</div>
+                      </>
+                    ) : c.type === 'free' ? (
+                      `free (${c.free_months ?? 12} months)`
+                    ) : (
+                      `${c.type}${c.discount_percent != null ? ` (${c.discount_percent}%)` : ''}`
+                    )}
                   </td>
                   <td style={{ padding: 8 }}>
                     {c.use_count}
@@ -312,7 +340,7 @@ export default function AdminCoupons() {
                         <button
                           type="button"
                           className="btn btn-primary"
-                          onClick={() => void saveExpiry(c.code)}
+                          onClick={() => void saveEdit(c)}
                         >
                           Save
                         </button>{' '}
@@ -341,9 +369,10 @@ export default function AdminCoupons() {
                           onClick={() => {
                             setEditingCode(c.code);
                             setEditExpiry(toDatetimeLocal(c.expires_at));
+                            setEditFreeMonths(c.free_months != null ? String(c.free_months) : '');
                           }}
                         >
-                          Edit expiry
+                          Edit
                         </button>
                       </>
                     )}
