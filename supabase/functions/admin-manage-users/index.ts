@@ -1816,9 +1816,9 @@ Deno.serve(async (req) => {
     }
     const codeRaw = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
     if (!codeRaw) return jsonResponse({ error: 'code required' }, req, 400);
-    if (codeRaw.length < 10 || !/^[A-Z0-9]+$/.test(codeRaw)) {
+    if (!/^[A-Z0-9]{1,32}$/.test(codeRaw)) {
       return jsonResponse(
-        { error: 'Coupon code must be at least 10 characters (A-Z, 0-9 only)' },
+        { error: 'Coupon code must be letters and numbers only (A-Z, 0-9), up to 32 characters' },
         req,
         400
       );

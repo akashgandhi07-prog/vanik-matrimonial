@@ -185,7 +185,7 @@ export default function AdminCoupons() {
         <form onSubmit={(e) => void createCoupon(e)} style={{ display: 'grid', gap: 12 }}>
           <fieldset disabled={supportOnly} style={{ border: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
             <p className="field-hint" style={{ margin: '0 0 8px' }}>
-              Use at least 10 characters, letters and numbers only (A-Z, 0-9). Use Generate for a random code.
+              Letters and numbers only (A-Z, 0-9). Use Generate for a random code.
             </p>
             <div>
               <span className="label">Code</span>
