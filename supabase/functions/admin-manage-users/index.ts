@@ -1867,7 +1867,16 @@ Deno.serve(async (req) => {
       is_active: true,
       created_by: callerId,
     });
-    if (insErr) return jsonResponse({ error: insErr.message }, req, 500);
+    if (insErr) {
+      if (insErr.code === '23505') {
+        return jsonResponse(
+          { error: `A coupon with the code ${codeRaw} already exists. It may already be in the table below.` },
+          req,
+          409
+        );
+      }
+      return jsonResponse({ error: insErr.message }, req, 500);
+    }
     return jsonResponse({ ok: true }, req);
   }
 
