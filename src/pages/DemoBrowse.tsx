@@ -223,7 +223,7 @@ export default function DemoBrowse() {
     <PublicLayout>
       <div className="layout-max">
         <div style={{ marginBottom: 14 }}>
-          <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Demo browse profiles</h1>
+          <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Browse profiles</h1>
           <p style={{ marginTop: 0, color: 'var(--color-text-secondary)' }}>
             Preview how member browse works. Use the filters below to narrow the list. Register and get approved to see
             full profiles, photos, and contact details.
@@ -319,7 +319,7 @@ export default function DemoBrowse() {
                 ))}
               </div>
               <p className="member-filter-hint--browse">
-                Same options as after login; on this page it only affects the demo browse list.
+                Same options as after login; on this page it only affects the list below.
               </p>
             </div>
 

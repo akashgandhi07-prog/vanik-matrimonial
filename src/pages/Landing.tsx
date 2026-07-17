@@ -45,7 +45,7 @@ export default function Landing() {
                 Register (£10/year)
               </Link>
               <Link to="/demo" className="btn btn-secondary landing-cta-demo">
-                Demo browse profiles
+                Browse Profiles
               </Link>
             </div>
             <p className="landing-cta-note">
