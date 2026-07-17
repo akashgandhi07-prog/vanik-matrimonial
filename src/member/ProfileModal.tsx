@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { ProfileThumb, useProfilePhotoDisplayUrls } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
+import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import type { ProfileRow } from './memberContext';
 
 type Props = {
@@ -128,7 +129,7 @@ export function ProfileModal({
 
   const displayTitle = anonymous
     ? ([c.gender, c.age ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile')
-    : `${c.first_name}${c.age ? `, ${c.age}` : ''}`;
+    : `${titleCaseIfAllCaps(c.first_name)}${c.age ? `, ${c.age}` : ''}`;
 
   const requestTrayTitle =
     blocked
@@ -234,7 +235,7 @@ export function ProfileModal({
             </h2>
             {c.job_title && (
               <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
-                {c.job_title}
+                {titleCaseIfAllCaps(c.job_title)}
               </p>
             )}
             {anonymous && (
@@ -254,13 +255,13 @@ export function ProfileModal({
             )}
 
             <Row label="Religion" value={c.religion} />
-            <Row label="Nationality" value={c.nationality} />
-            <Row label="Location" value={c.place_of_birth} />
-            <Row label="Family origin" value={c.town_country_of_origin} />
+            <Row label="Nationality" value={titleCaseIfAllCaps(c.nationality)} />
+            <Row label="Location" value={titleCaseIfAllCaps(c.place_of_birth)} />
+            <Row label="Family origin" value={titleCaseIfAllCaps(c.town_country_of_origin)} />
             <Row label="Diet" value={c.diet} />
             <Row label="Height" value={heightDisplay} />
-            <Row label="Education" value={c.education} />
-            <Row label="Settlement plans" value={c.future_settlement_plans} />
+            <Row label="Education" value={titleCaseIfAllCaps(c.education)} />
+            <Row label="Settlement plans" value={sentenceCaseIfAllCaps(c.future_settlement_plans)} />
             {/* Contact details - only shown when the user has already received them (My Requests view) */}
             {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
 
@@ -269,7 +270,7 @@ export function ProfileModal({
                 <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                   Hobbies &amp; interests
                 </p>
-                <p style={{ margin: 0, fontSize: 14 }}>{c.hobbies}</p>
+                <p style={{ margin: 0, fontSize: 14 }}>{sentenceCaseIfAllCaps(c.hobbies)}</p>
               </div>
             )}
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { titleCaseIfAllCaps } from '../lib/displayCase';
 
 type Fact = { label: string; value: ReactNode };
 
@@ -33,12 +34,12 @@ export default function ProfileCard({
   note,
 }: ProfileCardProps) {
   const facts: Fact[] = [];
-  if (profession) facts.push({ label: 'Profession', value: profession });
+  if (profession) facts.push({ label: 'Profession', value: titleCaseIfAllCaps(profession) });
   if (height) facts.push({ label: 'Height', value: height });
   if (diet) facts.push({ label: 'Diet', value: diet });
-  if (location) facts.push({ label: 'Location', value: location });
+  if (location) facts.push({ label: 'Location', value: titleCaseIfAllCaps(location) });
   if (religion) facts.push({ label: 'Religion', value: religion });
-  if (nationality) facts.push({ label: 'Nationality', value: nationality });
+  if (nationality) facts.push({ label: 'Nationality', value: titleCaseIfAllCaps(nationality) });
 
   const clickable = typeof onOpen === 'function';
 
