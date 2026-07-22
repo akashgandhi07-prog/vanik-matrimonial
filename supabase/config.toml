@@ -119,3 +119,6 @@ verify_jwt = false
 
 [functions.demo-browse-profiles]
 verify_jwt = false
+
+[functions.log-client-error]
+verify_jwt = false

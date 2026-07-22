@@ -5,6 +5,7 @@ import { ProfileThumb } from '../member/ProfileThumb';
 import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { computeMonthlyWindow, computeWeeklyWindow, effectiveMonthlyCap, effectiveWeeklyCap } from '../member/requestQuota';
+import { newErrorCode, reportError } from '../lib/errorLog';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
@@ -62,18 +63,15 @@ function telHref(phone: string): string {
 function friendlyContactsError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');
   const msg = raw.toLowerCase();
+  // A missing migration or an undeployed function is a server-side problem: members get the same
+  // neutral wording as any other outage, and the detail goes to the admin error log.
   if (
     msg.includes('member_request_profiles') ||
     msg.includes('function public.member_request_profiles') ||
-    msg.includes('could not find the function public.member_request_profiles')
+    msg.includes('could not find the function public.member_request_profiles') ||
+    (msg.includes('member-request-contacts') && (msg.includes('not found') || msg.includes('404')))
   ) {
-    return 'Server update required: requested-profile contact lookup is not installed yet. Apply the latest Supabase migration and reload.';
-  }
-  if (
-    msg.includes('member-request-contacts') &&
-    (msg.includes('not found') || msg.includes('404'))
-  ) {
-    return 'Server update required: member-request-contacts function is not deployed in this project.';
+    return 'Contact details are temporarily unavailable. Please try again shortly.';
   }
   if (
     msg.includes('could not reach edge function') ||
@@ -210,7 +208,10 @@ export default function MemberRequests() {
         setProfilesById(merged);
       } catch (e) {
         if (cancelled) return;
-        setContactsError(friendlyContactsError(e));
+        const code = newErrorCode();
+        // The log function resolves the member from the JWT, so no identity is needed here.
+        reportError(code, 'member_contacts_load', {}, e instanceof Error ? e.message : String(e));
+        setContactsError(`${friendlyContactsError(e)} (Reference ${code}.)`);
       } finally {
         if (!cancelled) setContactsLoading(false);
       }

@@ -12,6 +12,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import { isAdminUser } from "../lib/auth";
 import { profileNeedsMembershipExpiredRoute } from "../lib/memberStatus";
+import { newErrorCode, reportError } from "../lib/errorLog";
 import { invokeFunction, supabase } from "../lib/supabase";
 
 export type ProfileRow = {
@@ -63,6 +64,12 @@ type MemberCtx = {
   user: User | null;
   profile: ProfileRow | null;
   privateRow: MemberPrivateRow | null;
+  /** True when member-bootstrap (service role) confirmed no profile row exists for this login -
+   *  the user signed up + verified email but never submitted registration. Distinct from a
+   *  transient load failure, where we must NOT send them to /register (risk of double signup). */
+  profileConfirmedMissing: boolean;
+  /** Reference code shown to the member when the profile fails to load; detail is in client_error_log. */
+  errorCode: string | null;
   loading: boolean;
   /** True while reloading browse data after the initial dashboard load (does not block the auth gate). */
   refreshing: boolean;
@@ -96,6 +103,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [privateRow, setPrivateRow] = useState<MemberPrivateRow | null>(null);
+  const [profileConfirmedMissing, setProfileConfirmedMissing] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [candidates, setCandidates] = useState<ProfileRow[]>([]);
@@ -133,6 +142,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         if (!u) {
           setProfile(null);
           setPrivateRow(null);
+          setProfileConfirmedMissing(false);
           return;
         }
         if (isAdminUser(u)) {
@@ -145,9 +155,17 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         /** Set only when `member-bootstrap` supplied `member_private` (skip flaky client read). */
         let privateFromBootstrap: MemberPrivateRow | null | undefined =
           undefined;
+        /** Bootstrap answered successfully with no profile - the row genuinely does not exist. */
+        let confirmedNoProfile = false;
+        /** Collected for the admin-only error log when every attempt fails (never shown to members). */
+        const diagnostics: {
+          attempts: number;
+          profile_query_errors: { code?: string; message: string }[];
+          bootstrap_errors: string[];
+        } = { attempts: 0, profile_query_errors: [], bootstrap_errors: [] };
 
         const tryBootstrap = async (): Promise<
-          "admin" | "profile" | "none"
+          "admin" | "profile" | "none" | "error"
         > => {
           try {
             const boot = (await invokeFunction("member-bootstrap", {})) as {
@@ -165,10 +183,14 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
                 null) as MemberPrivateRow | null;
               return "profile";
             }
+            confirmedNoProfile = true;
+            return "none";
           } catch (e) {
-            console.error("member-bootstrap:", e);
+            diagnostics.bootstrap_errors.push(
+              e instanceof Error ? e.message : String(e),
+            );
+            return "error";
           }
-          return "none";
         };
 
         const maxAttempts = 8;
@@ -179,13 +201,17 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           if (attempt === 2 && !p) {
             await supabase.auth.refreshSession().catch(() => {});
           }
+          diagnostics.attempts = attempt + 1;
           const { data, error } = await supabase
             .from("profiles")
             .select("*")
             .eq("auth_user_id", u.id)
             .maybeSingle();
           if (error && error.code !== "PGRST116") {
-            console.error("profiles load:", error.message, error.code);
+            diagnostics.profile_query_errors.push({
+              code: error.code,
+              message: error.message,
+            });
           }
           if (data) {
             p = data as ProfileRow;
@@ -206,9 +232,24 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         if (!p) {
           setProfile(null);
           setPrivateRow(null);
+          setProfileConfirmedMissing(confirmedNoProfile);
+          // Genuine load failure (not "never registered"): give the member a reference code and
+          // send the technical detail to the admin-only error log.
+          if (!confirmedNoProfile) {
+            const code = newErrorCode();
+            setErrorCode(code);
+            reportError(
+              code,
+              "member_profile_load",
+              { ...diagnostics, auth_user_id: u.id },
+              "Profile row did not load for a signed-in user",
+            );
+          }
           return;
         }
         setProfile(p);
+        setProfileConfirmedMissing(false);
+        setErrorCode(null);
         if (privateFromBootstrap !== undefined) {
           setPrivateRow(privateFromBootstrap);
         } else {
@@ -369,6 +410,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setProfile(null);
         setPrivateRow(null);
+        setProfileConfirmedMissing(false);
         setCandidates([]);
         setBookmarks([]);
         setRequests([]);
@@ -417,6 +459,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       privateRow,
+      profileConfirmedMissing,
+      errorCode,
       loading,
       refreshing,
       candidates,
@@ -432,6 +476,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       privateRow,
+      profileConfirmedMissing,
+      errorCode,
       loading,
       refreshing,
       candidates,
@@ -449,7 +495,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
 
 /** Guards: use inside MemberDataProvider after load. */
 export function MemberAuthGate({ children }: { children: ReactNode }) {
-  const { user, profile, loading, loadAll } = useMemberArea();
+  const { user, profile, profileConfirmedMissing, errorCode, loading, loadAll } =
+    useMemberArea();
   if (loading) {
     return (
       <div className="layout-max" style={{ padding: 40 }}>
@@ -469,6 +516,11 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
   if (profile && profileNeedsMembershipExpiredRoute(profile)) {
     return <Navigate to="/membership-expired" replace />;
   }
+  // Signed in + verified, but registration was never submitted (bootstrap confirmed the profile
+  // row does not exist): send them back to finish registering rather than a dead-end error.
+  if (!profile && profileConfirmedMissing) {
+    return <Navigate to="/register" replace />;
+  }
   if (!profile) {
     return (
       <div
@@ -485,29 +537,19 @@ export function MemberAuthGate({ children }: { children: ReactNode }) {
           </a>
           .
         </p>
-        <details
-          style={{
-            marginTop: 16,
-            fontSize: 14,
-            color: "var(--color-text-secondary)",
-          }}
-        >
-          <summary style={{ cursor: "pointer", fontWeight: 600 }}>
-            Troubleshooting (site owners)
-          </summary>
-          <p style={{ lineHeight: 1.55, marginTop: 8 }}>
-            Check that <code style={{ fontSize: 13 }}>VITE_SUPABASE_URL</code>{" "}
-            points at the project where the profile was created, that the{" "}
-            <strong>member-bootstrap</strong> Edge Function is deployed with{" "}
-            <code style={{ fontSize: 13 }}>SUPABASE_SERVICE_ROLE_KEY</code>, and
-            in SQL that{" "}
-            <code style={{ fontSize: 13 }}>profiles.auth_user_id</code> matches{" "}
-            <code style={{ fontSize: 13 }}>auth.users.id</code> for this login.
-            Re-applying a full schema file without restoring{" "}
-            <code style={{ fontSize: 13 }}>profiles</code> data often causes
-            this symptom.
+        {errorCode && (
+          <p
+            style={{
+              marginTop: 16,
+              fontSize: 14,
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            Please quote reference{" "}
+            <strong style={{ letterSpacing: "0.04em" }}>{errorCode}</strong> if
+            you contact us.
           </p>
-        </details>
+        )}
         <div
           style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 24 }}
         >

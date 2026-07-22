@@ -8,6 +8,8 @@ import { rejectReasonIfNotJpegOrPng } from '../lib/profilePhotoAccept';
 import { sanitizeText } from '../lib/sanitize';
 import { isValidPlaceField } from '../lib/registerValidation';
 import { invokeFunction, supabase } from '../lib/supabase';
+import { userFacingAuthError } from '../lib/auth';
+import { friendlyUploadError } from '../lib/uploadError';
 import { useNavigate } from 'react-router-dom';
 const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
@@ -173,8 +175,13 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
       })
       .eq('id', p.id);
     if (error) {
+      console.error('profile save:', error.message, error.code);
       setSaveStatus('error');
-      setSaveError(error.message);
+      setSaveError(
+        /row-level security|jwt|unauthor/i.test(error.message)
+          ? 'Your session has expired. Please sign in again and retry.'
+          : 'Please check your details and try again.',
+      );
     } else {
       setSaveStatus('saved');
       void loadAll();
@@ -197,7 +204,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     const { error } = await supabase.auth.updateUser({ password: pwNew });
     if (error) {
       setPwStatus('error');
-      setPwError(error.message);
+      setPwError(userFacingAuthError(error));
       return;
     }
     setPwStatus('saved');
@@ -248,7 +255,10 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
       upsert: true,
       contentType: compressed.type || 'image/jpeg',
     });
-    if (upErr) throw new Error(upErr.message);
+    if (upErr) {
+      console.error('member photo upload:', upErr.message);
+      throw new Error(friendlyUploadError(upErr, 'photo'));
+    }
     await invokeFunction('member-manage-photos', { action: 'add', storage_path: path });
   }
 

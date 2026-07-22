@@ -1680,6 +1680,24 @@ Deno.serve(async (req) => {
     return jsonResponse({ rows: data ?? [] }, req);
   }
 
+  if (action === 'list_client_errors') {
+    const limit =
+      typeof body.limit === 'number' && body.limit >= 1 && body.limit <= 1000 ? Math.floor(body.limit) : 200;
+    const search = typeof body.search === 'string' ? body.search.trim() : '';
+    let q = admin
+      .from('client_error_log')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (search) {
+      const like = `%${search.replace(/[%_,()]/g, '')}%`;
+      q = q.or(`error_code.ilike.${like},user_email.ilike.${like},area.ilike.${like}`);
+    }
+    const { data, error } = await q;
+    if (error) return jsonResponse({ error: error.message }, req, 500);
+    return jsonResponse({ rows: data ?? [] }, req);
+  }
+
   if (action === 'list_cron_runs') {
     const jobNames = Array.isArray(body.job_names)
       ? body.job_names.filter((n): n is string => typeof n === 'string' && n.length > 0)

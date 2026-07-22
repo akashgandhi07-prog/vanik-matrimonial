@@ -9,6 +9,7 @@ export default function ResetPassword() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [linkTimedOut, setLinkTimedOut] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -19,7 +20,13 @@ export default function ResetPassword() {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
-    return () => sub.subscription.unsubscribe();
+    // An expired or already-used link never fires PASSWORD_RECOVERY. Without this the page would
+    // sit on "Checking your reset link..." forever with no way forward.
+    const timer = setTimeout(() => setLinkTimedOut(true), 6000);
+    return () => {
+      sub.subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -54,7 +61,22 @@ export default function ResetPassword() {
       <div className="layout-max" style={{ maxWidth: 440 }}>
         <div className="card" style={{ marginTop: 40 }}>
           <h1>Choose a new password</h1>
-          {!ready ? (
+          {!ready && linkTimedOut ? (
+            <>
+              <p style={{ color: 'var(--color-text-secondary)', lineHeight: 1.55 }}>
+                This password reset link has expired or has already been used. Reset links can only be
+                used once, and they must be opened in the same browser you requested them from.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 20 }}>
+                <a className="btn btn-primary" href="/forgot-password">
+                  Request a new link
+                </a>
+                <a className="btn btn-secondary" href="/login">
+                  Back to sign in
+                </a>
+              </div>
+            </>
+          ) : !ready ? (
             <p style={{ color: 'var(--color-text-secondary)' }}>Checking your reset link…</p>
           ) : (
             <form onSubmit={onSubmit} style={{ display: 'grid', gap: 16 }}>

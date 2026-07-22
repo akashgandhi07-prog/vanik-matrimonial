@@ -132,6 +132,25 @@ CREATE TABLE IF NOT EXISTS public.website_feedback (
 
 COMMENT ON TABLE public.website_feedback IS 'Volunteer suggestions about the matrimonial register site and service; admins only.';
 
+CREATE TABLE IF NOT EXISTS public.client_error_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  error_code text NOT NULL,
+  area text NOT NULL,
+  message text,
+  detail jsonb NOT NULL DEFAULT '{}'::jsonb,
+  auth_user_id uuid,
+  profile_id uuid REFERENCES public.profiles (id) ON DELETE SET NULL,
+  user_email text,
+  page_url text,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.client_error_log IS 'Client-side failures logged with a short reference code shown to the member; admins only.';
+
+CREATE INDEX IF NOT EXISTS client_error_log_code_idx ON public.client_error_log (error_code);
+CREATE INDEX IF NOT EXISTS client_error_log_created_idx ON public.client_error_log (created_at DESC);
+
 CREATE TABLE IF NOT EXISTS public.bookmarks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   member_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
@@ -458,6 +477,7 @@ ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookmarks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.client_error_log ENABLE ROW LEVEL SECURITY;
 
 -- Policies: drop first so re-runs do not error on "already exists"
 DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
@@ -487,6 +507,8 @@ DROP POLICY IF EXISTS admin_actions_select ON public.admin_actions;
 DROP POLICY IF EXISTS admin_actions_insert ON public.admin_actions;
 
 DROP POLICY IF EXISTS email_log_all ON public.email_log;
+DROP POLICY IF EXISTS client_error_log_admin_read ON public.client_error_log;
+DROP POLICY IF EXISTS client_error_log_admin_delete ON public.client_error_log;
 
 DROP POLICY IF EXISTS profile_photos_authenticated_insert ON storage.objects;
 DROP POLICY IF EXISTS profile_photos_authenticated_update ON storage.objects;
@@ -604,6 +626,18 @@ CREATE POLICY email_log_all ON public.email_log
   FOR ALL TO authenticated
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
+
+-- client_error_log: written only by the log-client-error Edge Function (service role); admins read.
+CREATE POLICY client_error_log_admin_read ON public.client_error_log
+  FOR SELECT TO authenticated
+  USING (public.is_admin());
+
+CREATE POLICY client_error_log_admin_delete ON public.client_error_log
+  FOR DELETE TO authenticated
+  USING (public.is_admin());
+
+GRANT SELECT, DELETE ON TABLE public.client_error_log TO authenticated;
+GRANT ALL ON TABLE public.client_error_log TO postgres, service_role;
 
 -- Storage buckets
 INSERT INTO storage.buckets (id, name, public)

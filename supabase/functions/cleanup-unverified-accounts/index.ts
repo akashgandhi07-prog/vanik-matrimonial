@@ -33,5 +33,14 @@ Deno.serve(async (req) => {
     page++;
   }
 
+  // Diagnostics behind member-facing error codes are only useful while a member might still be
+  // asking about them; drop anything older than 90 days so the table cannot grow unbounded.
+  const errorLogCutoff = new Date(Date.now() - 90 * 864e5).toISOString();
+  const { error: logErr } = await admin
+    .from('client_error_log')
+    .delete()
+    .lt('created_at', errorLogCutoff);
+  if (logErr) console.error('client_error_log retention', logErr.message);
+
   return jsonResponse({ ok: true, deleted }, req);
 });

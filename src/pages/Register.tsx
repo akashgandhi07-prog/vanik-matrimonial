@@ -17,6 +17,7 @@ import {
 } from '../lib/registerValidation';
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
 import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
+import { friendlyUploadError } from '../lib/uploadError';
 
 const LS_KEY = 'vmr_registration_v1';
 
@@ -431,6 +432,25 @@ export default function Register() {
     return ageFromDob(form.date_of_birth);
   }, [form.date_of_birth]);
 
+  /** Why "Submit registration" is still greyed out. Without this the last step silently blocks. */
+  const submitBlockers = useMemo(() => {
+    const out: string[] = [];
+    if (!form.consent_contact || !form.consent_age || !form.consent_privacy) {
+      out.push('tick all three consent boxes above');
+    }
+    if (billingEnabled && form.coupon_hint !== 'valid' && !stripeCheckoutSessionId) {
+      out.push('pay the £10 membership fee above (or enter a valid coupon code on the previous step)');
+    }
+    return out;
+  }, [
+    form.consent_contact,
+    form.consent_age,
+    form.consent_privacy,
+    form.coupon_hint,
+    billingEnabled,
+    stripeCheckoutSessionId,
+  ]);
+
   async function signUpAccount(e: React.FormEvent) {
     e.preventDefault();
     setAuthMsg(null);
@@ -471,7 +491,11 @@ export default function Register() {
       if (res.url) window.location.href = res.url;
       else throw new Error('No checkout URL returned');
     } catch (e) {
-      setActionNotice({ type: 'err', text: e instanceof Error ? e.message : 'Could not start checkout' });
+      console.error('create-checkout-session:', e);
+      setActionNotice({
+        type: 'err',
+        text: 'Card payment could not be started right now. Please try again in a moment, or contact matrimonial@vanikcouncil.uk.',
+      });
     } finally {
       setStripeRedirectBusy(false);
     }
@@ -522,8 +546,10 @@ export default function Register() {
     setIdUploading(false);
     setIdProgress(error ? 0 : 1);
     if (error) {
-      setFieldErrors((prev) => ({ ...prev, id_document_path: error.message }));
-      setActionNotice({ type: 'err', text: `Could not upload proof of identity: ${error.message}` });
+      console.error('id upload:', error.message);
+      const friendly = friendlyUploadError(error, 'id');
+      setFieldErrors((prev) => ({ ...prev, id_document_path: friendly }));
+      setActionNotice({ type: 'err', text: friendly });
       return;
     }
     update({ id_document_path: path, id_file_name: file.name });
@@ -558,8 +584,10 @@ export default function Register() {
         contentType: compressed.type || 'image/jpeg',
       });
       if (error) {
-        setFieldErrors((prev) => ({ ...prev, photo_path: error.message }));
-        setActionNotice({ type: 'err', text: `Could not upload profile photo: ${error.message}` });
+        console.error('photo upload:', error.message);
+        const friendly = friendlyUploadError(error, 'photo');
+        setFieldErrors((prev) => ({ ...prev, photo_path: friendly }));
+        setActionNotice({ type: 'err', text: friendly });
         return;
       }
       setPhotoPreviews((prev) => [...prev, URL.createObjectURL(compressed)]);
@@ -567,10 +595,8 @@ export default function Register() {
       update({ photo_paths: nextPaths, photo_path: nextPaths[0] ?? '' });
       setActionNotice({ type: 'ok', text: 'Photo uploaded. You can submit your registration now.' });
     } catch (err) {
-      setActionNotice({
-        type: 'err',
-        text: err instanceof Error ? err.message : 'Could not process this image. Please try a different file.',
-      });
+      console.error('photo processing:', err);
+      setActionNotice({ type: 'err', text: friendlyUploadError(err, 'photo') });
     } finally {
       setPhotoUploading(false);
     }
@@ -635,7 +661,20 @@ export default function Register() {
         });
         focusFirstFieldError({ payment: 'x' });
       } else {
-        setActionNotice({ type: 'err', text: err instanceof Error ? err.message : 'Submission failed' });
+        console.error('submit-registration:', err);
+        const raw = (err instanceof Error ? err.message : '').toLowerCase();
+        // "Profile already exists" means they submitted on another device/tab - send them to the
+        // status page rather than letting them retry a submission that can never succeed.
+        if (raw.includes('already exists')) {
+          window.location.href = '/registration-pending';
+          return;
+        }
+        setActionNotice({
+          type: 'err',
+          text: raw.includes('failed to fetch') || raw.includes('network') || raw.includes('reach')
+            ? 'Your registration could not be sent - please check your connection and try again.'
+            : 'Your registration could not be submitted. Please try again, or contact matrimonial@vanikcouncil.uk if this keeps happening.',
+        });
       }
     } finally {
       setSubmitting(false);
@@ -1747,6 +1786,11 @@ export default function Register() {
                   </p>
                 )}
               </fieldset>
+              {submitBlockers.length > 0 && (
+                <p className="field-hint" style={{ marginTop: 4, marginBottom: 0 }}>
+                  Before you can submit, please {submitBlockers.join(', and ')}.
+                </p>
+              )}
               <div className="register-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => update({ step: 2 })}>
                   Back

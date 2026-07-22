@@ -6,6 +6,7 @@ import AdminAddMember from './pages/admin/AdminAddMember';
 import AdminCoupons from './pages/admin/AdminCoupons';
 import AdminEmailExport from './pages/admin/AdminEmailExport';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
+import AdminErrorLog from './pages/admin/AdminErrorLog';
 import AdminFeedback from './pages/admin/AdminFeedback';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminMemberDetail from './pages/admin/AdminMemberDetail';
@@ -96,6 +97,7 @@ export default function App() {
               <Route path="coupons" element={<AdminCoupons />} />
               <Route path="email-log" element={<AdminEmailLog />} />
               <Route path="email-export" element={<AdminEmailExport />} />
+              <Route path="error-log" element={<AdminErrorLog />} />
               <Route path="settings" element={<AdminSettings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

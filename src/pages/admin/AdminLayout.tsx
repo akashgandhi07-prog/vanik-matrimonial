@@ -69,6 +69,9 @@ export default function AdminLayout() {
             <NavLink to="/admin/email-export" className={navCls}>
               Export emails
             </NavLink>
+            <NavLink to="/admin/error-log" className={navCls}>
+              Error log
+            </NavLink>
             <NavLink to="/admin/settings" className={navCls}>
               Settings
             </NavLink>
@@ -124,6 +127,9 @@ export default function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/email-export" className={navCls}>
           Export emails
+        </NavLink>
+        <NavLink to="/admin/error-log" className={navCls}>
+          Error log
         </NavLink>
         <NavLink to="/admin/settings" className={navCls}>
           Settings

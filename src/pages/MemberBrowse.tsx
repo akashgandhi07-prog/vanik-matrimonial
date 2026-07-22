@@ -742,15 +742,6 @@ export default function MemberBrowse() {
                     your filters, or check back later as new members join. If you think this is wrong, contact{' '}
                     <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
                   </p>
-                  <details style={{ marginTop: 12, fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Site administrators</summary>
-                    <p style={{ lineHeight: 1.55, marginTop: 8 }}>
-                      See <strong>Browse: no profiles troubleshooting</strong> in{' '}
-                      <code style={{ fontSize: 12 }}>docs/SETUP.md</code> in the project repository, and run{' '}
-                      <code style={{ fontSize: 12 }}>supabase/verify_browse_setup.sql</code> in the Supabase SQL editor
-                      for this project.
-                    </p>
-                  </details>
                 </>
               ) : (
                 <>

@@ -48,7 +48,10 @@ function functionsBase(): string {
 
 function requireEnv() {
   if (!url || !anon) {
-    throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+    throw new EdgeCallError(
+      'The site is not configured correctly. Please contact matrimonial@vanikcouncil.uk.',
+      'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY'
+    );
   }
   return { url, anon };
 }
@@ -72,6 +75,21 @@ export class EdgeFunctionHttpError extends Error {
     this.name = 'EdgeFunctionHttpError';
     this.code = opts?.code;
     this.requestIds = opts?.requestIds;
+  }
+}
+
+/**
+ * Connection failure. `message` is safe to show a member; `technicalDetail` holds the deployment
+ * diagnostics and belongs in the console / admin error log only.
+ */
+export class EdgeCallError extends Error {
+  readonly technicalDetail: string;
+
+  constructor(message: string, technicalDetail: string) {
+    super(message);
+    this.name = 'EdgeCallError';
+    this.technicalDetail = technicalDetail;
+    console.error('Edge call failed:', technicalDetail);
   }
 }
 
@@ -111,7 +129,8 @@ async function fetchFunctionEndpoint(
     method?: 'GET' | 'POST';
     body?: object;
     token: string;
-    networkErrorPrefix?: string;
+    /** Member-safe wording for connection failures; never include config or URLs here. */
+    networkErrorMessage?: string;
   }
 ) {
   const { anon } = requireEnv();
@@ -127,13 +146,19 @@ async function fetchFunctionEndpoint(
   }).catch((error: unknown) => {
     const msg = error instanceof Error ? error.message : String(error);
     const directTarget = `${functionsBase()}/functions/v1`;
+    // Deployment hints go to the console and the admin error log only - pages render `.message`
+    // directly, and members must never be shown env vars, hosting config, or internal URLs.
     const hint =
       msg.includes('fetch') || msg.includes('NetworkError')
         ? usesFunctionsBffProxy()
-          ? ` Request URL was ${invokeUrl}. If still failing, check Vercel rewrites for /bff/functions → Supabase or local Vite proxy.`
-          : ` Check DevTools → Network for ${directTarget}. If blocked by an extension/network, set VITE_SUPABASE_FUNCTIONS_BFF_PREFIX=/bff/functions in hosting + add the Vercel rewrite (see .env.example), or whitelist *.supabase.co. Also verify VITE_SUPABASE_URL and Edge CORS.`
+          ? `Request URL was ${invokeUrl}. Check Vercel rewrites for /bff/functions → Supabase or the local Vite proxy.`
+          : `Check DevTools → Network for ${directTarget}. If blocked by an extension/network, set VITE_SUPABASE_FUNCTIONS_BFF_PREFIX=/bff/functions in hosting + add the Vercel rewrite (see .env.example), or whitelist *.supabase.co. Also verify VITE_SUPABASE_URL and Edge CORS.`
         : '';
-    throw new Error(`${options.networkErrorPrefix ?? 'Could not reach Edge Function'}: ${msg}.${hint}`);
+    throw new EdgeCallError(
+      options.networkErrorMessage ??
+        'Could not reach the server. Please check your internet connection and try again.',
+      `${msg} ${hint}`.trim()
+    );
   });
 
   const text = await res.text();
@@ -161,7 +186,6 @@ async function invokeFunctionDirectFetch(
     method: 'POST',
     body: body ?? {},
     token,
-    networkErrorPrefix: 'Could not reach Edge Function. Deploy functions and check network / ad blockers',
   });
   if (!res.ok) {
     throw edgeHttpErrorFromPayload(json, responseMessage(res, text, json));
@@ -179,7 +203,8 @@ async function invokeFunctionDirectFetch(
  */
 export async function invokeFunction(name: string, body?: object) {
   if (!url || !anon) {
-    throw new Error(
+    throw new EdgeCallError(
+      'The site is not configured correctly. Please contact matrimonial@vanikcouncil.uk.',
       'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in .env - add them with the VITE_ prefix and restart npm run dev.'
     );
   }
@@ -188,9 +213,6 @@ export async function invokeFunction(name: string, body?: object) {
   if (!sessionData.session?.access_token) {
     throw new Error('Not authenticated - please log in again.');
   }
-
-  const networkErrorPrefix =
-    'Could not reach Edge Function. Deploy functions and check network / ad blockers';
 
   if (usesFunctionsBffProxy()) {
     let lastRelay: unknown;
@@ -232,7 +254,10 @@ export async function invokeFunction(name: string, body?: object) {
         return await invokeFunctionDirectFetch(name, body, tokenNow);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`${networkErrorPrefix} (${error.message}). Direct fetch: ${msg}`);
+        throw new EdgeCallError(
+          'Could not reach the server. Please check your internet connection and try again.',
+          `relay: ${error.message}; direct fetch: ${msg}`
+        );
       }
     }
 
@@ -254,8 +279,9 @@ export async function invokeFunction(name: string, body?: object) {
       }
       const msg = responseMessage(res, text, json);
       if (res.status === 401 && jwtHint401(msg)) {
-        throw new Error(
-          `${msg || 'Unauthorized'} - Sign out and sign in again, and confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed (redeploy after changing env vars).`
+        throw new EdgeCallError(
+          'Your session has expired. Please sign out and sign in again.',
+          `401 from ${name}: ${msg || 'Unauthorized'}. Confirm VITE_SUPABASE_URL / anon key match the project where functions are deployed (redeploy after changing env vars).`
         );
       }
       throw edgeHttpErrorFromPayload(json, msg);
