@@ -3,6 +3,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { allowFunctionRateLimit } from '../_shared/function-rate-limit.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+import { sendTransactionalMail } from '../_shared/transactional-mail.ts';
+import { letterHtml } from '../_shared/resend.ts';
+
+/** Plain-English explanation of each error `area`, included in the alert email. */
+function areaMeaning(area: string): string {
+  switch (area) {
+    case 'react_render_crash':
+      return 'A page crashed while rendering, so the member saw the fallback "Something went wrong" screen instead of the page. Usually a front-end bug tied to a specific page or a bad bit of data.';
+    case 'member_profile_load':
+      return 'A signed-in member\'s profile could not be loaded, so they saw the "Could not load your account" screen. Often a brief network or session hiccup; if the same member keeps hitting it, investigate.';
+    case 'member_contacts_load':
+      return 'A member opened their Requests page but the requested contact details would not load (a database function or edge function failed). Their existing request history still showed.';
+    default:
+      return 'A client-side error was recorded. See the technical detail below and the admin error log for the full context.';
+  }
+}
 
 /**
  * Records a client-side failure against the short code the member was shown, so support can look up
@@ -114,6 +130,73 @@ Deno.serve(async (req) => {
   if (insErr) {
     console.error('client_error_log insert', insErr.message);
     return jsonResponse({ error: 'insert_failed' }, req, 500);
+  }
+
+  // Best-effort alert email. Never affects the response, and is flood-protected so a burst of
+  // errors (e.g. an outage where many members fail at once) cannot fill the inbox:
+  //   - the same `area` sends at most one email per 15 minutes (repeats collapse), and
+  //   - a hard global cap limits total alerts per hour.
+  // The admin error log always holds the complete, un-throttled picture.
+  try {
+    const alertTo = Deno.env.get('ERROR_ALERT_EMAIL')?.trim() || 'akashgandhi07@gmail.com';
+    const perAreaOk = await allowFunctionRateLimit(admin, {
+      scope: `error-alert:${area}`,
+      rateKey: 'all',
+      maxAttempts: 1,
+      windowMs: 15 * 60 * 1000,
+    });
+    const globalOk = perAreaOk
+      ? await allowFunctionRateLimit(admin, {
+          scope: 'error-alert:_global',
+          rateKey: 'all',
+          maxAttempts: 20,
+          windowMs: 60 * 60 * 1000,
+        })
+      : false;
+
+    if (perAreaOk && globalOk) {
+      const esc = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      let detailStr = '{}';
+      try {
+        detailStr = JSON.stringify(detail, null, 2).slice(0, 1500);
+      } catch {
+        /* keep default */
+      }
+      const rows: [string, string][] = [
+        ['Reference', error_code],
+        ['What it means', areaMeaning(area)],
+        ['Area', area],
+        ['Message', message ?? '(none)'],
+        ['Page', page_url ?? '(unknown)'],
+        ['Member', user_email ?? (auth_user_id ?? 'signed out / unknown')],
+        ['Browser', user_agent ?? '(unknown)'],
+      ];
+      const table = rows
+        .map(
+          ([k, v]) =>
+            `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;white-space:nowrap">${esc(
+              k,
+            )}</td><td style="padding:4px 0;color:#111827">${esc(String(v))}</td></tr>`,
+        )
+        .join('');
+      const inner = `
+        <p style="margin:0 0 16px">An error was recorded on the Vanik Matrimonial Register.</p>
+        <table style="border-collapse:collapse;font-size:14px;width:100%">${table}</table>
+        <p style="margin:20px 0 6px;font-size:13px;color:#6b7280">Technical detail</p>
+        <pre style="margin:0;padding:12px;background:#f3f4f6;border-radius:8px;font-size:12px;white-space:pre-wrap;word-break:break-word">${esc(
+          detailStr,
+        )}</pre>
+        <p style="margin:18px 0 0;font-size:12px;color:#9ca3af">Repeats of this same error type are suppressed for 15 minutes. The full history is in Admin &rarr; Error log.</p>`;
+      const sent = await sendTransactionalMail({
+        to: alertTo,
+        subject: `[Vanik error] ${error_code} - ${area}`,
+        html: letterHtml('Site error alert', inner),
+      });
+      if (sent.error) console.error('error-alert email', sent.error);
+    }
+  } catch (e) {
+    console.error('error-alert email', e instanceof Error ? e.message : String(e));
   }
 
   return jsonResponse({ ok: true, error_code }, req);
