@@ -1,0 +1,20 @@
+-- PLACEHOLDER -- intentionally contains no SQL.
+--
+-- The remote migration history table records version 20260518180210 as applied to production
+-- on 2026-05-18 18:02:10, but no matching file has ever existed in this repo. The change was
+-- almost certainly applied by hand (SQL editor / dashboard) rather than through `db push`.
+--
+-- This file exists so local and remote migration histories reconcile and `supabase db push`
+-- can run. The alternative the CLI suggests -- `supabase migration repair --status reverted
+-- 20260518180210` -- would delete the only record that anything was applied that day, so it is
+-- deliberately not used here.
+--
+-- KNOWN GAP: whatever this migration did is not reproducible from this repo. Rebuilding the
+-- database from migrations alone will not reproduce production exactly. What it did NOT do is
+-- touch any column the listing-state migration depends on -- as of 2026-07-29 the live
+-- `profiles` table still had show_on_register, browse_paused, browse_paused_at and
+-- account_freeze_reminder_sent_at, and none of hidden_reason, delete_after, paused_at or
+-- pause_reminder_sent_at (verified against the live PostgREST schema).
+--
+-- To close the gap properly, run `supabase db pull` on a machine with Docker and diff the
+-- result against supabase/ULTIMATE_complete_schema.sql.
