@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
   const { data: target } = await admin
     .from('profiles')
-    .select('id, auth_user_id, photo_url, status, show_on_register, membership_expires_at')
+    .select('id, auth_user_id, photo_url, status, hidden_reason, membership_expires_at')
     .eq('id', profileId)
     .single();
 

@@ -23,7 +23,7 @@ const JOBS: JobInfo[] = [
   {
     name: 'send-account-freeze-reminders',
     schedule: '0 8 * * *',
-    scheduleLabel: 'Daily at 08:00 (emails ~30 days after freeze)',
+    scheduleLabel: 'Daily at 08:00 (emails ~30 days after a member pauses)',
   },
   { name: 'expire-memberships', schedule: '0 7 * * *', scheduleLabel: 'Daily at 07:00' },
   { name: 'archive-lapsed-members', schedule: '0 9 * * 1', scheduleLabel: 'Weekly Mon 09:00' },

@@ -18,9 +18,8 @@ export function pathForMemberStatus(status: string | null): string | null {
     case 'expired':
       return '/membership-expired';
     case 'active':
-    case 'matched':
       return '/dashboard/browse';
-    case 'archived':
+    case 'closed':
       return '/membership-expired';
     default:
       return null;

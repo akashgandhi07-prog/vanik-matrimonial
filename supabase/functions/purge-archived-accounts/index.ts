@@ -3,8 +3,9 @@ import { jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
-/** Days after archival (`profiles.updated_at`) before the auth user (and cascaded profile) is deleted. */
-const RETENTION_AFTER_ARCHIVE_MS = 90 * 864e5;
+// The deletion deadline is stored per-profile in `delete_after`, set when the account is
+// closed. It is deliberately not derived from `updated_at`: that column is bumped by the
+// profiles_updated_at trigger on every write, so any later edit used to push deletion back.
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -23,13 +24,12 @@ Deno.serve(async (req) => {
   const runId = runRow?.id as string | undefined;
 
   try {
-    const cutoff = new Date(Date.now() - RETENTION_AFTER_ARCHIVE_MS).toISOString();
-
     const { data: rows, error } = await admin
       .from('profiles')
       .select('id, auth_user_id')
-      .eq('status', 'archived')
-      .lt('updated_at', cutoff);
+      .eq('status', 'closed')
+      .not('delete_after', 'is', null)
+      .lt('delete_after', new Date().toISOString());
 
     if (error) {
       if (runId) {

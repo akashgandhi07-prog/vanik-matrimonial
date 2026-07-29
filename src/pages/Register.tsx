@@ -348,7 +348,7 @@ export default function Register() {
       if (!status) return;
       if (status === 'pending_approval') navigate('/registration-pending', { replace: true });
       else if (status === 'active') navigate('/dashboard/browse', { replace: true });
-      else if (status === 'matched') navigate('/dashboard/browse', { replace: true });
+      else if (status === 'closed') navigate('/membership-expired', { replace: true });
       else if (status === 'rejected' && location.pathname !== '/register') {
         navigate('/registration-rejected', { replace: true });
       }

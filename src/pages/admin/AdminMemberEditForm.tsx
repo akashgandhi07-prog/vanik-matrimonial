@@ -26,7 +26,9 @@ export type MemberProfileFull = {
   pending_photo_url: string | null;
   photo_status: string;
   status: string;
-  show_on_register: boolean;
+  hidden_reason: 'member_paused' | 'matched' | 'admin' | null;
+  paused_at: string | null;
+  delete_after: string | null;
   membership_expires_at: string | null;
   last_request_at: string | null;
   rejection_reason: string | null;
@@ -103,7 +105,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
   const [pendingPhotoUrl, setPendingPhotoUrl] = useState(profile.pending_photo_url ?? '');
   const [photoStatus, setPhotoStatus] = useState(profile.photo_status);
   const [status, setStatus] = useState(profile.status);
-  const [showOnRegister, setShowOnRegister] = useState(profile.show_on_register);
+  const [hiddenReason, setHiddenReason] = useState<string>(profile.hidden_reason ?? '');
   const [rejectionReason, setRejectionReason] = useState(profile.rejection_reason ?? '');
   const [membershipExpires, setMembershipExpires] = useState(isoToDatetimeLocal(profile.membership_expires_at));
   const [lastRequest, setLastRequest] = useState(isoToDatetimeLocal(profile.last_request_at));
@@ -140,7 +142,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     setPendingPhotoUrl(profile.pending_photo_url ?? '');
     setPhotoStatus(profile.photo_status);
     setStatus(profile.status);
-    setShowOnRegister(profile.show_on_register);
+    setHiddenReason(profile.hidden_reason ?? '');
     setRejectionReason(profile.rejection_reason ?? '');
     setMembershipExpires(isoToDatetimeLocal(profile.membership_expires_at));
     setLastRequest(isoToDatetimeLocal(profile.last_request_at));
@@ -194,7 +196,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           pending_photo_url: pendingPhotoUrl.trim() || null,
           photo_status: photoStatus,
           status,
-          show_on_register: showOnRegister,
+          hidden_reason: hiddenReason === '' ? null : hiddenReason,
           rejection_reason: status === 'rejected' ? rejectionReason : null,
           membership_expires_at: datetimeLocalToIso(membershipExpires),
           last_request_at: datetimeLocalToIso(lastRequest),
@@ -286,8 +288,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
               'active',
               'rejected',
               'expired',
-              'archived',
-              'matched',
+              'closed',
             ].map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -295,15 +296,14 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
             ))}
           </select>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={showOnRegister}
-              onChange={(e) => setShowOnRegister(e.target.checked)}
-            />
-            Show on register
-          </label>
+        <div>
+          <label className="label">Listing</label>
+          <select value={hiddenReason} onChange={(e) => setHiddenReason(e.target.value)}>
+            <option value="">On the register</option>
+            <option value="member_paused">Paused by the member</option>
+            <option value="matched">Matched</option>
+            <option value="admin">Hidden by admin</option>
+          </select>
         </div>
 
         <div>

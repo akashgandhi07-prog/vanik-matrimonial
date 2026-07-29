@@ -40,9 +40,8 @@ export type ProfileRow = {
   pending_photo_url: string | null;
   photo_status: string;
   status: string;
-  show_on_register: boolean;
-  /** When true, member is hidden from browse; existing requests to them still work. */
-  browse_paused?: boolean;
+  /** Why this profile is off the register; null when listed. */
+  hidden_reason: 'member_paused' | 'matched' | 'admin' | null;
   membership_expires_at: string | null;
   rejection_reason: string | null;
 };
@@ -303,15 +302,15 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
               rpc.error.code,
             );
           }
-          // RLS (`profiles_select_opposite_active` + own row) enforces opposite gender, active,
-          // show_on_register, membership, and browse_paused (unless viewer already requested this profile).
-          // Restrict to browse_paused = false here so this path matches browse_opposite_profiles (no paused
-          // profiles in the browse list even when the viewer could SELECT them via an existing request).
+          // RLS (`profiles_select_opposite_active` + own row) enforces opposite gender, active
+          // status, membership, and hidden_reason (a paused member is still SELECTable by someone
+          // who already requested them). Filter on hidden_reason here so this path matches
+          // browse_opposite_profiles: no hidden profiles in the browse list either way.
           const { data, error } = await supabase
             .from("profiles")
             .select("*")
             .neq("id", myId)
-            .eq("browse_paused", false);
+            .is("hidden_reason", null);
           if (error) {
             console.error(
               "browse candidates query:",

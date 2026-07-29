@@ -50,18 +50,18 @@ SELECT count(*) AS eligible_male_profiles
 FROM public.profiles
 WHERE gender = 'Male'
   AND status = 'active'
-  AND show_on_register IS TRUE
+  AND hidden_reason IS NULL
   AND membership_expires_at IS NOT NULL
   AND membership_expires_at > now();
 
 -- 3b) List eligible *candidates* for someone who seeks men (same rules as app RLS for “male” listings).
 --    IMPORTANT: filter on profiles.gender = 'Male'. Do NOT filter on seeking_gender here - that column is
 --    “who this row’s member wants to browse”, e.g. many men have seeking_gender = 'Female'.
-SELECT id, reference_number, gender, seeking_gender, status, show_on_register, membership_expires_at
+SELECT id, reference_number, gender, seeking_gender, status, hidden_reason, membership_expires_at
 FROM public.profiles
 WHERE gender = 'Male'
   AND status = 'active'
-  AND show_on_register IS TRUE
+  AND hidden_reason IS NULL
   AND membership_expires_at IS NOT NULL
   AND membership_expires_at > now()
 ORDER BY reference_number
@@ -71,7 +71,7 @@ LIMIT 50;
 SELECT gender, count(*) AS n
 FROM public.profiles
 WHERE status = 'active'
-  AND show_on_register IS TRUE
+  AND hidden_reason IS NULL
   AND membership_expires_at IS NOT NULL
   AND membership_expires_at > now()
 GROUP BY gender
@@ -89,7 +89,7 @@ SELECT id,
        gender,
        seeking_gender,
        status,
-       show_on_register,
+       hidden_reason,
        membership_expires_at,
        auth_user_id
 FROM public.profiles

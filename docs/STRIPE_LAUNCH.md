@@ -24,7 +24,7 @@ If you see logs like `profile renewal update failed - payment recorded, membersh
 
 1. In Supabase **Table Editor**, open `stripe_checkout_sessions` for the `checkout_session_id` (or latest row for that user/profile).
 2. Confirm `purpose = renewal`, `payment_status = paid`, and `renewal_applied_at` / row exists.
-3. In **`profiles`**, manually set `membership_expires_at` (extend one year from the previous expiry or from today, per your policy), set `status = 'active'` and `show_on_register = true` if appropriate.
+3. In **`profiles`**, manually set `membership_expires_at` (extend one year from the previous expiry or from today, per your policy), set `status = 'active'`, and clear `hidden_reason` and `delete_after` if appropriate.
 4. Investigate the DB error from function logs (permissions, constraint, etc.) so it does not recur.
 
 ## Monitoring

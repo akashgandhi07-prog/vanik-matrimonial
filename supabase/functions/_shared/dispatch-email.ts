@@ -265,12 +265,12 @@ export async function dispatchEmail(
     case 'account_freeze_reminder': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      if (!profile.browse_paused) return { ok: false, error: 'Not frozen' };
+      if (profile.hidden_reason !== 'member_paused') return { ok: false, error: 'Not paused' };
       const dash = `${publicSiteBaseUrl()}/login`;
-      subject = 'Reminder: your account is still frozen on the register';
+      subject = 'Reminder: your profile is still paused on the register';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>About a month ago you chose to <strong>freeze your account</strong>, so your profile stays hidden from browse and saved lists. This is just a gentle reminder that you are still frozen.</p>
-        <p>If you are ready to be visible again, sign in and open <strong>My profile</strong>, then turn off &quot;Freeze my account&quot;.</p>
+        <p>About a month ago you chose to <strong>pause your profile</strong>, so it stays hidden from browse and saved lists. This is just a gentle reminder that you are still paused.</p>
+        <p>If you are ready to be visible again, sign in and open <strong>My profile</strong>, then turn off &quot;Pause my profile&quot;.</p>
         <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Sign in</a></p>
         <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;

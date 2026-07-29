@@ -54,8 +54,8 @@ export default function VerifyEmailSuccess() {
         }
         if (status === 'pending_approval') navigate('/registration-pending', { replace: true });
         else if (status === 'rejected') navigate('/registration-rejected', { replace: true });
-        else if (status === 'expired' || status === 'archived') navigate('/membership-expired', { replace: true });
-        else if (status === 'active' || status === 'matched') {
+        else if (status === 'expired' || status === 'closed') navigate('/membership-expired', { replace: true });
+        else if (status === 'active') {
           navigate('/dashboard/browse', { replace: true });
         } else navigate('/register', { replace: true });
       } finally {

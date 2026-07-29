@@ -45,7 +45,7 @@ type RequestedProfileRpcRow = {
   pending_photo_url: string | null;
   photo_status: string;
   status: string;
-  show_on_register: boolean;
+  hidden_reason: 'member_paused' | 'matched' | 'admin' | null;
   membership_expires_at: string | null;
   rejection_reason: string | null;
   full_name: string | null;
@@ -163,7 +163,7 @@ export default function MemberRequests() {
               pending_photo_url: row.pending_photo_url,
               photo_status: row.photo_status,
               status: row.status,
-              show_on_register: row.show_on_register,
+              hidden_reason: row.hidden_reason,
               membership_expires_at: row.membership_expires_at,
               rejection_reason: row.rejection_reason,
             };

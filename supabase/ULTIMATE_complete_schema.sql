@@ -58,9 +58,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   photo_url text,
   photo_status text NOT NULL DEFAULT 'pending' CHECK (photo_status IN ('pending', 'approved', 'rejected')),
   status text NOT NULL DEFAULT 'pending_approval' CHECK (
-    status IN ('pending_approval', 'active', 'rejected', 'expired', 'archived', 'matched')
+    status IN ('pending_approval', 'active', 'rejected', 'expired', 'closed')
   ),
-  show_on_register boolean NOT NULL DEFAULT true,
+  -- NULL = listed on the register. See 20260729120000_profile_listing_state.sql.
+  hidden_reason text CHECK (
+    hidden_reason IS NULL OR hidden_reason IN ('member_paused', 'matched', 'admin')
+  ),
+  paused_at timestamptz,
+  pause_reminder_sent_at timestamptz,
+  delete_after timestamptz,
   membership_expires_at timestamptz,
   last_request_at timestamptz,
   rejection_reason text,
@@ -231,7 +237,7 @@ AS $$
     SELECT 1
     FROM public.profiles viewer
     WHERE viewer.id = viewer_profile_id
-      AND viewer.status IN ('active', 'matched')
+      AND viewer.status = 'active'
       AND viewer.membership_expires_at IS NOT NULL
       AND viewer.membership_expires_at > now()
       AND (
@@ -278,7 +284,7 @@ BEGIN
      OR OLD.gender IS DISTINCT FROM NEW.gender
      OR OLD.first_name IS DISTINCT FROM NEW.first_name
      OR OLD.status IS DISTINCT FROM NEW.status
-     OR OLD.show_on_register IS DISTINCT FROM NEW.show_on_register
+     OR OLD.delete_after IS DISTINCT FROM NEW.delete_after
      OR OLD.membership_expires_at IS DISTINCT FROM NEW.membership_expires_at
      OR OLD.last_request_at IS DISTINCT FROM NEW.last_request_at
      OR OLD.rejection_reason IS DISTINCT FROM NEW.rejection_reason
@@ -531,7 +537,7 @@ CREATE POLICY profiles_select_opposite_active ON public.profiles
     public.is_admin()
     OR (
       status = 'active'
-      AND show_on_register = true
+      AND hidden_reason IS NULL
       AND membership_expires_at > now()
       AND public.viewer_can_browse_gender(public.current_profile_id(), gender)
     )
@@ -852,7 +858,7 @@ AS $$
   WHERE p.id <> public.current_profile_id()
     AND public.viewer_can_browse_gender(public.current_profile_id(), p.gender)
     AND p.status = 'active'
-    AND p.show_on_register = true
+    AND p.hidden_reason IS NULL
     AND p.membership_expires_at IS NOT NULL
     AND p.membership_expires_at > now();
 $$;

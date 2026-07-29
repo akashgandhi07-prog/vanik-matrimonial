@@ -24,8 +24,7 @@ type ProfileCandidate = {
   gender: string;
   reference_number: string | null;
   status: string;
-  show_on_register: boolean;
-  browse_paused?: boolean;
+  hidden_reason?: string | null;
   membership_expires_at: string | null;
 };
 
@@ -150,7 +149,7 @@ Deno.serve(async (req) => {
     const now = new Date();
     const { data: candProfiles, error: cpErr } = await admin
       .from('profiles')
-      .select('id, first_name, gender, reference_number, status, show_on_register, browse_paused, membership_expires_at')
+      .select('id, first_name, gender, reference_number, status, hidden_reason, membership_expires_at')
       .in('id', ids);
     if (cpErr) {
       return jsonErr(req, 500, 'candidate_query_failed', cpErr.message);
@@ -181,16 +180,16 @@ Deno.serve(async (req) => {
           'This profile is not available for contact requests.'
         );
       }
-      if (!p.show_on_register) {
-        return jsonErr(req, 400, 'invalid_candidate', 'This profile is not listed on the register.');
-      }
-      if (p.browse_paused === true) {
+      if (p.hidden_reason === 'member_paused') {
         return jsonErr(
           req,
           400,
           'invalid_candidate',
-          'This member has paused browsing and is not accepting new contact requests right now.'
+          'This member has paused their profile and is not accepting new contact requests right now.'
         );
+      }
+      if (p.hidden_reason != null) {
+        return jsonErr(req, 400, 'invalid_candidate', 'This profile is not listed on the register.');
       }
       if (!p.membership_expires_at || new Date(p.membership_expires_at) <= now) {
         return jsonErr(req, 400, 'invalid_candidate', 'This member’s membership is not active.');

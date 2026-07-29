@@ -41,12 +41,12 @@ Deno.serve(async (req) => {
 
     const { data: profiles, error } = await admin
       .from('profiles')
-      .select('id, first_name, browse_paused_at')
-      .eq('browse_paused', true)
+      .select('id, first_name, paused_at')
+      .eq('hidden_reason', 'member_paused')
       .eq('status', 'active')
-      .not('browse_paused_at', 'is', null)
-      .lte('browse_paused_at', cutoff)
-      .is('account_freeze_reminder_sent_at', null);
+      .not('paused_at', 'is', null)
+      .lte('paused_at', cutoff)
+      .is('pause_reminder_sent_at', null);
 
     if (error) {
       if (runId) {
@@ -73,9 +73,9 @@ Deno.serve(async (req) => {
       if ((alreadyLogged ?? 0) > 0) {
         await admin
           .from('profiles')
-          .update({ account_freeze_reminder_sent_at: new Date().toISOString() })
+          .update({ pause_reminder_sent_at: new Date().toISOString() })
           .eq('id', pid)
-          .is('account_freeze_reminder_sent_at', null);
+          .is('pause_reminder_sent_at', null);
         continue;
       }
 
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       sent++;
       const { error: upErr } = await admin
         .from('profiles')
-        .update({ account_freeze_reminder_sent_at: new Date().toISOString() })
+        .update({ pause_reminder_sent_at: new Date().toISOString() })
         .eq('id', pid);
       if (upErr) {
         errors.push(`${pid}: sent but failed to mark: ${upErr.message}`);

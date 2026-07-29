@@ -84,7 +84,7 @@ export default function MembershipExpired() {
       if (
         after.st === 'active' &&
         before.st !== 'active' &&
-        (before.st === 'expired' || before.st === 'archived')
+        (before.st === 'expired' || before.st === 'closed')
       ) {
         return true;
       }
@@ -148,14 +148,14 @@ export default function MembershipExpired() {
   const isRenewable =
     profile != null &&
     (profile.status === 'expired' ||
-      profile.status === 'archived' ||
+      profile.status === 'closed' ||
       profileNeedsMembershipExpiredRoute(profile));
 
-  const isArchivedRenewal = profile != null && profile.status === 'archived';
+  const isArchivedRenewal = profile != null && profile.status === 'closed';
 
   const isEarlyRenewal =
     profile != null &&
-    (profile.status === 'active' || profile.status === 'matched') &&
+    profile.status === 'active' &&
     profile.membership_expires_at != null &&
     new Date(profile.membership_expires_at) > new Date();
 

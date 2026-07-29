@@ -4,6 +4,9 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
+/** Days between a member asking to leave and the auth user being hard-deleted. */
+const RETENTION_AFTER_CLOSE_DAYS = 90;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeadersFor(req) });
@@ -40,7 +43,11 @@ Deno.serve(async (req) => {
 
   await admin
     .from('profiles')
-    .update({ status: 'archived', show_on_register: false })
+    .update({
+      status: 'closed',
+      hidden_reason: null,
+      delete_after: new Date(Date.now() + RETENTION_AFTER_CLOSE_DAYS * 864e5).toISOString(),
+    })
     .eq('id', prof.id);
 
   if (isTransactionalMailConfigured()) {

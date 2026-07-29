@@ -8,8 +8,10 @@ const EXPORT_GROUPS = [
   { key: 'expired', label: 'Expired' },
   { key: 'lapsed90', label: 'Long-lapsed (365+ days past expiry)' },
   { key: 'rejected30', label: 'Rejected (last 30 days)' },
-  { key: 'archived', label: 'Archived' },
+  { key: 'closed', label: 'Closed' },
   { key: 'matched', label: 'Matched' },
+  { key: 'paused', label: 'Paused by member' },
+  { key: 'hidden', label: 'Hidden by admin' },
 ] as const;
 
 type ExportKey = (typeof EXPORT_GROUPS)[number]['key'];

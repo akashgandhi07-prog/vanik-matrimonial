@@ -280,7 +280,6 @@ Deno.serve(async (req) => {
       .update({
         ...profilePayload,
         rejection_reason: null,
-        show_on_register: false,
       })
       .eq('id', profileId);
     if (upProf) {

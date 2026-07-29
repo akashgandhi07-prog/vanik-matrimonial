@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: prof, error: pe } = await admin
       .from('profiles')
-      .select('id, auth_user_id, membership_expires_at, status')
+      .select('id, auth_user_id, membership_expires_at, status, hidden_reason')
       .eq('id', profileId)
       .maybeSingle();
 
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     }
 
     const st = prof.status as string;
-    const renewable = new Set(['active', 'matched', 'expired', 'archived']);
+    const renewable = new Set(['active', 'expired', 'closed']);
     if (!renewable.has(st)) {
       return jsonResponse({ received: true, skipped: 'bad_status' }, req);
     }
@@ -153,7 +153,10 @@ Deno.serve(async (req) => {
       .update({
         membership_expires_at: newExp.toISOString(),
         status: 'active',
-        show_on_register: true,
+        // Renewing clears a matched flag -- they are coming back -- but must not undo a
+        // member's own pause or a staff hide. A payment is not a moderation override.
+        hidden_reason: prof.hidden_reason === 'matched' ? null : prof.hidden_reason,
+        delete_after: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', profileId);

@@ -55,7 +55,7 @@ Use one **canonical** public origin everywhere (for example `https://matrimonial
 If the member **Browse** page loads but shows no candidates, the database is only returning profiles that match all of the following (enforced by RLS / `browse_opposite_profiles`):
 
 - The viewer’s **seeking_gender** (under Browse or My profile) matches the candidate’s gender, or seeking is **Both**.
-- Candidate **status** is **active**, **show_on_register** is true, and **membership_expires_at** is in the future.
+- Candidate **status** is **active**, **hidden_reason** is null (not paused by the member, matched, or hidden by an admin), and **membership_expires_at** is in the future.
 - The candidate row has **auth_user_id** linked to a real login (not a placeholder account).
 
 Run `supabase/verify_browse_setup.sql` in the Supabase SQL editor for the **same** project the app uses to verify migrations, policies, and sample data. Also confirm `VITE_SUPABASE_URL` points at that project.

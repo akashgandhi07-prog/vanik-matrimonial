@@ -22,8 +22,12 @@ const ACTION_LABELS: Record<string, string> = {
   marked_matched: 'Marked as matched',
   photo_approved: 'Profile photo approved',
   photo_rejected: 'Profile photo rejected',
-  archived: 'Member archived',
-  reinstated: 'Member reinstated',
+  closed: 'Account closed',
+  reopened: 'Account reopened',
+  hidden: 'Taken off the register',
+  unhidden: 'Restored to the register',
+  archived: 'Member archived (legacy)',
+  reinstated: 'Member reinstated (legacy)',
   profile_admin_edit: 'Profile updated (admin edit)',
   photo_admin_upload: 'Profile photo uploaded (admin)',
   internal_note_updated: 'Internal staff note updated',
@@ -36,6 +40,27 @@ const ACTION_LABELS: Record<string, string> = {
   admin_role_changed: 'Admin role changed',
   contact_request_quota_adjusted: 'Contact request limits adjusted',
 };
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+/** One phrase for "is this member on the register, and if not why not". */
+function listingLabel(reason: string | null): string {
+  switch (reason) {
+    case 'member_paused':
+      return 'paused by the member';
+    case 'matched':
+      return 'off the register (matched)';
+    case 'admin':
+      return 'off the register (hidden by admin)';
+    default:
+      return 'on the register';
+  }
+}
 
 function humanizeAction(type: string) {
   return ACTION_LABELS[type] ?? type.replace(/_/g, ' ');
@@ -86,7 +111,8 @@ export default function AdminMemberDetail() {
   const [matchOpen, setMatchOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineRow[]>([]);
   const [confirmApprove, setConfirmApprove] = useState(false);
-  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [listingBusy, setListingBusy] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   /** Pre-signed ID document URL from server (short-lived); refreshed on each detail load. */
   const [idDocSignedFromServer, setIdDocSignedFromServer] = useState<string | null>(null);
@@ -183,6 +209,19 @@ export default function AdminMemberDetail() {
     })();
   }, [id, ok, mfaOk, reloadKey]);
 
+  async function listingAction(action: 'hide' | 'unhide') {
+    if (!profile) return;
+    setListingBusy(true);
+    try {
+      await invokeFunction('admin-update-member-status', { profile_id: profile.id, action });
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setListingBusy(false);
+    }
+  }
+
   if (ok === false) return <Navigate to="/dashboard/browse" replace />;
   if (ok === null || mfaOk === null) {
     return <div className="layout-max">Loading…</div>;
@@ -202,7 +241,10 @@ export default function AdminMemberDetail() {
 
   const pending = profile.status === 'pending_approval';
   const canMarkMatched =
-    !pending && profile.status !== 'matched' && profile.status !== 'archived' && profile.status !== 'rejected';
+    !pending &&
+    profile.hidden_reason !== 'matched' &&
+    profile.status !== 'closed' &&
+    profile.status !== 'rejected';
 
   return (
     <div>
@@ -213,8 +255,7 @@ export default function AdminMemberDetail() {
           {profile.first_name} {priv.surname}
         </h1>
         <p style={{ color: 'var(--color-text-secondary)' }}>
-          {profile.reference_number} · {profile.status}
-          {profile.show_on_register ? ' · on register' : ''}
+          {profile.reference_number} · {profile.status} · {listingLabel(profile.hidden_reason)}
         </p>
 
         <div className="card" style={{ marginTop: 20 }}>
@@ -1064,17 +1105,103 @@ export default function AdminMemberDetail() {
         </div>
 
         <div className="card" style={{ marginTop: 24 }}>
+          <h3>Listing</h3>
+          <p style={{ fontSize: 14, marginTop: 0 }}>
+            This member is <strong>{listingLabel(profile.hidden_reason)}</strong>
+            {profile.hidden_reason === 'member_paused' && profile.paused_at
+              ? ` since ${fmtDateTime(profile.paused_at)}`
+              : ''}
+            .
+          </p>
+          {profile.status !== 'active' && (
+            <p className="field-hint">
+              Their status is <code>{profile.status}</code>, so they are off the register regardless of this
+              setting.
+            </p>
+          )}
+          {!supportOnly ? (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {profile.hidden_reason == null ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => void listingAction('hide')}
+                  disabled={listingBusy}
+                >
+                  Take off the register
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => void listingAction('unhide')}
+                  disabled={listingBusy}
+                >
+                  {profile.hidden_reason === 'member_paused'
+                    ? 'Unpause on their behalf'
+                    : 'Put back on the register'}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="field-hint" style={{ marginBottom: 0 }}>
+              Support role cannot change the listing from this screen.
+            </p>
+          )}
+          {profile.hidden_reason === 'member_paused' && !supportOnly && (
+            <p className="field-hint" style={{ marginBottom: 0 }}>
+              This member paused themselves. Only unpause them if they have asked you to.
+            </p>
+          )}
+        </div>
+
+        <div className="card" style={{ marginTop: 24 }}>
           <h3>Account status</h3>
-          {profile.status !== 'archived' && !supportOnly && (
+          {profile.status === 'closed' ? (
             <div>
-              {!confirmArchive ? (
-                <button type="button" className="btn btn-secondary" onClick={() => setConfirmArchive(true)}>
-                  Archive member
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
+                This account is closed
+                {profile.delete_after
+                  ? `. Their data is deleted permanently after ${fmtDateTime(profile.delete_after)}.`
+                  : ' and has no deletion date set.'}{' '}
+                {!supportOnly && 'Reopening sets status to active and extends membership by 1 year.'}
+              </p>
+              {!supportOnly ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    try {
+                      await invokeFunction('admin-update-member-status', {
+                        profile_id: profile.id,
+                        action: 'reopen',
+                      });
+                      navigate('/admin/members');
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : 'Failed');
+                    }
+                  }}
+                >
+                  Reopen account
+                </button>
+              ) : (
+                <p className="field-hint" style={{ marginBottom: 0 }}>
+                  Reopening requires a super admin.
+                </p>
+              )}
+            </div>
+          ) : !supportOnly ? (
+            <div>
+              {!confirmClose ? (
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirmClose(true)}>
+                  Close account
                 </button>
               ) : (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 14, color: 'var(--color-danger)' }}>
-                    Archive this member? They will be hidden from the register.
+                    Close this account? Their membership ends and all their data is permanently deleted after 90
+                    days. To hide them without ending their membership, use <strong>Take off the register</strong>{' '}
+                    above.
                   </span>
                   <button
                     type="button"
@@ -1084,7 +1211,7 @@ export default function AdminMemberDetail() {
                       try {
                         await invokeFunction('admin-update-member-status', {
                           profile_id: profile.id,
-                          action: 'archive',
+                          action: 'close',
                         });
                         navigate('/admin/members');
                       } catch (e) {
@@ -1092,47 +1219,17 @@ export default function AdminMemberDetail() {
                       }
                     }}
                   >
-                    Confirm archive
+                    Confirm close
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setConfirmArchive(false)}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setConfirmClose(false)}>
                     Cancel
                   </button>
                 </div>
               )}
             </div>
-          )}
-          {profile.status === 'archived' && !supportOnly && (
-            <div>
-              <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-                This member is archived. Reinstating will set status to active and extend membership by 1 year.
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={async () => {
-                  try {
-                    await invokeFunction('admin-update-member-status', {
-                      profile_id: profile.id,
-                      action: 'reinstate',
-                    });
-                    navigate('/admin/members');
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : 'Failed');
-                  }
-                }}
-              >
-                Reinstate member
-              </button>
-            </div>
-          )}
-          {profile.status === 'archived' && supportOnly && (
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginBottom: 0 }}>
-              This member is archived (reinstate requires a super admin).
-            </p>
-          )}
-          {supportOnly && profile.status !== 'archived' && (
+          ) : (
             <p className="field-hint" style={{ marginBottom: 0 }}>
-              Support role cannot archive or mark matched from this screen.
+              Support role cannot close accounts or mark matched from this screen.
             </p>
           )}
         </div>
@@ -1150,8 +1247,8 @@ export default function AdminMemberDetail() {
                 Mark as matched
               </h2>
               <p>
-                This sets status to <strong>matched</strong>, hides the profile from the register (
-                <code>show_on_register = false</code>), sends the congratulations email, and logs an admin action.
+                This takes the profile off the register (<code>hidden_reason = matched</code>), sends the
+                congratulations email, and logs an admin action. Their membership keeps running.
               </p>
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setMatchOpen(false)}>

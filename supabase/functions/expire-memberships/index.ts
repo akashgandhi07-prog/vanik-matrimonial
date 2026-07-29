@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const { data: rows, error } = await admin
       .from('profiles')
       .select('id')
-      .in('status', ['active', 'matched'])
+      .eq('status', 'active')
       .lt('membership_expires_at', now);
 
     if (error) {
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       const pid = r.id as string;
       const { error: up } = await admin
         .from('profiles')
-        .update({ status: 'expired', show_on_register: false })
+        .update({ status: 'expired' })
         .eq('id', pid);
       if (up) continue;
       expired++;

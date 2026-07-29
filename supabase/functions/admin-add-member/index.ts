@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   const membershipExpiresAt = body.membership_expires_at
     ? String(body.membership_expires_at)
     : null;
-  const showOnRegister = body.show_on_register === true || body.show_on_register === 'true';
+  const listed = body.listed === true || body.listed === 'true';
   const genderNorm = String(body.gender ?? 'Male') === 'Female' ? 'Female' : 'Male';
   const skRaw = String(body.seeking_gender ?? '').trim();
   const seekingGender =
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       father_name: body.father_name ? String(body.father_name) : null,
       mother_name: body.mother_name ? String(body.mother_name) : null,
       membership_expires_at: membershipExpiresAt,
-      show_on_register: showOnRegister,
+      hidden_reason: listed ? null : 'admin',
     })
     .select('id')
     .single();

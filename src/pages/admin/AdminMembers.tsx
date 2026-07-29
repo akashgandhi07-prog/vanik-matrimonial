@@ -15,6 +15,7 @@ type Profile = {
   full_name?: string;
   gender: string;
   status: string;
+  hidden_reason?: 'member_paused' | 'matched' | 'admin' | null;
   community: string | null;
   age: number | null;
   membership_expires_at: string | null;
@@ -32,8 +33,10 @@ const FILTERS = [
   'expired',
   'rejected',
   'rejected30',
-  'archived',
+  'closed',
   'matched',
+  'paused',
+  'hidden',
   'lapsed90',
   'photo_pending',
   'expires60',
@@ -69,11 +72,19 @@ function memberDisplayName(m: Pick<Profile, 'first_name' | 'full_name'>): string
   return m.first_name.trim();
 }
 
+const LISTING_BADGE: Record<string, string> = {
+  member_paused: 'paused by member',
+  matched: 'matched',
+  admin: 'hidden by admin',
+};
+
 function filterLabel(f: (typeof FILTERS)[number]): string {
   if (f === 'rejected30') return 'Rejected (30d)';
   if (f === 'photo_pending') return 'Photo pending';
   if (f === 'expires60') return 'Expires ≤60d';
   if (f === 'lapsed90') return 'Long-lapsed (365+ days past expiry)';
+  if (f === 'paused') return 'Paused by member';
+  if (f === 'hidden') return 'Hidden by admin';
   return f;
 }
 
@@ -110,9 +121,8 @@ const MEMBER_EXPORT_COLUMN_OPTS = [
   { id: 'mother_name', label: "Mother's name" },
   { id: 'status', label: 'Status' },
   { id: 'photo_status', label: 'Photo status' },
-  { id: 'show_on_register', label: 'Show on register' },
-  { id: 'browse_paused', label: 'Browse paused' },
-  { id: 'browse_paused_at', label: 'Browse paused at' },
+  { id: 'hidden_reason', label: 'Off register (reason)' },
+  { id: 'paused_at', label: 'Paused at' },
   { id: 'membership_expires_at', label: 'Membership expires' },
   { id: 'last_request_at', label: 'Last contact request' },
   { id: 'rejection_reason', label: 'Rejection reason' },
@@ -124,7 +134,8 @@ const MEMBER_EXPORT_COLUMN_OPTS = [
   { id: 'private_record_created_at', label: 'Private record created at' },
   { id: 'contact_request_weekly_bonus', label: 'Contact quota bonus (weekly)' },
   { id: 'contact_request_monthly_bonus', label: 'Contact quota bonus (monthly)' },
-  { id: 'account_freeze_reminder_sent_at', label: 'Account freeze reminder sent at' },
+  { id: 'pause_reminder_sent_at', label: 'Pause reminder sent at' },
+  { id: 'delete_after', label: 'Delete after' },
   { id: 'staff_admin_notes', label: 'Staff notes (internal)' },
   { id: 'id_document_deleted_at', label: 'ID document deleted at' },
   { id: 'auth_user_id', label: 'Auth user ID' },
@@ -629,7 +640,14 @@ export default function AdminMembers() {
                     </td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.gender}</td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.age}</td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.status}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                      {m.status}
+                      {m.hidden_reason && (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                          {LISTING_BADGE[m.hidden_reason]}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.membership_expires_at)}</td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.last_request_at)}</td>
                     <td style={{ padding: 8 }}>

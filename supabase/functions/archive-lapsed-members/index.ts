@@ -4,6 +4,9 @@ import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 
+/** Days a closed account is kept before purge-archived-accounts hard-deletes the auth user. */
+const RETENTION_AFTER_CLOSE_DAYS = 90;
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, req, 405);
@@ -13,7 +16,7 @@ Deno.serve(async (req) => {
 
   const admin = getAdminClient();
   const mailOk = isTransactionalMailConfigured();
-  /** Expired members whose `membership_expires_at` is more than this many days in the past are archived. */
+  /** Expired members whose `membership_expires_at` is more than this many days in the past are closed. */
   const cutoff = new Date(Date.now() - 365 * 864e5).toISOString();
 
   const { data: rows, error } = await admin
@@ -31,7 +34,11 @@ Deno.serve(async (req) => {
     const pid = r.id as string;
     const { error: up } = await admin
       .from('profiles')
-      .update({ status: 'archived', show_on_register: false })
+      .update({
+        status: 'closed',
+        hidden_reason: null,
+        delete_after: new Date(Date.now() + RETENTION_AFTER_CLOSE_DAYS * 864e5).toISOString(),
+      })
       .eq('id', pid);
     if (up) continue;
     archived++;

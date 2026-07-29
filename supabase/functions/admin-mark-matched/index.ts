@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   const admin = getAdminClient();
   const { error: up } = await admin
     .from('profiles')
-    .update({ status: 'matched', show_on_register: false })
+    .update({ hidden_reason: 'matched' })
     .eq('id', profileId);
   if (up) {
     return jsonResponse({ error: up.message }, req, 500);

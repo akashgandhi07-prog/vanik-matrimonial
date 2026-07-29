@@ -35,7 +35,7 @@ type FormState = {
   country: string;
   status: 'active' | 'pending_approval';
   membership_expires_at: string;
-  show_on_register: boolean;
+  listed: boolean;
 };
 
 const INIT: FormState = {
@@ -63,7 +63,7 @@ const INIT: FormState = {
   country: 'UK',
   status: 'active',
   membership_expires_at: defaultExpiry,
-  show_on_register: true,
+  listed: true,
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -295,10 +295,10 @@ export default function AdminAddMember() {
           <label className="form-checkbox-label">
             <input
               type="checkbox"
-              checked={form.show_on_register}
-              onChange={(e) => set('show_on_register', e.target.checked)}
+              checked={form.listed}
+              onChange={(e) => set('listed', e.target.checked)}
             />
-            Show on register
+            List on the register
           </label>
 
           {error && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{error}</p>}

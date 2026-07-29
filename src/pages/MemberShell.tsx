@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { MemberAuthGate, MemberDataProvider, useMemberArea } from '../member/memberContext';
+import { supabase } from '../lib/supabase';
 
 const DASHBOARD_BROWSE_TIP_KEY = 'vanik_dashboard_browse_tip_v1';
 
@@ -13,6 +14,7 @@ function MemberLayoutBody() {
   const { profile, loadAll } = useMemberArea();
   const [searchParams, setSearchParams] = useSearchParams();
   const [renewalPaidNotice, setRenewalPaidNotice] = useState(false);
+  const [unpausing, setUnpausing] = useState(false);
   const [browseTipDismissed, setBrowseTipDismissed] = useState(() => {
     try {
       return typeof localStorage !== 'undefined' && Boolean(localStorage.getItem(DASHBOARD_BROWSE_TIP_KEY));
@@ -59,6 +61,15 @@ function MemberLayoutBody() {
   const navCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'btn btn-primary' : 'btn btn-secondary';
 
+  const isPaused = profile.hidden_reason === 'member_paused';
+
+  async function unpause() {
+    setUnpausing(true);
+    const { error } = await supabase.from('profiles').update({ hidden_reason: null }).eq('id', profile!.id);
+    if (!error) await loadAll();
+    setUnpausing(false);
+  }
+
   return (
     <div className="member-dashboard-root" style={{ paddingBottom: 24 }}>
       <header className="member-dashboard-header member-dashboard-header--bar">
@@ -104,6 +115,23 @@ function MemberLayoutBody() {
             <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew for £10
             </NavLink>
+          </div>
+        )}
+        {isPaused && (
+          <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">
+            <span>
+              Your profile is <strong>paused</strong>, so other members can&apos;t find you in browse or saved
+              profiles. Your membership is unaffected.
+            </span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: '4px 12px', fontSize: 13 }}
+              disabled={unpausing}
+              onClick={() => void unpause()}
+            >
+              {unpausing ? 'Unpausing…' : 'Unpause my profile'}
+            </button>
           </div>
         )}
         {showRed && (

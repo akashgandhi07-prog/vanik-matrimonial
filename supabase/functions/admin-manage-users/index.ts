@@ -163,8 +163,10 @@ async function fetchAllFilteredProfileRows(admin: any, f: string, selectCols: st
     else if (f === 'active') q = q.eq('status', 'active');
     else if (f === 'expired') q = q.eq('status', 'expired');
     else if (f === 'rejected') q = q.eq('status', 'rejected');
-    else if (f === 'archived') q = q.eq('status', 'archived');
-    else if (f === 'matched') q = q.eq('status', 'matched');
+    else if (f === 'closed') q = q.eq('status', 'closed');
+    else if (f === 'matched') q = q.eq('hidden_reason', 'matched');
+    else if (f === 'paused') q = q.eq('hidden_reason', 'member_paused');
+    else if (f === 'hidden') q = q.eq('hidden_reason', 'admin');
     else if (f === 'lapsed90') q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
     else if (f === 'rejected30') q = q.eq('status', 'rejected').gte('updated_at', since30);
     else if (f === 'photo_pending') q = q.not('pending_photo_url', 'is', null);
@@ -223,9 +225,8 @@ const EXPORT_MEMBERS_CSV_COLUMNS = [
   'mother_name',
   'status',
   'photo_status',
-  'show_on_register',
-  'browse_paused',
-  'browse_paused_at',
+  'hidden_reason',
+  'paused_at',
   'membership_expires_at',
   'last_request_at',
   'rejection_reason',
@@ -237,7 +238,8 @@ const EXPORT_MEMBERS_CSV_COLUMNS = [
   'private_record_created_at',
   'contact_request_weekly_bonus',
   'contact_request_monthly_bonus',
-  'account_freeze_reminder_sent_at',
+  'pause_reminder_sent_at',
+  'delete_after',
   'staff_admin_notes',
   'id_document_deleted_at',
   'auth_user_id',
@@ -331,9 +333,8 @@ function buildMemberExportValueMap(
     mother_name: priv?.mother_name ?? '',
     status: p.status ?? '',
     photo_status: p.photo_status ?? '',
-    show_on_register: p.show_on_register ?? '',
-    browse_paused: p.browse_paused ?? '',
-    browse_paused_at: p.browse_paused_at ?? '',
+    hidden_reason: p.hidden_reason ?? '',
+    paused_at: p.paused_at ?? '',
     membership_expires_at: p.membership_expires_at ?? '',
     last_request_at: p.last_request_at ?? '',
     rejection_reason: p.rejection_reason ?? '',
@@ -351,7 +352,8 @@ function buildMemberExportValueMap(
       priv?.contact_request_monthly_bonus === null || priv?.contact_request_monthly_bonus === undefined
         ? ''
         : priv.contact_request_monthly_bonus,
-    account_freeze_reminder_sent_at: p.account_freeze_reminder_sent_at ?? '',
+    pause_reminder_sent_at: p.pause_reminder_sent_at ?? '',
+    delete_after: p.delete_after ?? '',
     staff_admin_notes: staffNotesBody ?? '',
     id_document_deleted_at: priv?.id_document_deleted_at ?? '',
     auth_user_id: p.auth_user_id ?? '',
@@ -507,7 +509,7 @@ Deno.serve(async (req) => {
     }
 
     const profileSelect =
-      'id, reference_number, first_name, gender, seeking_gender, age, education, job_title, height_cm, weight_kg, diet, religion, community, nationality, place_of_birth, town_country_of_origin, future_settlement_plans, hobbies, photo_status, status, show_on_register, browse_paused, browse_paused_at, account_freeze_reminder_sent_at, membership_expires_at, last_request_at, rejection_reason, created_at, updated_at, auth_user_id, pending_photo_url';
+      'id, reference_number, first_name, gender, seeking_gender, age, education, job_title, height_cm, weight_kg, diet, religion, community, nationality, place_of_birth, town_country_of_origin, future_settlement_plans, hobbies, photo_status, status, hidden_reason, paused_at, pause_reminder_sent_at, delete_after, membership_expires_at, last_request_at, rejection_reason, created_at, updated_at, auth_user_id, pending_photo_url';
 
     const { rows: profRows, error: pErr } = await fetchAllFilteredProfileRows(admin, f, profileSelect);
     if (pErr) {
@@ -731,13 +733,15 @@ Deno.serve(async (req) => {
       'expired',
       'lapsed90',
       'rejected30',
-      'archived',
+      'closed',
       'matched',
+      'paused',
+      'hidden',
     ]);
     const statuses = [...new Set(rawStatuses.filter((x): x is string => typeof x === 'string' && allowed.has(x)))];
     if (statuses.length === 0) {
       return jsonResponse(
-        { error: 'statuses required: non-empty array of active|pending|expires60|expired|lapsed90|rejected30|archived|matched' },
+        { error: 'statuses required: non-empty array of active|pending|expires60|expired|lapsed90|rejected30|closed|matched|paused|hidden' },
         req,
         400
       );
@@ -757,8 +761,10 @@ Deno.serve(async (req) => {
       else if (f === 'active') q = q.eq('status', 'active');
       else if (f === 'expired') q = q.eq('status', 'expired');
       else if (f === 'rejected30') q = q.eq('status', 'rejected').gte('updated_at', since30);
-      else if (f === 'archived') q = q.eq('status', 'archived');
-      else if (f === 'matched') q = q.eq('status', 'matched');
+      else if (f === 'closed') q = q.eq('status', 'closed');
+      else if (f === 'matched') q = q.eq('hidden_reason', 'matched');
+      else if (f === 'paused') q = q.eq('hidden_reason', 'member_paused');
+      else if (f === 'hidden') q = q.eq('hidden_reason', 'admin');
       else if (f === 'lapsed90') {
         q = q.eq('status', 'expired').lt('membership_expires_at', lapseCutoff);
       } else if (f === 'expires60') {
@@ -1191,21 +1197,26 @@ Deno.serve(async (req) => {
       'active',
       'expired',
       'rejected',
-      'archived',
-      'matched',
+      'closed',
     ] as const;
     const countPromises = statuses.map((s) =>
       admin.from('profiles').select('id', { count: 'exact', head: true }).eq('status', s)
     );
-    const [counts, reqC, fbC, emailAttempted, emailOk] = await Promise.all([
+    // Off-register reasons are counted separately now that they are no longer statuses.
+    const reasons = ['matched', 'member_paused', 'admin'] as const;
+    const reasonPromises = reasons.map((r) =>
+      admin.from('profiles').select('id', { count: 'exact', head: true }).eq('hidden_reason', r)
+    );
+    const [counts, reasonCounts, reqC, fbC, emailAttempted, emailOk] = await Promise.all([
       Promise.all(countPromises),
+      Promise.all(reasonPromises),
       admin.from('requests').select('id', { count: 'exact', head: true }),
       admin.from('feedback').select('id', { count: 'exact', head: true }),
       admin.from('email_log').select('id', { count: 'exact', head: true }).not('resend_message_id', 'is', null),
       admin.from('email_log').select('id', { count: 'exact', head: true }).in('status', ['sent', 'delivered']),
     ]);
 
-    for (const c of counts) {
+    for (const c of [...counts, ...reasonCounts]) {
       if (c.error) return jsonResponse({ error: c.error.message }, req, 500);
     }
     if (reqC.error) return jsonResponse({ error: reqC.error.message }, req, 500);
@@ -1217,8 +1228,13 @@ Deno.serve(async (req) => {
     statuses.forEach((s, i) => {
       byStatus[s] = counts[i].count ?? 0;
     });
+    const byHiddenReason: Record<string, number> = {};
+    reasons.forEach((r, i) => {
+      byHiddenReason[r] = reasonCounts[i].count ?? 0;
+    });
     return jsonResponse({
       byStatus,
+      byHiddenReason,
       requests: reqC.count ?? 0,
       feedback: fbC.count ?? 0,
       emailAttempted: emailAttempted.count ?? 0,
@@ -1360,15 +1376,19 @@ Deno.serve(async (req) => {
       if (profIn.status !== undefined) {
         const st = String(profIn.status);
         if (
-          !['pending_approval', 'active', 'rejected', 'expired', 'archived', 'matched'].includes(st)
+          !['pending_approval', 'active', 'rejected', 'expired', 'closed'].includes(st)
         ) {
           return jsonResponse({ error: 'Invalid status' }, req, 400);
         }
         profilePatch.status = st;
       }
 
-      if (profIn.show_on_register !== undefined) {
-        profilePatch.show_on_register = !!profIn.show_on_register;
+      if (profIn.hidden_reason !== undefined) {
+        const hr = profIn.hidden_reason;
+        if (hr !== null && !['member_paused', 'matched', 'admin'].includes(String(hr))) {
+          return jsonResponse({ error: 'Invalid hidden_reason' }, req, 400);
+        }
+        profilePatch.hidden_reason = hr === null ? null : String(hr);
       }
 
       if (profIn.rejection_reason !== undefined) {

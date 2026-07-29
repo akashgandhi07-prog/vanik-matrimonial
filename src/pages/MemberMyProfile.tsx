@@ -54,36 +54,43 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [seeking, setSeeking] = useState<'Male' | 'Female' | 'Both'>(() =>
     p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female')
   );
-  const [browsePaused, setBrowsePaused] = useState(() => !!p.browse_paused);
-  const [browsePauseSaving, setBrowsePauseSaving] = useState(false);
-  const [browsePauseError, setBrowsePauseError] = useState('');
+  const [paused, setPaused] = useState(() => p.hidden_reason === 'member_paused');
+  const [pauseSaving, setPauseSaving] = useState(false);
+  const [pauseError, setPauseError] = useState('');
 
   useEffect(() => {
     setSeeking(p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'));
   }, [p.seeking_gender, p.gender, p.id]);
 
   useEffect(() => {
-    setBrowsePaused(!!p.browse_paused);
-  }, [p.browse_paused, p.id]);
+    setPaused(p.hidden_reason === 'member_paused');
+  }, [p.hidden_reason, p.id]);
 
   const nonPrimaryOrdered = useMemo(() => {
     return [...photos].filter((x) => !x.is_primary).sort((a, b) => a.position - b.position);
   }, [photos]);
 
-  async function setBrowsePause(next: boolean) {
-    if (p.status !== 'active') return;
-    const prev = browsePaused;
-    setBrowsePaused(next);
-    setBrowsePauseSaving(true);
-    setBrowsePauseError('');
-    const { error } = await supabase.from('profiles').update({ browse_paused: next }).eq('id', p.id);
+  // Members may only move their own listing between "listed" and "paused by me"; a staff
+  // hide or a matched flag is not theirs to clear (enforced by enforce_profile_member_update).
+  const canPause = p.status === 'active' && (p.hidden_reason == null || p.hidden_reason === 'member_paused');
+
+  async function setPauseState(next: boolean) {
+    if (!canPause) return;
+    const prev = paused;
+    setPaused(next);
+    setPauseSaving(true);
+    setPauseError('');
+    const { error } = await supabase
+      .from('profiles')
+      .update({ hidden_reason: next ? 'member_paused' : null })
+      .eq('id', p.id);
     if (error) {
-      setBrowsePauseError(error.message);
-      setBrowsePaused(prev);
+      setPauseError(error.message);
+      setPaused(prev);
     } else {
       void loadAll();
     }
-    setBrowsePauseSaving(false);
+    setPauseSaving(false);
   }
 
   const heightCm = height === '' ? null : Number(height);
@@ -488,38 +495,60 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           </div>
         )}
 
-        {p.status === 'active' && (
+        {canPause && (
           <>
             <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
-            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Freeze my account</h4>
+            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Pause my profile</h4>
             <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
-              Maybe you&apos;re busy or not looking for anyone to contact you for a short time? Freezing hides you from
+              Maybe you&apos;re busy or not looking for anyone to contact you for a short time? Pausing hides you from
               browse and saved lists. People who already sent you a contact request can still see you in their My
-              requests. If you&apos;re still frozen after about a month, we&apos;ll send one email to remind you.
+              requests. If you&apos;re still paused after about a month, we&apos;ll send one email to remind you. Your
+              membership keeps running while you&apos;re paused, and you can unpause any time.
             </p>
             <label
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
-                cursor: browsePauseSaving ? 'wait' : 'pointer',
+                cursor: pauseSaving ? 'wait' : 'pointer',
                 fontSize: 14,
               }}
             >
               <input
                 type="checkbox"
-                checked={browsePaused}
-                disabled={browsePauseSaving}
-                onChange={(e) => void setBrowsePause(e.target.checked)}
+                checked={paused}
+                disabled={pauseSaving}
+                onChange={(e) => void setPauseState(e.target.checked)}
               />
-              <span>{browsePaused ? 'Account frozen (hidden from browse)' : 'Freeze my account'}</span>
+              <span>{paused ? 'Profile paused (hidden from browse)' : 'Pause my profile'}</span>
             </label>
-            {browsePauseSaving && (
+            {pauseSaving && (
               <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>Updating…</p>
             )}
-            {browsePauseError && (
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>{browsePauseError}</p>
+            {pauseError && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>{pauseError}</p>
             )}
+          </>
+        )}
+        {p.status === 'active' && p.hidden_reason === 'matched' && (
+          <>
+            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
+            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Your profile is off the register</h4>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              You&apos;re marked as matched, so your profile is hidden from browse. If that&apos;s changed and
+              you&apos;d like to be listed again, email{' '}
+              <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
+            </p>
+          </>
+        )}
+        {p.status === 'active' && p.hidden_reason === 'admin' && (
+          <>
+            <hr style={{ margin: '20px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
+            <h4 style={{ margin: '0 0 8px', fontSize: 15 }}>Your profile is off the register</h4>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+              Your profile has been taken off the register by the register team. Please email{' '}
+              <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a> if you have questions.
+            </p>
           </>
         )}
       </div>

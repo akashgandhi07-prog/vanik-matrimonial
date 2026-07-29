@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     .update({
       status: 'rejected',
       rejection_reason: reason,
-      show_on_register: false,
+      hidden_reason: null,
     })
     .eq('id', profileId);
   if (upProf) {

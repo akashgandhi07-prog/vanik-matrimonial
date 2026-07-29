@@ -7,8 +7,7 @@ import { supabase } from '../lib/supabase';
 
 function isProfileVisibleToMember(p: ProfileRow): boolean {
   if (p.status !== 'active') return false;
-  if (!p.show_on_register) return false;
-  if (p.browse_paused) return false;
+  if (p.hidden_reason != null) return false;
   if (!p.membership_expires_at || new Date(p.membership_expires_at) <= new Date()) return false;
   return true;
 }

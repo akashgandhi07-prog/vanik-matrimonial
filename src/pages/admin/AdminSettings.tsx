@@ -28,10 +28,17 @@ function browserSupabaseHost(): string | null {
   }
 }
 
+const HIDDEN_REASON_LABELS: Record<string, string> = {
+  matched: 'Matched',
+  member_paused: 'Paused by the member',
+  admin: 'Hidden by admin',
+};
+
 export default function AdminSettings() {
   const [users, setUsers] = useState<AuthRow[]>([]);
   const [stats, setStats] = useState<{
     byStatus: Record<string, number>;
+    byHiddenReason: Record<string, number>;
     requests: number;
     feedback: number;
     emailAttempted: number;
@@ -51,6 +58,7 @@ export default function AdminSettings() {
         invokeFunction('admin-manage-users', { action: 'list' }) as Promise<{ users?: AuthRow[] }>,
         invokeFunction('admin-manage-users', { action: 'settings_stats' }) as Promise<{
           byStatus?: Record<string, number>;
+          byHiddenReason?: Record<string, number>;
           requests?: number;
           feedback?: number;
           emailAttempted?: number;
@@ -76,6 +84,7 @@ export default function AdminSettings() {
       ) {
         setStats({
           byStatus: statsRes.byStatus,
+          byHiddenReason: statsRes.byHiddenReason ?? {},
           requests: statsRes.requests,
           feedback: statsRes.feedback,
           emailAttempted: statsRes.emailAttempted,
@@ -230,6 +239,17 @@ export default function AdminSettings() {
               {Object.entries(stats.byStatus).map(([k, v]) => (
                 <tr key={k} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td style={{ padding: 8 }}>{k}</td>
+                  <td style={{ padding: 8 }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <h3 style={{ fontSize: 15 }}>Off the register</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <tbody>
+              {Object.entries(stats.byHiddenReason).map(([k, v]) => (
+                <tr key={k} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <td style={{ padding: 8 }}>{HIDDEN_REASON_LABELS[k] ?? k}</td>
                   <td style={{ padding: 8 }}>{v}</td>
                 </tr>
               ))}
