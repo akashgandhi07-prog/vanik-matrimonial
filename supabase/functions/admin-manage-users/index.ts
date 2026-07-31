@@ -994,6 +994,135 @@ Deno.serve(async (req) => {
     }, req);
   }
 
+  if (action === 'list_referrals') {
+    // Every member who registered with a referral code, newest first, with the
+    // referrer resolved by name and the reward status from public.referrals.
+    const { data: referredPrivRows, error: rpErr } = await admin
+      .from('member_private')
+      .select('profile_id, referred_by_code, surname')
+      .not('referred_by_code', 'is', null);
+    if (rpErr) return jsonResponse({ error: rpErr.message }, req, 500);
+    const referredPriv = (referredPrivRows ?? []) as {
+      profile_id: string;
+      referred_by_code: string;
+      surname: string | null;
+    }[];
+
+    const referredIds = referredPriv.map((r) => r.profile_id);
+    const codes = [...new Set(referredPriv.map((r) => r.referred_by_code))];
+
+    const profilesById = new Map<
+      string,
+      { first_name: string | null; status: string; created_at: string; reference_number: string | null }
+    >();
+    if (referredIds.length > 0) {
+      const { data: profs, error: prErr } = await admin
+        .from('profiles')
+        .select('id, first_name, status, created_at, reference_number')
+        .in('id', referredIds);
+      if (prErr) return jsonResponse({ error: prErr.message }, req, 500);
+      for (const p of (profs ?? []) as {
+        id: string;
+        first_name: string | null;
+        status: string;
+        created_at: string;
+        reference_number: string | null;
+      }[]) {
+        profilesById.set(p.id, p);
+      }
+    }
+
+    // Resolve each code to its owning (referrer) member.
+    const referrerByCode = new Map<
+      string,
+      { profile_id: string; first_name: string | null; surname: string | null; reference_number: string | null }
+    >();
+    if (codes.length > 0) {
+      const { data: refOwners, error: roErr } = await admin
+        .from('member_private')
+        .select('profile_id, referral_code, surname')
+        .in('referral_code', codes);
+      if (roErr) return jsonResponse({ error: roErr.message }, req, 500);
+      const owners = (refOwners ?? []) as { profile_id: string; referral_code: string; surname: string | null }[];
+      const ownerIds = owners.map((o) => o.profile_id);
+      const ownerProfiles = new Map<string, { first_name: string | null; reference_number: string | null }>();
+      if (ownerIds.length > 0) {
+        const { data: ops } = await admin
+          .from('profiles')
+          .select('id, first_name, reference_number')
+          .in('id', ownerIds);
+        for (const p of (ops ?? []) as { id: string; first_name: string | null; reference_number: string | null }[]) {
+          ownerProfiles.set(p.id, p);
+        }
+      }
+      for (const o of owners) {
+        const op = ownerProfiles.get(o.profile_id);
+        referrerByCode.set(o.referral_code, {
+          profile_id: o.profile_id,
+          first_name: op?.first_name ?? null,
+          surname: o.surname,
+          reference_number: op?.reference_number ?? null,
+        });
+      }
+    }
+
+    const rewardByReferredId = new Map<
+      string,
+      { rewarded_at: string | null; referrer_months: number | null; referred_months: number | null }
+    >();
+    if (referredIds.length > 0) {
+      const { data: rewRows } = await admin
+        .from('referrals')
+        .select('referred_profile_id, rewarded_at, referrer_months, referred_months')
+        .in('referred_profile_id', referredIds);
+      for (const r of (rewRows ?? []) as {
+        referred_profile_id: string;
+        rewarded_at: string | null;
+        referrer_months: number | null;
+        referred_months: number | null;
+      }[]) {
+        rewardByReferredId.set(r.referred_profile_id, r);
+      }
+    }
+
+    const rows = referredPriv
+      .map((r) => {
+        const prof = profilesById.get(r.profile_id);
+        const referrer = referrerByCode.get(r.referred_by_code) ?? null;
+        const reward = rewardByReferredId.get(r.profile_id) ?? null;
+        return {
+          referred_profile_id: r.profile_id,
+          referred_first_name: prof?.first_name ?? null,
+          referred_surname: r.surname,
+          referred_status: prof?.status ?? 'unknown',
+          referred_reference_number: prof?.reference_number ?? null,
+          registered_at: prof?.created_at ?? null,
+          code_used: r.referred_by_code,
+          referrer_profile_id: referrer?.profile_id ?? null,
+          referrer_first_name: referrer?.first_name ?? null,
+          referrer_surname: referrer?.surname ?? null,
+          referrer_reference_number: referrer?.reference_number ?? null,
+          rewarded_at: reward?.rewarded_at ?? null,
+          referrer_months: reward?.referrer_months ?? null,
+          referred_months: reward?.referred_months ?? null,
+        };
+      })
+      .sort((a, b) => (b.registered_at ?? '').localeCompare(a.registered_at ?? ''));
+
+    const totalMonthsAwarded = rows.reduce((s, r) => s + (r.referrer_months ?? 0) + (r.referred_months ?? 0), 0);
+    return jsonResponse(
+      {
+        rows,
+        totals: {
+          total: rows.length,
+          accepted: rows.filter((r) => r.rewarded_at != null || r.referrer_months != null || r.referred_months != null).length,
+          months_awarded: totalMonthsAwarded,
+        },
+      },
+      req
+    );
+  }
+
   if (action === 'list_requests') {
     const page = typeof body.page === 'number' && body.page >= 1 ? Math.floor(body.page) : 1;
     const pageSize =

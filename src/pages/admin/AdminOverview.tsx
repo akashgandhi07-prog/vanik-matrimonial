@@ -2,6 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invokeFunction } from '../../lib/supabase';
 
+type ReferralRow = {
+  referred_profile_id: string;
+  referred_first_name: string | null;
+  referred_surname: string | null;
+  referred_status: string;
+  referred_reference_number: string | null;
+  registered_at: string | null;
+  code_used: string;
+  referrer_profile_id: string | null;
+  referrer_first_name: string | null;
+  referrer_surname: string | null;
+  referrer_reference_number: string | null;
+  rewarded_at: string | null;
+  referrer_months: number | null;
+  referred_months: number | null;
+};
+
 type Metrics = {
   pending: number;
   requestsWeek: number;
@@ -38,6 +55,12 @@ export default function AdminOverview() {
     }[]
   >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [referralRows, setReferralRows] = useState<ReferralRow[]>([]);
+  const [referralTotals, setReferralTotals] = useState<{ total: number; accepted: number; months_awarded: number }>({
+    total: 0,
+    accepted: 0,
+    months_awarded: 0,
+  });
 
   const loadOverview = useCallback(async () => {
     setLoadError(null);
@@ -52,6 +75,16 @@ export default function AdminOverview() {
       setCallerRole(res.caller_role ?? null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Failed to load overview');
+    }
+    try {
+      const ref = (await invokeFunction('admin-manage-users', { action: 'list_referrals' })) as {
+        rows?: ReferralRow[];
+        totals?: { total: number; accepted: number; months_awarded: number };
+      };
+      setReferralRows(ref.rows ?? []);
+      if (ref.totals) setReferralTotals(ref.totals);
+    } catch {
+      /* referral panel is non-critical; the rest of the overview still loads */
     }
   }, []);
 
@@ -128,6 +161,82 @@ export default function AdminOverview() {
             View list
           </button>
         </p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h2 style={{ marginTop: 0 }}>Referral scheme</h2>
+        <p className="field-hint" style={{ marginTop: -6 }}>
+          Members who registered using another member&apos;s recommend-a-friend code. Rewards (2 months to the
+          referrer, 1 to the new member) are applied automatically at approval.
+        </p>
+        <p style={{ fontSize: 14, margin: '0 0 12px' }}>
+          <strong>{referralTotals.total}</strong> registered via referral · <strong>{referralTotals.accepted}</strong>{' '}
+          accepted · <strong>{referralTotals.months_awarded}</strong> free months given out
+        </p>
+        {referralRows.length === 0 ? (
+          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
+            No referral registrations yet.
+          </p>
+        ) : (
+          <div className="table-scroll">
+            <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.12)' }}>
+                  <th style={{ padding: '6px 8px' }}>New member</th>
+                  <th style={{ padding: '6px 8px' }}>Status</th>
+                  <th style={{ padding: '6px 8px' }}>Registered</th>
+                  <th style={{ padding: '6px 8px' }}>Referred by</th>
+                  <th style={{ padding: '6px 8px' }}>Code</th>
+                  <th style={{ padding: '6px 8px' }}>Reward</th>
+                </tr>
+              </thead>
+              <tbody>
+                {referralRows.map((r) => (
+                  <tr key={r.referred_profile_id} style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+                    <td style={{ padding: '6px 8px' }}>
+                      <button
+                        type="button"
+                        className="btn-link"
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-primary)', textDecoration: 'underline', fontSize: 14 }}
+                        onClick={() => navigate(`/admin/members/${r.referred_profile_id}`)}
+                      >
+                        {[r.referred_first_name, r.referred_surname].filter(Boolean).join(' ') || 'Unknown'}
+                      </button>{' '}
+                      {r.referred_reference_number ? `(${r.referred_reference_number})` : ''}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>{r.referred_status}</td>
+                    <td style={{ padding: '6px 8px' }}>
+                      {r.registered_at ? new Date(r.registered_at).toLocaleDateString('en-GB') : '-'}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>
+                      {r.referrer_profile_id ? (
+                        <button
+                          type="button"
+                          className="btn-link"
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--color-primary)', textDecoration: 'underline', fontSize: 14 }}
+                          onClick={() => navigate(`/admin/members/${r.referrer_profile_id}`)}
+                        >
+                          {[r.referrer_first_name, r.referrer_surname].filter(Boolean).join(' ') || 'Unknown'}
+                        </button>
+                      ) : (
+                        <span style={{ color: 'var(--color-text-secondary)' }}>code no longer matches a member</span>
+                      )}
+                      {r.referrer_reference_number ? ` (${r.referrer_reference_number})` : ''}
+                    </td>
+                    <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{r.code_used}</td>
+                    <td style={{ padding: '6px 8px' }}>
+                      {r.rewarded_at
+                        ? `+${r.referrer_months ?? 0}m referrer / +${r.referred_months ?? 0}m member`
+                        : r.referred_months != null
+                          ? `+${r.referred_months}m member only`
+                          : 'awaiting approval'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="admin-metric-grid" style={{ marginBottom: 32 }}>
