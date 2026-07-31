@@ -29,6 +29,7 @@ type FormState = {
   gender: 'Male' | 'Female' | '';
   date_of_birth: string;
   mobile_phone: string;
+  consent_mobile_own: boolean;
   home_address_line1: string;
   home_address_city: string;
   home_address_postcode: string;
@@ -64,6 +65,7 @@ const defaultState: FormState = {
   gender: '',
   date_of_birth: '',
   mobile_phone: '',
+  consent_mobile_own: false,
   home_address_line1: '',
   home_address_city: '',
   home_address_postcode: '',
@@ -120,6 +122,9 @@ function validateStep1(form: FormState, age: number | null): Record<string, stri
     e.mobile_phone =
       'Enter a valid phone number (8-15 digits; include country code, e.g. +1 415 555 0100).';
   }
+  if (!form.consent_mobile_own) {
+    e.consent_mobile_own = "Please confirm the mobile number is the candidate's own, not a parent's or relative's.";
+  }
   if (!form.home_address_line1.trim()) e.home_address_line1 = 'Address line 1 is required.';
   else if (form.home_address_line1.trim().length < 3)
     e.home_address_line1 = 'Please enter a fuller address line.';
@@ -173,6 +178,7 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   gender: 'reg-gender-male',
   date_of_birth: 'reg-dob',
   mobile_phone: 'reg-tel',
+  consent_mobile_own: 'reg-tel-own',
   home_address_line1: 'reg-addr1',
   home_address_city: 'reg-city',
   home_address_postcode: 'reg-postcode',
@@ -405,6 +411,7 @@ export default function Register() {
         consent_contact: false,
         consent_age: false,
         consent_privacy: false,
+        consent_mobile_own: false,
         step: 1,
       }));
       setPhotoPreviews((old) => {
@@ -646,6 +653,7 @@ export default function Register() {
         consent_contact: form.consent_contact,
         consent_age: form.consent_age,
         consent_privacy_terms: form.consent_privacy,
+        consent_mobile_own: form.consent_mobile_own,
       };
       const res = (await invokeFunction('submit-registration', payload)) as {
         reference_number?: string;
@@ -1079,6 +1087,30 @@ export default function Register() {
                 />
                 {fieldErrors.mobile_phone && (
                   <p className="field-error">{fieldErrors.mobile_phone}</p>
+                )}
+                <label
+                  htmlFor="reg-tel-own"
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 14, cursor: 'pointer' }}
+                >
+                  <input
+                    id="reg-tel-own"
+                    type="checkbox"
+                    checked={form.consent_mobile_own}
+                    onChange={(e) => {
+                      update({ consent_mobile_own: e.target.checked });
+                      clearFieldError('consent_mobile_own');
+                    }}
+                    style={{ marginTop: 3 }}
+                    aria-invalid={fieldErrors.consent_mobile_own ? true : undefined}
+                  />
+                  <span>
+                    I confirm this mobile number belongs to the <strong>candidate themselves</strong> - the person
+                    looking for a match - and not to a parent or other relative. Prospective matches will call or
+                    WhatsApp this number directly.
+                  </span>
+                </label>
+                {fieldErrors.consent_mobile_own && (
+                  <p className="field-error">{fieldErrors.consent_mobile_own}</p>
                 )}
               </div>
 

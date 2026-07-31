@@ -107,6 +107,10 @@ export default function AdminMemberDetail() {
   const [checklist, setChecklist] = useState([false, false, false, false]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoGallery, setPhotoGallery] = useState<
+    { id: string; position: number; is_primary: boolean; signed_url: string | null }[]
+  >([]);
+  const [photoRemoveBusy, setPhotoRemoveBusy] = useState<string | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
   const [timeline, setTimeline] = useState<TimelineRow[]>([]);
@@ -160,6 +164,7 @@ export default function AdminMemberDetail() {
           member_private?: MemberPrivateFull;
           timeline?: TimelineRow[];
           signed_urls?: { photo: string | null; photos?: string[]; pending_photo: string | null; id_document: string | null };
+          photo_gallery?: { id: string; position: number; is_primary: boolean; signed_url: string | null }[];
           admin_note?: { body: string; updated_at: string | null; updated_by: string | null };
           recent_emails?: typeof recentEmails;
           contact_request_quota?: {
@@ -188,6 +193,7 @@ export default function AdminMemberDetail() {
           : [];
         setPhotoUrls(signedPhotoList);
         setPhotoUrl(signedPhotoList[0] ?? su?.photo ?? null);
+        setPhotoGallery(res.photo_gallery ?? []);
         setPendingPreview(su?.pending_photo ?? null);
         setIdDocSignedFromServer(su?.id_document ?? null);
         setInternalNoteDraft(res.admin_note?.body ?? '');
@@ -204,10 +210,38 @@ export default function AdminMemberDetail() {
         setProfile(null);
         setPriv(null);
         setPhotoUrls([]);
+        setPhotoGallery([]);
         setContactQuota(null);
       }
     })();
   }, [id, ok, mfaOk, reloadKey]);
+
+  async function removeMemberPhoto(photoId: string) {
+    if (!profile) return;
+    const reason = window.prompt(
+      'Reason for removing this photo (required - it is emailed to the member):'
+    );
+    if (reason == null) return;
+    if (!reason.trim()) {
+      alert('A reason is required.');
+      return;
+    }
+    setPhotoRemoveBusy(photoId);
+    try {
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'admin_remove_member_photo',
+        profile_id: profile.id,
+        photo_id: photoId,
+        reason: reason.trim(),
+      })) as { email_sent?: boolean };
+      alert(res.email_sent ? 'Photo removed and the member has been emailed.' : 'Photo removed. Email is not configured, so no notification was sent.');
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to remove photo');
+    } finally {
+      setPhotoRemoveBusy(null);
+    }
+  }
 
   async function listingAction(action: 'hide' | 'unhide') {
     if (!profile) return;
@@ -746,7 +780,49 @@ export default function AdminMemberDetail() {
         <div className="admin-detail-photo-grid" style={{ marginTop: 24 }}>
           <div className="card">
             <h3>Profile photo</h3>
-            {photoUrls.length > 0 ? (
+            {photoGallery.length > 0 ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {photoGallery.map((g, idx) => (
+                  <figure key={g.id} style={{ margin: 0 }}>
+                    {g.signed_url ? (
+                      <img
+                        src={g.signed_url}
+                        alt={`${profile.first_name}'s profile photo ${idx + 1}`}
+                        style={{ width: '100%', maxWidth: 320, borderRadius: 8 }}
+                      />
+                    ) : (
+                      <p style={{ margin: 0, color: 'var(--color-danger)', fontSize: 13 }}>
+                        Preview unavailable for this photo.
+                      </p>
+                    )}
+                    <figcaption
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        color: 'var(--color-text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      {g.is_primary ? 'Primary photo' : `Photo ${idx + 1}`}
+                      {!supportOnly && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '2px 10px', fontSize: 12 }}
+                          disabled={photoRemoveBusy != null}
+                          onClick={() => void removeMemberPhoto(g.id)}
+                        >
+                          {photoRemoveBusy === g.id ? 'Removing…' : 'Remove with reason…'}
+                        </button>
+                      )}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : photoUrls.length > 0 ? (
               <div style={{ display: 'grid', gap: 10 }}>
                 {photoUrls.map((url, idx) => (
                   <figure key={url} style={{ margin: 0 }}>

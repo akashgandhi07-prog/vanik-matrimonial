@@ -18,6 +18,7 @@ export type EmailType =
   | 'admin_daily_digest'
   | 'matched_congratulations'
   | 'photo_update_rejected'
+  | 'photo_removed_by_admin'
   | 'admin_pending_reminder'
   | 'account_freeze_reminder'
   | 'website_feedback_submission';
@@ -248,6 +249,20 @@ export async function dispatchEmail(
         <p>We were unable to accept the new profile photo you submitted. Your previous approved photo will continue to be shown.</p>
         <p>If you would like to try again with a different image, please sign in and upload a new photo from your profile.</p>
         <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
+        <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'photo_removed_by_admin': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const reason = stripHtml(String((extraData as Record<string, unknown>).reason ?? ''), 500).trim();
+      subject = 'A photo has been removed from your profile';
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>Our admin team has removed one of the photos on your Vanik Matrimonial Register profile because it did not meet our photo guidelines.</p>
+        ${reason ? `<p><strong>Reason:</strong> ${escapeHtmlEmail(reason)}</p>` : ''}
+        <p>Photos should be a clear, recent picture of your face only &mdash; group photos are not accepted. You are welcome to upload a replacement any time from <strong>My profile</strong> after signing in.</p>
+        <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
+        <p>If you have any questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;
       break;
     }

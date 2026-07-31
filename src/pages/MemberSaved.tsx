@@ -3,14 +3,8 @@ import { ProfileThumb } from '../member/ProfileThumb';
 import { ProfileModal } from '../member/ProfileModal';
 import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
+import { isProfileListedOnRegister } from '../lib/memberStatus';
 import { supabase } from '../lib/supabase';
-
-function isProfileVisibleToMember(p: ProfileRow): boolean {
-  if (p.status !== 'active') return false;
-  if (p.hidden_reason != null) return false;
-  if (!p.membership_expires_at || new Date(p.membership_expires_at) <= new Date()) return false;
-  return true;
-}
 
 export default function MemberSaved() {
   const { profile, bookmarks, toggleBookmark, requests } = useMemberArea();
@@ -54,7 +48,7 @@ export default function MemberSaved() {
       {bookmarks.map((id) => {
         const c = byId.get(id);
         const alreadyRequested = requestedIds.has(id);
-        const available = c && (isProfileVisibleToMember(c) || alreadyRequested);
+        const available = c && (isProfileListedOnRegister(c) || alreadyRequested);
 
         if (c && !available) {
           return (

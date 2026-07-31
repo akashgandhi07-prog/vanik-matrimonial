@@ -6,6 +6,7 @@ import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
 import { computeMonthlyWindow, computeWeeklyWindow, effectiveMonthlyCap, effectiveWeeklyCap } from '../member/requestQuota';
 import { newErrorCode, reportError } from '../lib/errorLog';
+import { isProfileListedOnRegister } from '../lib/memberStatus';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
@@ -442,6 +443,7 @@ export default function MemberRequests() {
                         details?.father_name ||
                         details?.mother_name
                       );
+                      const noLongerListed = !!candidateProfile && !isProfileListedOnRegister(candidateProfile);
                       const openProfile = candidateProfile
                         ? () =>
                             setSelectedProfile({
@@ -488,6 +490,21 @@ export default function MemberRequests() {
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
                               {displayName}
+                              {noLongerListed && (
+                                <span
+                                  className="badge"
+                                  title="This member has since paused or left the register. The contact details you already received stay here for your records."
+                                  style={{
+                                    marginLeft: 8,
+                                    fontWeight: 500,
+                                    background: 'var(--color-surface-muted)',
+                                    color: 'var(--color-text-secondary)',
+                                    border: '1px solid var(--color-border)',
+                                  }}
+                                >
+                                  No longer on the register
+                                </span>
+                              )}
                             </div>
                             {hasContactDetails ? (
                               <>

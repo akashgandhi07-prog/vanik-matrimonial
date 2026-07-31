@@ -391,9 +391,11 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           multiple
           disabled={photoSaving}
           onChange={(e) => {
-            const picked = e.target.files;
+            // Copy the FileList before clearing the input: it is live, so
+            // resetting value first would empty it and make upload a no-op.
+            const picked = Array.from(e.target.files ?? []);
             e.currentTarget.value = '';
-            void addPhotosFromFileInput(Array.from(picked ?? []));
+            void addPhotosFromFileInput(picked);
           }}
         />
         {photoSaving && (

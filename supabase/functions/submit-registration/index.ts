@@ -122,6 +122,15 @@ Deno.serve(async (req) => {
   if (!consentContact || !consentAge || !consentPrivacyTerms) {
     return jsonResponse({ error: 'All required declarations and consents must be accepted.' }, req, 400);
   }
+  // Older cached frontends omit this field entirely; only reject an explicit false.
+  const consentMobileOwn = body.consent_mobile_own === undefined ? null : body.consent_mobile_own === true;
+  if (consentMobileOwn === false) {
+    return jsonResponse(
+      { error: "Please confirm the mobile number is the candidate's own, not a parent's or relative's." },
+      req,
+      400
+    );
+  }
 
   const policyVersionAtSubmit = resolvedPrivacyPolicyVersionId();
   const consentIpSecret = Deno.env.get('REGISTRATION_CONSENT_IP_HMAC_SECRET') ?? undefined;
@@ -256,6 +265,7 @@ Deno.serve(async (req) => {
     consent_contact: consentContact,
     consent_age: consentAge,
     consent_privacy_terms: consentPrivacyTerms,
+    consent_mobile_own: consentMobileOwn,
     consent_privacy_policy_version: policyVersionAtSubmit,
     consent_recorded_at: consentRecordedAt,
     registration_submitter_ip_hash: registrationSubmitIpHash,

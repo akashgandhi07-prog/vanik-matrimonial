@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { replacePrimaryGalleryPhoto } from '../_shared/profile-photos.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
@@ -60,7 +61,13 @@ Deno.serve(async (req) => {
   const oldPath = profile.photo_url as string | null;
 
   if (action === 'approve') {
-    if (oldPath && oldPath !== pendingPath) {
+    // Promote the approved photo in profile_photos as well - serve-photo and the
+    // member gallery read that table first, so updating profiles.photo_url alone
+    // would leave the approved image invisible (and the primary row pointing at a
+    // deleted file). Only delete the old object once nothing references it.
+    const { referenced, error: galErr } = await replacePrimaryGalleryPhoto(admin, profileId, pendingPath);
+    if (galErr) return jsonResponse({ error: galErr }, req, 500);
+    if (oldPath && oldPath !== pendingPath && !referenced.includes(oldPath)) {
       await admin.storage.from('profile-photos').remove([oldPath]);
     }
     const { error: up } = await admin
@@ -79,7 +86,16 @@ Deno.serve(async (req) => {
       notes: stripHtml('Pending photo approved', 500),
     });
   } else {
-    await admin.storage.from('profile-photos').remove([pendingPath]);
+    // Legacy fixed-name pending uploads could share their object with the live
+    // gallery primary; never delete an object the gallery still references.
+    const { data: refRows } = await admin
+      .from('profile_photos')
+      .select('id')
+      .eq('storage_path', pendingPath)
+      .limit(1);
+    if (!refRows || refRows.length === 0) {
+      await admin.storage.from('profile-photos').remove([pendingPath]);
+    }
     const { error: up } = await admin
       .from('profiles')
       .update({

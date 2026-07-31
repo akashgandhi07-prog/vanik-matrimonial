@@ -9,6 +9,7 @@ import {
   transactionalMailRuntimeStatus,
 } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
+import { replacePrimaryGalleryPhoto } from '../_shared/profile-photos.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
 type QueryErrorLike = {
@@ -1597,15 +1598,39 @@ Deno.serve(async (req) => {
       pending_photo: null,
       id_document: null,
     };
-    const photoPaths = Array.isArray(prof.photo_paths)
-      ? prof.photo_paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
-      : [];
-    const uniquePaths = [...new Set(photoPaths)];
-    const effectivePhotoPaths = uniquePaths.length > 0 ? uniquePaths : (prof.photo_url ? [prof.photo_url] : []);
-    for (const path of effectivePhotoPaths) {
-      const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(path, 3600);
-      const signed = s?.signedUrl ?? null;
-      if (signed) signedUrls.photos.push(signed);
+    // Preferred source: the multi-photo gallery (has ids, so the UI can offer per-photo removal).
+    const { data: galleryRows } = await admin
+      .from('profile_photos')
+      .select('id, storage_path, position, is_primary')
+      .eq('profile_id', profileId)
+      .order('is_primary', { ascending: false })
+      .order('position', { ascending: true });
+    const photoGallery: Array<{ id: string; position: number; is_primary: boolean; signed_url: string | null }> = [];
+    for (const row of (galleryRows ?? []) as { id: string; storage_path: string; position: number; is_primary: boolean }[]) {
+      const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(row.storage_path, 3600);
+      photoGallery.push({
+        id: row.id,
+        position: row.position,
+        is_primary: row.is_primary,
+        signed_url: s?.signedUrl ?? null,
+      });
+    }
+    if (photoGallery.length > 0) {
+      signedUrls.photos = photoGallery
+        .map((g) => g.signed_url)
+        .filter((u): u is string => typeof u === 'string' && u.length > 0);
+    } else {
+      // Legacy fallback for profiles predating the profile_photos table.
+      const photoPaths = Array.isArray(prof.photo_paths)
+        ? prof.photo_paths.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+        : [];
+      const uniquePaths = [...new Set(photoPaths)];
+      const effectivePhotoPaths = uniquePaths.length > 0 ? uniquePaths : (prof.photo_url ? [prof.photo_url] : []);
+      for (const path of effectivePhotoPaths) {
+        const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(path, 3600);
+        const signed = s?.signedUrl ?? null;
+        if (signed) signedUrls.photos.push(signed);
+      }
     }
     signedUrls.photo = signedUrls.photos[0] ?? null;
     if (prof.pending_photo_url) {
@@ -1681,6 +1706,7 @@ Deno.serve(async (req) => {
       profile,
       member_private: memberPrivate,
       signed_urls: signedUrls,
+      photo_gallery: photoGallery,
       timeline,
       admin_note: noteRow ?? { body: '', updated_at: null, updated_by: null },
       recent_emails: recentEmails ?? [],
@@ -2286,8 +2312,12 @@ Deno.serve(async (req) => {
     }
     const authUid = prof.auth_user_id as string;
     const baseFolder = `${gender}/${authUid}`;
+    // Pending files get a unique name so a re-upload or reject can never
+    // overwrite/delete an object a previous approval promoted into the gallery.
     const objectPath =
-      mode === 'pending_review' ? `${baseFolder}/photo-pending.${ext}` : `${baseFolder}/photo.${ext}`;
+      mode === 'pending_review'
+        ? `${baseFolder}/photo-pending-${Date.now()}.${ext}`
+        : `${baseFolder}/photo.${ext}`;
 
     const { error: upErr } = await admin.storage.from('profile-photos').upload(objectPath, bytes, {
       upsert: true,
@@ -2299,13 +2329,18 @@ Deno.serve(async (req) => {
     const oldPending = prof.pending_photo_url as string | null;
 
     if (mode === 'direct') {
-      if (oldMain && oldMain !== objectPath) {
-        const { error: rmErr } = await admin.storage.from('profile-photos').remove([oldMain]);
-        if (rmErr) console.warn('admin_upload_member_photo remove old main:', rmErr.message);
-      }
-      if (oldPending && oldPending !== objectPath) {
-        const { error: rm2 } = await admin.storage.from('profile-photos').remove([oldPending]);
-        if (rm2) console.warn('admin_upload_member_photo remove old pending:', rm2.message);
+      // Replace the primary row in profile_photos too - serve-photo and the member
+      // gallery read that table first, so updating profiles.photo_url alone would
+      // leave the new image invisible (and the primary row pointing at a deleted file).
+      const { referenced, error: galErr } = await replacePrimaryGalleryPhoto(admin, profileId, objectPath);
+      if (galErr) return jsonResponse({ error: galErr }, req, 500);
+      const stillReferenced = new Set(referenced);
+      const removable = [...new Set([oldMain, oldPending])].filter(
+        (p): p is string => !!p && p !== objectPath && !stillReferenced.has(p)
+      );
+      if (removable.length > 0) {
+        const { error: rmErr } = await admin.storage.from('profile-photos').remove(removable);
+        if (rmErr) console.warn('admin_upload_member_photo remove replaced objects:', rmErr.message);
       }
       const { error: dbErr } = await admin
         .from('profiles')
@@ -2339,6 +2374,91 @@ Deno.serve(async (req) => {
     });
 
     return jsonResponse({ ok: true, path: objectPath, mode }, req);
+  }
+
+  if (action === 'admin_remove_member_photo') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot remove member photos' }, req, 403);
+    }
+    const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
+    const photoId = typeof body.photo_id === 'string' ? body.photo_id : '';
+    const reason = stripHtml(String(body.reason ?? ''), 500).trim();
+    if (!profileId || !photoId) {
+      return jsonResponse({ error: 'profile_id and photo_id required' }, req, 400);
+    }
+    if (!reason) {
+      return jsonResponse({ error: 'A reason is required; it is emailed to the member.' }, req, 400);
+    }
+
+    const { data: photoRow, error: phErr } = await admin
+      .from('profile_photos')
+      .select('id, profile_id, storage_path')
+      .eq('id', photoId)
+      .eq('profile_id', profileId)
+      .maybeSingle();
+    if (phErr) return jsonResponse({ error: phErr.message }, req, 500);
+    if (!photoRow) return jsonResponse({ error: 'Photo not found on this profile' }, req, 404);
+
+    const { error: delErr } = await admin
+      .from('profile_photos')
+      .delete()
+      .eq('id', photoId)
+      .eq('profile_id', profileId);
+    if (delErr) return jsonResponse({ error: delErr.message }, req, 500);
+    await admin.storage.from('profile-photos').remove([photoRow.storage_path as string]).catch(() => null);
+
+    // Re-pack positions, keep exactly one primary, and sync profiles.photo_url
+    // (same invariants member-manage-photos maintains).
+    const { data: remainRows, error: remErr } = await admin
+      .from('profile_photos')
+      .select('id, storage_path, position, is_primary')
+      .eq('profile_id', profileId)
+      .order('position', { ascending: true });
+    if (remErr) return jsonResponse({ error: remErr.message }, req, 500);
+    const remaining = (remainRows ?? []) as { id: string; storage_path: string; position: number; is_primary: boolean }[];
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].position === i) continue;
+      const { error } = await admin
+        .from('profile_photos')
+        .update({ position: i })
+        .eq('id', remaining[i].id)
+        .eq('profile_id', profileId);
+      if (error) return jsonResponse({ error: error.message }, req, 500);
+    }
+    let primary = remaining.find((r) => r.is_primary) ?? null;
+    if (!primary && remaining.length > 0) {
+      primary = remaining[0];
+      const { error } = await admin
+        .from('profile_photos')
+        .update({ is_primary: true })
+        .eq('id', primary.id)
+        .eq('profile_id', profileId);
+      if (error) return jsonResponse({ error: error.message }, req, 500);
+    }
+    const { error: syncErr } = await admin
+      .from('profiles')
+      .update({ photo_url: primary?.storage_path ?? null })
+      .eq('id', profileId);
+    if (syncErr) return jsonResponse({ error: syncErr.message }, req, 500);
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: profileId,
+      action_type: 'photo_removed_by_admin',
+      notes: reason,
+    });
+
+    let emailSent = false;
+    if (isTransactionalMailConfigured()) {
+      const sent = await dispatchEmail(admin, {
+        type: 'photo_removed_by_admin',
+        recipientProfileId: profileId,
+        extraData: { reason },
+      });
+      emailSent = sent.ok;
+    }
+
+    return jsonResponse({ ok: true, remaining_photos: remaining.length, email_sent: emailSent }, req);
   }
 
   if (action === 'promote' || action === 'demote') {
