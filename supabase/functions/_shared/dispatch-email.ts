@@ -19,6 +19,7 @@ export type EmailType =
   | 'matched_congratulations'
   | 'photo_update_rejected'
   | 'photo_removed_by_admin'
+  | 'referral_reward'
   | 'admin_pending_reminder'
   | 'account_freeze_reminder'
   | 'website_feedback_submission';
@@ -263,6 +264,24 @@ export async function dispatchEmail(
         <p>Photos should be a clear, recent picture of your face only &mdash; group photos are not accepted. You are welcome to upload a replacement any time from <strong>My profile</strong> after signing in.</p>
         <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have any questions, reply to this email.</p>
+        <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'referral_reward': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const friendFirst = stripHtml(String((extraData as Record<string, unknown>).friend_first_name ?? ''), 60);
+      const months = Number((extraData as Record<string, unknown>).months ?? 2);
+      const newExpiryRaw = String((extraData as Record<string, unknown>).new_expiry ?? '');
+      const newExpiry = newExpiryRaw
+        ? new Date(newExpiryRaw).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+        : '';
+      subject = `Thank you for recommending a friend - ${months} months added to your membership`;
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>Great news - ${friendFirst ? `<strong>${escapeHtmlEmail(friendFirst)}</strong>, who you recommended,` : 'someone you recommended'} has been accepted onto the Vanik Matrimonial Register.</p>
+        <p>As a thank you, we have added <strong>${months} months</strong> to your membership${newExpiry ? `, which now runs until <strong>${newExpiry}</strong>` : ''}.</p>
+        <p>There is no limit - every friend who is accepted adds another 2 months. Your personal code is in the banner of your member dashboard, ready to share on WhatsApp.</p>
+        <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>With thanks,<br/>The register team</p>`;
       break;
     }

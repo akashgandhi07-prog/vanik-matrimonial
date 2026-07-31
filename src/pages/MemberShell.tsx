@@ -9,6 +9,96 @@ function daysBetween(a: Date, b: Date) {
   return Math.ceil((b.getTime() - a.getTime()) / 86400000);
 }
 
+/** Recommend-a-friend band: personal code, share link, and months earned so far. */
+function ReferralBanner() {
+  const { profile, privateRow } = useMemberArea();
+  const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState<{ count: number; months: number } | null>(null);
+
+  const code = privateRow?.referral_code ?? null;
+  const active = profile?.status === 'active';
+
+  useEffect(() => {
+    if (!active || !code) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('referrals')
+        .select('referrer_months')
+        .not('rewarded_at', 'is', null);
+      if (!cancelled && data) {
+        setStats({
+          count: data.length,
+          months: data.reduce((s, r) => s + ((r.referrer_months as number | null) ?? 0), 0),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [active, code]);
+
+  if (!active || !code) return null;
+
+  const shareLink = `${window.location.origin}/register?ref=${encodeURIComponent(code)}`;
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(
+        `Join me on the Vanik Matrimonial Register - use my code ${code} when you register and we both get free months: ${shareLink}`
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      /* clipboard unavailable; the code itself is still visible */
+    }
+  }
+
+  return (
+    <div
+      className="layout-max"
+      style={{ marginTop: 12 }}
+    >
+      <div
+        className="card"
+        style={{
+          padding: '10px 14px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 10,
+          justifyContent: 'space-between',
+          border: '1px solid rgba(146, 64, 14, 0.25)',
+          background: 'rgba(254, 243, 199, 0.45)',
+          fontSize: 14,
+          lineHeight: 1.45,
+        }}
+      >
+        <span style={{ flex: '1 1 260px' }}>
+          <strong>Recommend a friend:</strong> for every friend who is accepted, you get{' '}
+          <strong>2 months free</strong> and they get an extra month. Your code:{' '}
+          <strong style={{ letterSpacing: '0.04em' }}>{code}</strong>
+          {stats && stats.months > 0 && (
+            <span style={{ opacity: 0.85 }}>
+              {' '}
+              - you&apos;ve earned {stats.months} month{stats.months === 1 ? '' : 's'} from{' '}
+              {stats.count} friend{stats.count === 1 ? '' : 's'} so far.
+            </span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ padding: '4px 12px', fontSize: 13, flexShrink: 0 }}
+          onClick={() => void copyLink()}
+        >
+          {copied ? 'Copied!' : 'Copy invite link'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MemberLayoutBody() {
   const location = useLocation();
   const { profile, loadAll } = useMemberArea();
@@ -174,6 +264,8 @@ function MemberLayoutBody() {
           </div>
         </div>
       )}
+
+      <ReferralBanner />
 
       <div className="layout-max member-dashboard-main" style={{ marginTop: 16 }}>
         {showBrowseTip && (

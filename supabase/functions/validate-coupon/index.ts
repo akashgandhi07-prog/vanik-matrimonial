@@ -43,11 +43,41 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Too many attempts. Try again later.', code: 'rate_limited' }, req, 429);
   }
 
-  let body: { code?: string };
+  let body: { code?: string; referral?: string };
   try {
     body = await req.json();
   } catch {
     return jsonResponse({ error: 'Invalid JSON' }, req, 400);
+  }
+
+  // Referral codes (VR-XXXXXX) share this endpoint and its rate limit. Valid =
+  // the code belongs to a member whose profile is currently active. No details
+  // about the referrer are ever returned.
+  if (typeof body.referral === 'string') {
+    const refRaw = body.referral.trim().toUpperCase();
+    // Strict format check also keeps ilike wildcards (%/_) out of the lookup.
+    if (!/^VR-[A-Z2-9]{4,8}$/.test(refRaw)) {
+      return jsonResponse({ valid: false }, req);
+    }
+    const { data: refRow, error: refErr } = await admin
+      .from('member_private')
+      .select('profile_id, referral_code, email')
+      .ilike('referral_code', refRaw)
+      .maybeSingle();
+    if (refErr || !refRow) {
+      return jsonResponse({ valid: false }, req);
+    }
+    const callerEmail = (userData.user.email ?? '').trim().toLowerCase();
+    if (callerEmail && String(refRow.email ?? '').trim().toLowerCase() === callerEmail) {
+      // You cannot refer yourself.
+      return jsonResponse({ valid: false }, req);
+    }
+    const { data: refProf } = await admin
+      .from('profiles')
+      .select('status')
+      .eq('id', refRow.profile_id as string)
+      .maybeSingle();
+    return jsonResponse({ valid: refProf?.status === 'active' }, req);
   }
 
   const raw = (body.code ?? '').trim().toUpperCase();

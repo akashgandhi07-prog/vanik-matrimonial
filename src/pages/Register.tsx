@@ -20,6 +20,11 @@ import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { friendlyUploadError } from '../lib/uploadError';
 
 const LS_KEY = 'vmr_registration_v1';
+/** Recommend-a-friend code captured from a ?ref= link. Stored separately from the
+ *  form draft because the friend typically arrives, creates an account, verifies
+ *  their email (possibly on another device/day) and only then fills in the form. */
+const REFERRAL_LS_KEY = 'vmr_referral_code_v1';
+const REFERRAL_CODE_RE = /^VR-[A-Z2-9]{4,8}$/i;
 
 type Step = 1 | 2 | 3;
 const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
@@ -37,6 +42,8 @@ type FormState = {
   id_document_path: string;
   coupon_code: string;
   coupon_hint: '' | 'valid' | 'invalid';
+  referral_code: string;
+  referral_hint: '' | 'valid' | 'invalid';
   first_name: string;
   surname: string;
   nationality: string;
@@ -73,6 +80,8 @@ const defaultState: FormState = {
   id_document_path: '',
   coupon_code: '',
   coupon_hint: '',
+  referral_code: '',
+  referral_hint: '',
   first_name: '',
   surname: '',
   nationality: '',
@@ -251,6 +260,7 @@ export default function Register() {
   const [stripeRedirectBusy, setStripeRedirectBusy] = useState(false);
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponFreeMonths, setCouponFreeMonths] = useState<number | null>(null);
+  const [referralChecking, setReferralChecking] = useState(false);
   const [resubmitMode, setResubmitMode] = useState(false);
   const [resubmitReason, setResubmitReason] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -403,6 +413,8 @@ export default function Register() {
         hobbies: p.hobbies ?? '',
         coupon_code: (m.coupon_used as string) ?? '',
         coupon_hint: '',
+        referral_code: (m.referred_by_code as string) ?? prev.referral_code,
+        referral_hint: '',
         id_document_path: '',
         photo_path: '',
         photo_paths: [],
@@ -423,6 +435,26 @@ export default function Register() {
 
   const update = useCallback((patch: Partial<FormState>) => {
     setForm((f) => ({ ...f, ...patch }));
+  }, []);
+
+  // Capture a recommend-a-friend code from ?ref= (survives the email-verification
+  // round trip via localStorage) and prefill the referral field once.
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      const fromUrl = (searchParams.get('ref') ?? '').trim().toUpperCase();
+      if (fromUrl && REFERRAL_CODE_RE.test(fromUrl)) {
+        localStorage.setItem(REFERRAL_LS_KEY, fromUrl);
+      }
+      stored = localStorage.getItem(REFERRAL_LS_KEY);
+    } catch {
+      /* localStorage unavailable */
+    }
+    if (stored && REFERRAL_CODE_RE.test(stored)) {
+      const code = stored;
+      setForm((f) => (f.referral_code ? f : { ...f, referral_code: code, referral_hint: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; later param changes must not overwrite typing
   }, []);
 
   const clearFieldError = useCallback((key: string) => {
@@ -530,6 +562,23 @@ export default function Register() {
     }
   }
 
+  async function applyReferral() {
+    const code = form.referral_code.trim().toUpperCase();
+    if (!code) {
+      update({ referral_hint: '' });
+      return;
+    }
+    setReferralChecking(true);
+    try {
+      const res = (await invokeFunction('validate-coupon', { referral: code })) as { valid?: boolean };
+      update({ referral_hint: res.valid ? 'valid' : 'invalid' });
+    } catch {
+      update({ referral_hint: 'invalid' });
+    } finally {
+      setReferralChecking(false);
+    }
+  }
+
   async function uploadId(file: File) {
     if (!session?.user) return;
     const reject = rejectReasonIfNotJpegOrPng(file);
@@ -634,6 +683,7 @@ export default function Register() {
         photo_paths: form.photo_paths,
         photo_path: form.photo_path,
         coupon_code: form.coupon_code.trim(),
+        referral_code: form.referral_code.trim().toUpperCase(),
         first_name: titleCaseIfAllCaps(sanitizeText(form.first_name, 80)),
         surname: titleCaseIfAllCaps(sanitizeText(form.surname, 80)),
         email: session.user.email,
@@ -661,6 +711,7 @@ export default function Register() {
       sessionStorage.setItem('vmr_pending_email', session.user.email);
       if (res.reference_number) sessionStorage.setItem('vmr_pending_ref', res.reference_number);
       localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(REFERRAL_LS_KEY);
       window.location.href = '/registration-pending';
     } catch (err) {
       if (err instanceof Error && err.message === 'PAYMENT_REQUIRED') {
@@ -1301,6 +1352,52 @@ export default function Register() {
                     {billingEnabled
                       ? 'Membership fee: £10/year. You will pay securely online before submitting your application (final step).'
                       : 'Membership fee: £10/year. Our team will contact you to arrange payment after approval.'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label" htmlFor="reg-referral">
+                  Referral code (optional)
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    id="reg-referral"
+                    name="referral"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="e.g. VR-ABC234"
+                    value={form.referral_code}
+                    onChange={(e) => {
+                      update({ referral_code: e.target.value.toUpperCase(), referral_hint: '' });
+                    }}
+                    disabled={referralChecking}
+                    aria-busy={referralChecking}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={!form.referral_code.trim() || referralChecking}
+                    onClick={() => void applyReferral()}
+                  >
+                    {referralChecking ? 'Checking…' : 'Apply'}
+                  </button>
+                </div>
+                {form.referral_hint === 'valid' && (
+                  <p style={{ color: 'var(--color-success)', fontSize: 14, margin: '6px 0 0' }}>
+                    Valid: once you are accepted, you get an extra month free and the member who recommended
+                    you gets 2 months.
+                  </p>
+                )}
+                {form.referral_hint === 'invalid' && form.referral_code.trim() && (
+                  <p style={{ color: 'var(--color-danger)', fontSize: 14, margin: '6px 0 0' }}>
+                    This referral code was not recognised. Check it with the person who shared it - you can
+                    also continue without one.
+                  </p>
+                )}
+                {form.referral_hint === '' && (
+                  <p className="field-hint" style={{ marginBottom: 0 }}>
+                    Were you recommended by an existing member? Enter their code and you both get free
+                    months when you are accepted. This works alongside any coupon code.
                   </p>
                 )}
               </div>

@@ -57,6 +57,8 @@ export type MemberPrivateRow = {
   contact_request_weekly_bonus?: number | null;
   /** Admin-granted extra distinct-candidate slots for the UTC calendar month (default caps: 6 + bonus). */
   contact_request_monthly_bonus?: number | null;
+  /** Personal recommend-a-friend code (VR-XXXXXX); generated server-side. */
+  referral_code?: string | null;
 };
 
 type MemberCtx = {

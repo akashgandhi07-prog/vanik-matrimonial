@@ -48,6 +48,10 @@ export type MemberPrivateFull = {
   mother_name: string | null;
   id_document_url: string | null;
   coupon_used: string | null;
+  /** This member's own recommend-a-friend code. */
+  referral_code?: string | null;
+  /** Referral code this member entered when registering (rewarded at approval). */
+  referred_by_code?: string | null;
   contact_request_weekly_bonus?: number | null;
   contact_request_monthly_bonus?: number | null;
   consent_contact?: boolean | null;

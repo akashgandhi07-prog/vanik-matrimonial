@@ -1133,6 +1133,16 @@ export default function AdminMemberDetail() {
               DOB: {priv.date_of_birth}
               <br />
               Coupon used: {priv.coupon_used ?? '-'}
+              <br />
+              Referral code (theirs to share): {priv.referral_code ?? '-'}
+              <br />
+              Referred by code: {priv.referred_by_code ?? '-'}
+              {priv.referred_by_code && (
+                <span style={{ color: 'var(--color-text-secondary)' }}>
+                  {' '}
+                  (referrer is rewarded automatically on approval)
+                </span>
+              )}
             </p>
           </div>
         )}

@@ -195,6 +195,34 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Optional recommend-a-friend code. Invalid or self-referring codes are
+  // silently dropped rather than blocking the registration - the field is a
+  // bonus, never a barrier to signing up.
+  const referralRaw = stripHtml(String(body.referral_code ?? ''), 16).trim().toUpperCase();
+  let referralValid: string | null = null;
+  // Strict format check also keeps ilike wildcards (%/_) out of the lookup.
+  if (referralRaw && /^VR-[A-Z2-9]{4,8}$/.test(referralRaw)) {
+    const { data: refRow } = await admin
+      .from('member_private')
+      .select('profile_id, referral_code, email')
+      .ilike('referral_code', referralRaw)
+      .maybeSingle();
+    if (refRow) {
+      const registrantEmail = (userData.user.email ?? '').trim().toLowerCase();
+      const referrerEmail = String(refRow.email ?? '').trim().toLowerCase();
+      if (!registrantEmail || referrerEmail !== registrantEmail) {
+        const { data: refProf } = await admin
+          .from('profiles')
+          .select('status')
+          .eq('id', refRow.profile_id as string)
+          .maybeSingle();
+        if (refProf?.status === 'active') {
+          referralValid = String(refRow.referral_code);
+        }
+      }
+    }
+  }
+
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
   const paymentRequired = !!stripeSecret && !couponValid && !isResubmit;
   let stripeCheckoutSessionId: string | null = null;
@@ -262,6 +290,7 @@ Deno.serve(async (req) => {
     mother_name: stripHtml(String(body.mother_name ?? ''), 120),
     id_document_url: idPath,
     coupon_used: couponValid ? couponRaw : null,
+    referred_by_code: referralValid,
     consent_contact: consentContact,
     consent_age: consentAge,
     consent_privacy_terms: consentPrivacyTerms,
@@ -280,10 +309,15 @@ Deno.serve(async (req) => {
 
     const { data: beforePriv } = await admin
       .from('member_private')
-      .select('coupon_used')
+      .select('coupon_used, referred_by_code')
       .eq('profile_id', profileId)
       .maybeSingle();
     const prevCouponCode = String(beforePriv?.coupon_used ?? '').toUpperCase();
+    // A resubmission without the field (e.g. an older cached frontend) must not
+    // wipe a referral recorded on the first submission.
+    if (!referralValid && beforePriv?.referred_by_code) {
+      privatePayload.referred_by_code = beforePriv.referred_by_code as string;
+    }
 
     const { error: upProf } = await admin
       .from('profiles')

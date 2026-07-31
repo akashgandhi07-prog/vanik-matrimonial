@@ -142,10 +142,42 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Request failed' }, req, 500);
   }
 
+  // Recommend-a-friend: make sure every member who reaches the dashboard has a
+  // personal code (migration backfilled existing members; this covers anyone
+  // registered since), and return their referral tally for the banner.
+  let referralStats: { count: number; months: number } | null = null;
+  if (member_private) {
+    if (!member_private.referral_code) {
+      const { data: code, error: codeErr } = await admin.rpc('assign_referral_code', {
+        p_profile_id: profile.id as string,
+      });
+      if (codeErr) {
+        console.error('member-bootstrap assign_referral_code', codeErr.message);
+      } else if (code) {
+        member_private.referral_code = code as string;
+      }
+    }
+    const { data: refRows, error: refErr } = await admin
+      .from('referrals')
+      .select('referrer_months')
+      .eq('referrer_profile_id', profile.id as string)
+      .not('rewarded_at', 'is', null);
+    if (refErr) {
+      console.error('member-bootstrap referrals select', refErr.message);
+    } else {
+      const rows = (refRows ?? []) as { referrer_months: number | null }[];
+      referralStats = {
+        count: rows.length,
+        months: rows.reduce((sum, r) => sum + (r.referrer_months ?? 0), 0),
+      };
+    }
+  }
+
   return jsonResponse(
     {
       profile,
       member_private: member_private ?? null,
+      referral_stats: referralStats,
     },
     req
   );
