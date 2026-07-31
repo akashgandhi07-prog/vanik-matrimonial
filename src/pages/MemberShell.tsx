@@ -9,36 +9,16 @@ function daysBetween(a: Date, b: Date) {
   return Math.ceil((b.getTime() - a.getTime()) / 86400000);
 }
 
-/** Recommend-a-friend band: personal code, share link, and months earned so far. */
+/** Recommend-a-friend band: personal code, copy link, and a link to the Referrals tab. */
 function ReferralBanner() {
+  const location = useLocation();
   const { profile, privateRow } = useMemberArea();
   const [copied, setCopied] = useState(false);
-  const [stats, setStats] = useState<{ count: number; months: number } | null>(null);
 
   const code = privateRow?.referral_code ?? null;
   const active = profile?.status === 'active';
-
-  useEffect(() => {
-    if (!active || !code) return;
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supabase
-        .from('referrals')
-        .select('referrer_months')
-        .not('rewarded_at', 'is', null);
-      if (!cancelled && data) {
-        setStats({
-          count: data.length,
-          months: data.reduce((s, r) => s + ((r.referrer_months as number | null) ?? 0), 0),
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [active, code]);
-
-  if (!active || !code) return null;
+  // The Referrals tab already opens with the full pitch; no need to repeat it above.
+  if (!active || !code || location.pathname === '/dashboard/referrals') return null;
 
   const shareLink = `${window.location.origin}/register?ref=${encodeURIComponent(code)}`;
 
@@ -55,10 +35,7 @@ function ReferralBanner() {
   }
 
   return (
-    <div
-      className="layout-max"
-      style={{ marginTop: 12 }}
-    >
+    <div className="layout-max" style={{ marginTop: 12 }}>
       <div
         className="card"
         style={{
@@ -75,16 +52,12 @@ function ReferralBanner() {
         }}
       >
         <span style={{ flex: '1 1 260px' }}>
-          <strong>Recommend a friend:</strong> for every friend who is accepted, you get{' '}
-          <strong>2 months free</strong> and they get an extra month. Your code:{' '}
-          <strong style={{ letterSpacing: '0.04em' }}>{code}</strong>
-          {stats && stats.months > 0 && (
-            <span style={{ opacity: 0.85 }}>
-              {' '}
-              - you&apos;ve earned {stats.months} month{stats.months === 1 ? '' : 's'} from{' '}
-              {stats.count} friend{stats.count === 1 ? '' : 's'} so far.
-            </span>
-          )}
+          <strong>Recommend a friend:</strong> every accepted friend earns you{' '}
+          <strong>2 months free</strong> (they get an extra month too). Your code:{' '}
+          <strong style={{ letterSpacing: '0.04em' }}>{code}</strong> -{' '}
+          <NavLink to="/dashboard/referrals" style={{ whiteSpace: 'nowrap' }}>
+            see your referrals
+          </NavLink>
         </span>
         <button
           type="button"
@@ -188,6 +161,7 @@ function MemberLayoutBody() {
                 ['/dashboard/saved', 'Saved profiles'],
                 ['/dashboard/requests', 'My requests'],
                 ['/dashboard/my-profile', 'My profile'],
+                ['/dashboard/referrals', 'Referrals'],
               ] as const
             ).map(([to, label]) => (
               <NavLink key={to} to={to} className={navCls}>

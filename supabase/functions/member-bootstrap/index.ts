@@ -144,8 +144,16 @@ Deno.serve(async (req) => {
 
   // Recommend-a-friend: make sure every member who reaches the dashboard has a
   // personal code (migration backfilled existing members; this covers anyone
-  // registered since), and return their referral tally for the banner.
-  let referralStats: { count: number; months: number } | null = null;
+  // registered since), and return the member's referral history for the
+  // Referrals tab. Privacy: in-progress entries are date-only (no name), and a
+  // rejected friend stays indistinguishable from one still under review - a
+  // referrer must never learn that someone they recommended was rejected.
+  let referralInfo: {
+    code: string | null;
+    total_months: number;
+    accepted: { first_name: string; months: number | null; rewarded_at: string | null }[];
+    in_progress: { registered_at: string }[];
+  } | null = null;
   if (member_private) {
     if (!member_private.referral_code) {
       const { data: code, error: codeErr } = await admin.rpc('assign_referral_code', {
@@ -157,19 +165,70 @@ Deno.serve(async (req) => {
         member_private.referral_code = code as string;
       }
     }
+    referralInfo = {
+      code: (member_private.referral_code as string | null) ?? null,
+      total_months: 0,
+      accepted: [],
+      in_progress: [],
+    };
     const { data: refRows, error: refErr } = await admin
       .from('referrals')
-      .select('referrer_months')
+      .select('referred_profile_id, referrer_months, rewarded_at')
       .eq('referrer_profile_id', profile.id as string)
-      .not('rewarded_at', 'is', null);
+      .order('created_at', { ascending: false });
     if (refErr) {
       console.error('member-bootstrap referrals select', refErr.message);
     } else {
-      const rows = (refRows ?? []) as { referrer_months: number | null }[];
-      referralStats = {
-        count: rows.length,
-        months: rows.reduce((sum, r) => sum + (r.referrer_months ?? 0), 0),
-      };
+      const rows = (refRows ?? []) as {
+        referred_profile_id: string;
+        referrer_months: number | null;
+        rewarded_at: string | null;
+      }[];
+      const ids = rows.map((r) => r.referred_profile_id);
+      const names = new Map<string, string>();
+      if (ids.length > 0) {
+        const { data: profs } = await admin.from('profiles').select('id, first_name').in('id', ids);
+        for (const p2 of (profs ?? []) as { id: string; first_name: string | null }[]) {
+          names.set(p2.id, p2.first_name ?? '');
+        }
+      }
+      referralInfo.accepted = rows.map((r) => ({
+        first_name: names.get(r.referred_profile_id) ?? '',
+        months: r.referrer_months,
+        rewarded_at: r.rewarded_at,
+      }));
+      referralInfo.total_months = rows.reduce((sum, r) => sum + (r.referrer_months ?? 0), 0);
+    }
+    if (referralInfo.code) {
+      // Applicants who used this member's code but have no referrals row yet.
+      // 'rejected' is deliberately included alongside 'pending_approval' so a
+      // rejection never becomes visible as a disappeared entry.
+      const { data: pendRows, error: pendErr } = await admin
+        .from('member_private')
+        .select('profile_id')
+        .eq('referred_by_code', referralInfo.code);
+      if (pendErr) {
+        console.error('member-bootstrap pending referrals select', pendErr.message);
+      } else {
+        const pendIds = ((pendRows ?? []) as { profile_id: string }[]).map((r) => r.profile_id);
+        const alreadyRecorded = new Set(
+          ((await admin
+            .from('referrals')
+            .select('referred_profile_id')
+            .in('referred_profile_id', pendIds.length > 0 ? pendIds : ['00000000-0000-0000-0000-000000000000'])
+          ).data ?? []).map((r) => (r as { referred_profile_id: string }).referred_profile_id)
+        );
+        if (pendIds.length > 0) {
+          const { data: pendProfs } = await admin
+            .from('profiles')
+            .select('id, status, created_at')
+            .in('id', pendIds)
+            .in('status', ['pending_approval', 'rejected']);
+          referralInfo.in_progress = ((pendProfs ?? []) as { id: string; created_at: string }[])
+            .filter((p2) => !alreadyRecorded.has(p2.id))
+            .map((p2) => ({ registered_at: p2.created_at }));
+        }
+      }
     }
   }
 
@@ -177,7 +236,7 @@ Deno.serve(async (req) => {
     {
       profile,
       member_private: member_private ?? null,
-      referral_stats: referralStats,
+      referral_info: referralInfo,
     },
     req
   );

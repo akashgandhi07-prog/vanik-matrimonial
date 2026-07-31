@@ -25,6 +25,7 @@ import MemberBrowse from './pages/MemberBrowse';
 import MemberMyProfile from './pages/MemberMyProfile';
 import MemberRequests from './pages/MemberRequests';
 import MemberSaved from './pages/MemberSaved';
+import MemberReferrals from './pages/MemberReferrals';
 import MemberShell from './pages/MemberShell';
 import MembershipExpired from './pages/MembershipExpired';
 import Privacy from './pages/Privacy';
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="saved" element={<MemberSaved />} />
               <Route path="requests" element={<MemberRequests />} />
               <Route path="my-profile" element={<MemberMyProfile />} />
+              <Route path="referrals" element={<MemberReferrals />} />
             </Route>
             <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
             <Route path="/admin" element={<AdminLayout />}>

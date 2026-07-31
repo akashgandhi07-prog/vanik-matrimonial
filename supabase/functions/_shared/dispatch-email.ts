@@ -119,10 +119,25 @@ export async function dispatchEmail(
             year: 'numeric',
           })
         : '';
+      // Transparency: a referred member should see WHY their expiry includes an
+      // extra month, not just a silently longer date.
+      let referralBonusLine = '';
+      if (member.referred_by_code) {
+        const { data: refRow } = await admin
+          .from('referrals')
+          .select('referred_months')
+          .eq('referred_profile_id', recipientProfileId!)
+          .maybeSingle();
+        const bonus = refRow?.referred_months;
+        if (typeof bonus === 'number' && bonus >= 1) {
+          referralBonusLine = `<p>Because an existing member recommended you, your membership includes <strong>${bonus} bonus month${bonus === 1 ? '' : 's'}</strong> - already counted in the date above.</p>`;
+        }
+      }
       subject = `Your account is now active - Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your account has now been created and your application has been approved. You can log in and start browsing profiles straight away.</p>
         ${exp ? `<p>Your membership is valid until <strong>${exp}</strong>.</p>` : ''}
+        ${referralBonusLine}
         <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:6px;text-decoration:none;font-weight:bold;">Log in now</a></p>
         <p><strong>How it works</strong></p>
         <ul>
