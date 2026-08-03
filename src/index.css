@@ -2433,10 +2433,46 @@ textarea:focus-visible {
   box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
 }
 
-.member-tray-toggle {
+.member-tray-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.member-tray-collapsed-row {
   display: none;
-  width: 100%;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.member-tray-toggle {
+  flex: 1 1 auto;
+}
+
+.member-tray-submit-cta {
+  flex: 1.4 1 auto;
+  animation: member-tray-submit-pulse 2s ease-in-out infinite;
+}
+
+.member-tray-submit-cta:disabled {
+  animation: none;
+}
+
+@keyframes member-tray-submit-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(123, 46, 59, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(123, 46, 59, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .member-tray-submit-cta {
+    animation: none;
+  }
 }
 
 .member-tray-panel {
@@ -2467,8 +2503,8 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .member-tray-toggle {
-    display: inline-flex;
+  .member-tray-collapsed-row {
+    display: flex;
   }
 
   .member-tray-panel {

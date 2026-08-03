@@ -276,6 +276,9 @@ export default function MemberBrowse() {
         state: { fromBrowse: true, requestId: res.request_id ?? '' },
       });
     } catch (e) {
+      // Errors render inside the drawer - make sure it is open so a failed
+      // submit is never silent on mobile.
+      setTrayDrawerOpen(true);
       if (e instanceof EdgeFunctionHttpError) {
         const msg = e.message;
         switch (e.code) {
@@ -826,15 +829,28 @@ export default function MemberBrowse() {
 
       {tray.length > 0 && (
         <div className="member-request-tray">
-          <button
-            type="button"
-            className="btn btn-secondary member-tray-toggle"
-            aria-expanded={trayDrawerOpen}
-            aria-controls="member-tray-panel"
-            onClick={() => setTrayDrawerOpen((o) => !o)}
-          >
-            {tray.length}/{trayMax} selected{trayDrawerOpen ? ' - hide' : ' - show'}
-          </button>
+          <p className="member-tray-hint">
+            {tray.length === 1 ? '1 person selected' : `${tray.length} people selected`} - not requested yet
+          </p>
+          <div className="member-tray-collapsed-row">
+            <button
+              type="button"
+              className="btn btn-secondary member-tray-toggle"
+              aria-expanded={trayDrawerOpen}
+              aria-controls="member-tray-panel"
+              onClick={() => setTrayDrawerOpen((o) => !o)}
+            >
+              {tray.length}/{trayMax}{trayDrawerOpen ? ' - hide' : ' - review'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary member-tray-submit-cta"
+              disabled={feedbackBlocking || trayMax === 0 || traySubmitting}
+              onClick={() => void submitTray()}
+            >
+              {traySubmitting ? 'Submitting…' : 'Submit request'}
+            </button>
+          </div>
           <div
             id="member-tray-panel"
             className={`member-tray-panel ${trayDrawerOpen ? 'member-tray-panel--open' : ''}`}
