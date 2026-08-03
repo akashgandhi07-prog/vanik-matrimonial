@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
-import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { dispatchEmailInBackground, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
@@ -80,8 +80,9 @@ Deno.serve(async (req) => {
     notes: reason,
   });
 
+  // Sent after the response - a mail failure must not report the rejection as failed.
   if (isTransactionalMailConfigured()) {
-    await dispatchEmail(admin, {
+    dispatchEmailInBackground(admin, {
       type: 'registration_rejected',
       recipientProfileId: profileId,
       extra_data: { reason },

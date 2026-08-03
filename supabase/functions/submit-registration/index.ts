@@ -1,7 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
-import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { dispatchEmail, getAdminClient, runAfterResponse } from '../_shared/dispatch-email.ts';
 import { letterHtml } from '../_shared/resend.ts';
 import { isTransactionalMailConfigured, sendTransactionalMail } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
@@ -413,32 +413,36 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Both emails go out after the response: the registration is already saved,
+  // and a mail failure must not make the applicant think their submission failed.
   if (isTransactionalMailConfigured()) {
-    await dispatchEmail(admin, {
-      type: 'registration_received',
-      recipientProfileId: profileId,
-      extra_data: {
-        first_name: firstName,
-        resubmitted: isResubmit,
-      },
-    });
+    runAfterResponse('registration emails', async () => {
+      await dispatchEmail(admin, {
+        type: 'registration_received',
+        recipientProfileId: profileId,
+        extra_data: {
+          first_name: firstName,
+          resubmitted: isResubmit,
+        },
+      });
 
-    const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
-    const adminSubject = isResubmit ? 'Registration resubmitted (after rejection)' : 'New Vanik Matrimonial registration';
-    const adminLead = isResubmit
-      ? '<p>A member <strong>resubmitted</strong> their application after an earlier rejection.</p>'
-      : '<p>A new matrimonial registration was submitted.</p>';
-    const html = letterHtml(
-      isResubmit ? 'Resubmitted registration' : 'New registration',
-      `${adminLead}
-       <p><strong>Name:</strong> ${firstName} ${surname}<br/>
-       <strong>Email:</strong> ${email}</p>
-       <p><a href="${publicSiteBaseUrl()}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
-    );
-    await sendTransactionalMail({
-      to: notify,
-      subject: adminSubject,
-      html,
+      const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
+      const adminSubject = isResubmit ? 'Registration resubmitted (after rejection)' : 'New Vanik Matrimonial registration';
+      const adminLead = isResubmit
+        ? '<p>A member <strong>resubmitted</strong> their application after an earlier rejection.</p>'
+        : '<p>A new matrimonial registration was submitted.</p>';
+      const html = letterHtml(
+        isResubmit ? 'Resubmitted registration' : 'New registration',
+        `${adminLead}
+         <p><strong>Name:</strong> ${firstName} ${surname}<br/>
+         <strong>Email:</strong> ${email}</p>
+         <p><a href="${publicSiteBaseUrl()}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
+      );
+      await sendTransactionalMail({
+        to: notify,
+        subject: adminSubject,
+        html,
+      });
     });
   }
 

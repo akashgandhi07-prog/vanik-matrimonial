@@ -115,11 +115,15 @@ function edgeHttpErrorFromPayload(json: unknown, fallbackMessage: string): EdgeF
 
 function responseMessage(res: Response, text: string, json: unknown): string {
   const payload = json as { error?: string; message?: string } | null;
+  // Gateway error pages are HTML - never show raw markup (or a blank string) in the UI.
+  const looksLikeHtml = /^\s*</.test(text);
   return (
     (payload && typeof payload.message === 'string' && payload.message) ||
     (payload && typeof payload.error === 'string' && payload.error) ||
-    text.slice(0, 400) ||
-    res.statusText
+    (!looksLikeHtml && text.slice(0, 400)) ||
+    (res.status >= 500
+      ? `The server had a temporary problem (HTTP ${res.status}). Refresh the page to check whether your action was applied before trying again.`
+      : res.statusText || `HTTP ${res.status}`)
   );
 }
 
@@ -246,19 +250,35 @@ export async function invokeFunction(name: string, body?: object) {
       if (data != null && typeof data === 'object' && !Array.isArray(data)) {
         return data as Record<string, unknown>;
       }
-      return await invokeFunctionDirectFetch(name, body, tokenNow);
+      // Success with a dropped/empty body. The function already executed -
+      // never re-POST here, that would run the action twice.
+      console.warn(`invokeFunction(${name}): 2xx with empty body; returning {}`);
+      return {};
     }
 
-    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+    if (error instanceof FunctionsFetchError) {
+      // The request never got a response (blocked/offline) - a direct fetch
+      // retry is the long-standing workaround for relay-blocking extensions.
       try {
         return await invokeFunctionDirectFetch(name, body, tokenNow);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new EdgeCallError(
           'Could not reach the server. Please check your internet connection and try again.',
-          `relay: ${error.message}; direct fetch: ${msg}`
+          `fetch: ${error.message}; direct fetch: ${msg}`
         );
       }
+    }
+
+    if (error instanceof FunctionsRelayError) {
+      // The request reached Supabase and the worker failed mid-flight. The
+      // function may have already done its work - re-POSTing would execute the
+      // action twice (this double-ran admin approvals in production on
+      // 2026-08-02), so surface the error instead.
+      throw new EdgeCallError(
+        'The server had a temporary problem. Refresh the page to check whether your action was applied before trying again.',
+        `relay error from ${name}: ${error.message}`
+      );
     }
 
     if (error instanceof FunctionsHttpError) {

@@ -374,6 +374,35 @@ export async function dispatchEmail(
   return { ok: true, messageId: id };
 }
 
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
+
+/**
+ * Runs a task after the HTTP response has been sent (via EdgeRuntime.waitUntil
+ * when available). Use for email sends so a mail failure or crash can never
+ * turn an already-committed action into a 5xx for the caller.
+ */
+export function runAfterResponse(label: string, task: () => Promise<unknown>): void {
+  const promise = task().catch((e) => {
+    console.error(`background task '${label}' failed:`, e instanceof Error ? e.message : e);
+  });
+  try {
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(promise);
+    }
+  } catch {
+    // waitUntil unavailable (e.g. local tooling) - the floating promise above
+    // still runs best-effort.
+  }
+}
+
+/** dispatchEmail after the response is sent; failures are logged, never thrown. */
+export function dispatchEmailInBackground(admin: SupabaseClient, params: DispatchParams): void {
+  runAfterResponse(`email:${params.type}`, async () => {
+    const r = await dispatchEmail(admin, params);
+    if (!r.ok) console.error(`background email '${params.type}' not sent:`, r.error);
+  });
+}
+
 /** Admin client factory */
 export function getAdminClient() {
   const url = Deno.env.get('SUPABASE_URL')!;

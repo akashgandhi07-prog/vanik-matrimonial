@@ -1,6 +1,24 @@
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 import { sendResendEmail, type EmailPayload } from './resend.ts';
 
+// denomailer can raise errors on background microtasks when the SMTP server
+// drops the connection mid-send ("Error while in datamode", then
+// "BadResource at TlsConn.close"). Those never pass through a try/catch and
+// would otherwise kill the whole worker - the gateway then returns 502/503 to
+// the browser even though the function's DB writes already committed
+// (observed in production on 2026-08-02). Swallow them at the event-loop
+// level so a mail failure can never crash the function.
+globalThis.addEventListener('unhandledrejection', (ev) => {
+  console.error('transactional-mail: suppressed unhandled rejection:', ev.reason);
+  ev.preventDefault();
+});
+globalThis.addEventListener('error', (ev) => {
+  console.error('transactional-mail: suppressed uncaught error:', ev.error ?? ev.message);
+  ev.preventDefault();
+});
+
+const SMTP_SEND_TIMEOUT_MS = 25_000;
+
 /** Splits comma/semicolon-separated lists (e.g. ADMIN_NOTIFY_EMAIL). */
 export function normalizeMailRecipients(raw: string): string[] {
   return [
@@ -104,19 +122,26 @@ async function sendViaSmtp(
   });
 
   try {
-    await client.send({
-      from: `${fromName} <${fromEmail}>`,
-      to: payload.to.length === 1 ? payload.to[0]! : payload.to,
-      subject: payload.subject,
-      mimeContent: [
-        {
-          mimeType: 'text/html; charset="utf-8"',
-          content: htmlToBase64MimeBody(payload.html),
-          transferEncoding: 'base64',
-        },
-      ],
-      ...(replyTo ? { replyTo } : {}),
-    });
+    // A dropped SMTP connection can leave denomailer waiting forever; cap the
+    // whole conversation so background email tasks always finish.
+    await Promise.race([
+      client.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: payload.to.length === 1 ? payload.to[0]! : payload.to,
+        subject: payload.subject,
+        mimeContent: [
+          {
+            mimeType: 'text/html; charset="utf-8"',
+            content: htmlToBase64MimeBody(payload.html),
+            transferEncoding: 'base64',
+          },
+        ],
+        ...(replyTo ? { replyTo } : {}),
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`SMTP send timed out after ${SMTP_SEND_TIMEOUT_MS}ms`)), SMTP_SEND_TIMEOUT_MS)
+      ),
+    ]);
     await client.close();
     return { id: null, error: null };
   } catch (e) {

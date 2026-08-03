@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
-import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { dispatchEmailInBackground, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 
@@ -275,7 +275,7 @@ Deno.serve(async (req) => {
           .select('first_name')
           .eq('id', profileId)
           .maybeSingle();
-        await dispatchEmail(admin, {
+        dispatchEmailInBackground(admin, {
           type: 'referral_reward',
           recipientProfileId: referrer.profileId,
           extraData: {
@@ -288,8 +288,10 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Email goes out after the response: the approval is already committed, and
+  // a mail failure must never surface as an error for an action that worked.
   if (isTransactionalMailConfigured()) {
-    await dispatchEmail(admin, {
+    dispatchEmailInBackground(admin, {
       type: 'registration_approved',
       recipientProfileId: profileId,
     });
