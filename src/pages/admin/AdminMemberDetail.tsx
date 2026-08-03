@@ -2,6 +2,7 @@ import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { isSupportAdmin } from '../../lib/auth';
+import { cmToFeetInches } from '../../lib/heights';
 import { rejectReasonIfNotJpegOrPng } from '../../lib/profilePhotoAccept';
 import { invokeFunction, supabase } from '../../lib/supabase';
 import { AdminMemberEditForm, type MemberPrivateFull, type MemberProfileFull } from './AdminMemberEditForm';
@@ -333,6 +334,54 @@ export default function AdminMemberDetail() {
               </li>
             </ul>
           )}
+        </div>
+
+        <div className="card" style={{ marginTop: 20 }}>
+          <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Profile snapshot</h2>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: '10px 24px',
+              fontSize: 14,
+            }}
+          >
+            {(
+              [
+                ['Gender', profile.gender],
+                ['Seeking', profile.seeking_gender ?? null],
+                ['Age', profile.age != null ? String(profile.age) : null],
+                [
+                  'Height',
+                  profile.height_cm != null
+                    ? `${profile.height_cm} cm (${cmToFeetInches(profile.height_cm)})`
+                    : null,
+                ],
+                ['Weight', profile.weight_kg != null ? `${profile.weight_kg} kg` : null],
+                ['Religion', profile.religion],
+                ['Community', profile.community],
+                ['Nationality', profile.nationality],
+                ['Location', profile.place_of_birth],
+                ['Family origin', profile.town_country_of_origin],
+                ['Diet', profile.diet],
+                ['Education', profile.education],
+                ['Job', profile.job_title],
+                ['Settlement plans', profile.future_settlement_plans],
+              ] as [string, string | null][]
+            ).map(([label, value]) => (
+              <div key={label}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>{label}</span>
+                <br />
+                <strong>{value?.trim() ? value : '-'}</strong>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 14 }}>
+            <span style={{ color: 'var(--color-text-secondary)' }}>Hobbies &amp; interests</span>
+            <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>
+              {profile.hobbies?.trim() ? profile.hobbies : '-'}
+            </p>
+          </div>
         </div>
 
         <p style={{ marginTop: 12 }}>

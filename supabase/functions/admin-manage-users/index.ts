@@ -193,6 +193,58 @@ async function fetchAllFilteredProfileRows(admin: any, f: string, selectCols: st
   return { rows: out, error: null };
 }
 
+/** Fetch every row of a table with a compact column list, paging past the PostgREST default limit. */
+// deno-lint-ignore no-explicit-any Supabase chained filter builder has no narrow public type here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- aligned with Deno pragma above
+async function fetchAllTableRows(admin: any, table: string, selectCols: string, orderCol: string): Promise<{ rows: Record<string, unknown>[]; error: string | null }> {
+  const pageSize = 1000;
+  const out: Record<string, unknown>[] = [];
+  let offset = 0;
+  for (;;) {
+    const { data, error } = await admin
+      .from(table)
+      .select(selectCols)
+      .order(orderCol, { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) return { rows: [], error: error.message };
+    const chunk = (data ?? []) as Record<string, unknown>[];
+    out.push(...chunk);
+    if (chunk.length < pageSize) break;
+    offset += pageSize;
+  }
+  return { rows: out, error: null };
+}
+
+/** Monday-start UTC week buckets covering the last `weeks` weeks (oldest first). */
+function analyticsWeekBuckets(weeks: number): { startMs: number; week_start: string }[] {
+  const now = new Date();
+  const mondayOffset = (now.getUTCDay() + 6) % 7;
+  const thisMonday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - mondayOffset);
+  const buckets: { startMs: number; week_start: string }[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const startMs = thisMonday - i * 7 * 864e5;
+    buckets.push({ startMs, week_start: new Date(startMs).toISOString().slice(0, 10) });
+  }
+  return buckets;
+}
+
+function analyticsWeekSeries(
+  timestamps: (string | null | undefined)[],
+  buckets: { startMs: number; week_start: string }[]
+): { week_start: string; count: number }[] {
+  const counts = new Array<number>(buckets.length).fill(0);
+  const firstStart = buckets[0]?.startMs ?? 0;
+  const weekMs = 7 * 864e5;
+  for (const ts of timestamps) {
+    if (!ts) continue;
+    const t = new Date(ts).getTime();
+    if (Number.isNaN(t) || t < firstStart) continue;
+    const idx = Math.floor((t - firstStart) / weekMs);
+    if (idx >= 0 && idx < counts.length) counts[idx] += 1;
+  }
+  return buckets.map((b, i) => ({ week_start: b.week_start, count: counts[i] }));
+}
+
 /** Canonical column ids for `export_members_csv` (order preserved in output). Keep in sync with AdminMembers `MEMBER_EXPORT_COLUMN_OPTS`. */
 const EXPORT_MEMBERS_CSV_COLUMNS = [
   'profile_id',
@@ -1258,7 +1310,14 @@ Deno.serve(async (req) => {
 
     const profiles: Record<
       string,
-      { id: string; first_name: string; reference_number: string | null; full_name: string }
+      {
+        id: string;
+        first_name: string;
+        reference_number: string | null;
+        full_name: string;
+        status: string;
+        hidden_reason: string | null;
+      }
     > = {};
     const surnameByProfile = new Map<string, string | null>();
     const idList = [...profileIds];
@@ -1266,7 +1325,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < idList.length; i += profChunk) {
       const chunk = idList.slice(i, i + profChunk);
       const [{ data: profs, error: pErr }, { data: privs, error: privErr }] = await Promise.all([
-        admin.from('profiles').select('id, first_name, reference_number').in('id', chunk),
+        admin.from('profiles').select('id, first_name, reference_number, status, hidden_reason').in('id', chunk),
         admin.from('member_private').select('profile_id, surname').in('profile_id', chunk),
       ]);
       if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
@@ -1276,7 +1335,13 @@ Deno.serve(async (req) => {
         surnameByProfile.set(row.profile_id, row.surname);
       }
       for (const p of profs ?? []) {
-        const row = p as { id: string; first_name: string; reference_number: string | null };
+        const row = p as {
+          id: string;
+          first_name: string;
+          reference_number: string | null;
+          status: string;
+          hidden_reason: string | null;
+        };
         const full_name = memberDisplayLabel(
           row.first_name,
           surnameByProfile.get(row.id) ?? null,
@@ -1370,6 +1435,215 @@ Deno.serve(async (req) => {
       emailAttempted: emailAttempted.count ?? 0,
       emailOk: emailOk.count ?? 0,
     }, req);
+  }
+
+  if (action === 'analytics_stats') {
+    const WEEKS = 12;
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const in30Iso = new Date(nowMs + 30 * 864e5).toISOString();
+    const in60Iso = new Date(nowMs + 60 * 864e5).toISOString();
+
+    // Tables are small (hundreds of rows), so aggregate compact selects in TypeScript.
+    const [profilesRes, requestsRes, referralsRes] = await Promise.all([
+      fetchAllTableRows(
+        admin,
+        'profiles',
+        'id, first_name, reference_number, status, hidden_reason, gender, created_at, membership_expires_at',
+        'created_at'
+      ),
+      fetchAllTableRows(admin, 'requests', 'id, created_at, requester_id, candidate_ids', 'created_at'),
+      fetchAllTableRows(
+        admin,
+        'referrals',
+        'referrer_profile_id, referred_profile_id, code_used, referrer_months, referred_months, rewarded_at, created_at',
+        'created_at'
+      ),
+    ]);
+    for (const [label, res] of [
+      ['profiles', profilesRes],
+      ['requests', requestsRes],
+      ['referrals', referralsRes],
+    ] as const) {
+      if (res.error) return jsonResponse({ error: `${label}: ${res.error}` }, req, 500);
+    }
+
+    const [fbTotal, fbYes, fbNo, fbUnsure, fbFlagged, fbArchived] = await Promise.all([
+      admin.from('feedback').select('id', { count: 'exact', head: true }),
+      admin.from('feedback').select('id', { count: 'exact', head: true }).eq('recommend_retain', 'yes'),
+      admin.from('feedback').select('id', { count: 'exact', head: true }).eq('recommend_retain', 'no'),
+      admin.from('feedback').select('id', { count: 'exact', head: true }).eq('recommend_retain', 'unsure'),
+      admin
+        .from('feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_flagged', true)
+        .is('archived_at', null),
+      admin.from('feedback').select('id', { count: 'exact', head: true }).not('archived_at', 'is', null),
+    ]);
+    for (const c of [fbTotal, fbYes, fbNo, fbUnsure, fbFlagged, fbArchived]) {
+      if (c.error) return jsonResponse({ error: c.error.message }, req, 500);
+    }
+
+    const profiles = profilesRes.rows as {
+      id: string;
+      first_name: string | null;
+      reference_number: string | null;
+      status: string;
+      hidden_reason: string | null;
+      gender: string | null;
+      created_at: string;
+      membership_expires_at: string | null;
+    }[];
+    const requestRows = requestsRes.rows as {
+      id: string;
+      created_at: string;
+      requester_id: string | null;
+      candidate_ids: string[] | null;
+    }[];
+    const referralRows = referralsRes.rows as {
+      referrer_profile_id: string;
+      referred_profile_id: string;
+      code_used: string;
+      referrer_months: number | null;
+      referred_months: number | null;
+      rewarded_at: string | null;
+      created_at: string;
+    }[];
+
+    const labelById = new Map<string, string>();
+    for (const p of profiles) {
+      labelById.set(p.id, memberDisplayLabel(p.first_name, null, p.reference_number) || 'Unknown');
+    }
+
+    // ---- Member counts by state and gender ----
+    const byStatus: Record<string, number> = {
+      pending_approval: 0,
+      active: 0,
+      expired: 0,
+      rejected: 0,
+      closed: 0,
+    };
+    const byHiddenReason: Record<string, number> = { member_paused: 0, matched: 0, admin: 0 };
+    const byGender: Record<string, number> = { Male: 0, Female: 0 };
+    const activeByGender: Record<string, number> = { Male: 0, Female: 0 };
+    let expiring30 = 0;
+    let expiring60 = 0;
+    for (const p of profiles) {
+      if (p.status in byStatus) byStatus[p.status] += 1;
+      if (p.hidden_reason && p.hidden_reason in byHiddenReason) byHiddenReason[p.hidden_reason] += 1;
+      if (p.gender && p.gender in byGender) byGender[p.gender] += 1;
+      if (p.status === 'active') {
+        if (p.gender && p.gender in activeByGender) activeByGender[p.gender] += 1;
+        const exp = p.membership_expires_at;
+        if (exp && exp >= nowIso) {
+          if (exp <= in30Iso) expiring30 += 1;
+          if (exp <= in60Iso) expiring60 += 1;
+        }
+      }
+    }
+
+    // ---- Time series (Monday-start UTC weeks) ----
+    const buckets = analyticsWeekBuckets(WEEKS);
+    const registrationsByWeek = analyticsWeekSeries(profiles.map((p) => p.created_at), buckets);
+    const requestsByWeek = analyticsWeekSeries(requestRows.map((r) => r.created_at), buckets);
+
+    // ---- Most / least requested members ----
+    const requestCountByProfile = new Map<string, number>();
+    let candidateMentions = 0;
+    for (const r of requestRows) {
+      for (const c of r.candidate_ids ?? []) {
+        if (!c) continue;
+        candidateMentions += 1;
+        requestCountByProfile.set(c, (requestCountByProfile.get(c) ?? 0) + 1);
+      }
+    }
+    const statusById = new Map(profiles.map((p) => [p.id, p] as const));
+    const topRequested = [...requestCountByProfile.entries()]
+      .sort((a, b) => b[1] - a[1] || (labelById.get(a[0]) ?? '').localeCompare(labelById.get(b[0]) ?? ''))
+      .slice(0, 10)
+      .map(([profileId, count]) => {
+        const prof = statusById.get(profileId);
+        return {
+          profile_id: profileId,
+          label: labelById.get(profileId) ?? 'Unknown (removed member)',
+          status: prof?.status ?? 'unknown',
+          hidden_reason: prof?.hidden_reason ?? null,
+          count,
+        };
+      });
+
+    // Active, listed members nobody has requested yet -- the ones worth promoting.
+    const zeroRequestedAll = profiles
+      .filter((p) => p.status === 'active' && p.hidden_reason == null && !requestCountByProfile.has(p.id))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const zeroRequested = zeroRequestedAll.slice(0, 30).map((p) => ({
+      profile_id: p.id,
+      label: labelById.get(p.id) ?? 'Unknown',
+      gender: p.gender,
+      listed_since: p.created_at,
+    }));
+
+    // ---- Referral scheme ----
+    const referralAgg = new Map<string, { count: number; rewarded: number; months: number }>();
+    let referralMonthsAwarded = 0;
+    let referralRewarded = 0;
+    for (const r of referralRows) {
+      const months = (r.referrer_months ?? 0) + (r.referred_months ?? 0);
+      referralMonthsAwarded += months;
+      if (r.rewarded_at != null) referralRewarded += 1;
+      const agg = referralAgg.get(r.referrer_profile_id) ?? { count: 0, rewarded: 0, months: 0 };
+      agg.count += 1;
+      if (r.rewarded_at != null) agg.rewarded += 1;
+      agg.months += r.referrer_months ?? 0;
+      referralAgg.set(r.referrer_profile_id, agg);
+    }
+    const topReferrers = [...referralAgg.entries()]
+      .sort((a, b) => b[1].count - a[1].count || (labelById.get(a[0]) ?? '').localeCompare(labelById.get(b[0]) ?? ''))
+      .slice(0, 10)
+      .map(([profileId, agg]) => ({
+        profile_id: profileId,
+        label: labelById.get(profileId) ?? 'Unknown (removed member)',
+        referrals: agg.count,
+        rewarded: agg.rewarded,
+        months_earned: agg.months,
+      }));
+
+    return jsonResponse(
+      {
+        members: {
+          total: profiles.length,
+          byStatus,
+          byHiddenReason,
+          byGender,
+          activeByGender,
+        },
+        expiring: { in30: expiring30, in60: expiring60 },
+        registrationsByWeek,
+        requestsByWeek,
+        requests: {
+          total: requestRows.length,
+          candidate_mentions: candidateMentions,
+          top_requested: topRequested,
+          zero_requested: zeroRequested,
+          zero_requested_total: zeroRequestedAll.length,
+        },
+        referrals: {
+          total: referralRows.length,
+          rewarded: referralRewarded,
+          months_awarded: referralMonthsAwarded,
+          top_referrers: topReferrers,
+        },
+        feedback: {
+          total: fbTotal.count ?? 0,
+          recommend_yes: fbYes.count ?? 0,
+          recommend_no: fbNo.count ?? 0,
+          recommend_unsure: fbUnsure.count ?? 0,
+          flagged_open: fbFlagged.count ?? 0,
+          archived: fbArchived.count ?? 0,
+        },
+      },
+      req
+    );
   }
 
   if (action === 'update_member_record') {

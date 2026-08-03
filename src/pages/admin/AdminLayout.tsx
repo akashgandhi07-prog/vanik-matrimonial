@@ -52,6 +52,9 @@ export default function AdminLayout() {
             <NavLink to="/admin/feedback" className={navCls}>
               Feedback
             </NavLink>
+            <NavLink to="/admin/analytics" className={navCls}>
+              Analytics
+            </NavLink>
             {adminRole !== 'support' && (
               <NavLink to="/admin/add-member" className={navCls}>
                 Add member
@@ -110,6 +113,9 @@ export default function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/feedback" className={navCls}>
           Feedback
+        </NavLink>
+        <NavLink to="/admin/analytics" className={navCls}>
+          Analytics
         </NavLink>
         {adminRole !== 'support' && (
           <NavLink to="/admin/add-member" className={navCls}>

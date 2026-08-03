@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { SessionProvider } from './components/SessionContext';
 import { SiteHeader } from './components/SiteHeader';
 import AdminAddMember from './pages/admin/AdminAddMember';
+import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminCoupons from './pages/admin/AdminCoupons';
 import AdminEmailExport from './pages/admin/AdminEmailExport';
 import AdminEmailLog from './pages/admin/AdminEmailLog';
@@ -94,6 +95,7 @@ export default function App() {
               <Route path="members/:id" element={<AdminMemberDetail />} />
               <Route path="requests" element={<AdminRequests />} />
               <Route path="feedback" element={<AdminFeedback />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
               <Route path="add-member" element={<AdminAddMember />} />
               <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
               <Route path="coupons" element={<AdminCoupons />} />

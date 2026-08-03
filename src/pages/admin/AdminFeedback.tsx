@@ -28,12 +28,15 @@ type ProfileSummary = {
   first_name: string;
   reference_number: string | null;
   full_name?: string;
+  status?: string;
+  hidden_reason?: string | null;
 };
 
 type GroupedFeedback = {
   candidate: ProfileSummary;
   rows: FeedbackRow[];
   profileId: string | null;
+  stateNote: string | null;
 };
 
 type WebsiteFeedbackRow = {
@@ -80,38 +83,84 @@ function resolveRequesterId(row: FeedbackRow, requests: Record<string, RequestSu
   return req?.requester_id ?? null;
 }
 
+/**
+ * Short state note shown in brackets after a member's name, or null for a
+ * normally listed (active, not hidden) member.
+ */
+function profileStateNote(p: ProfileSummary | undefined): string | null {
+  if (!p) return 'deleted';
+  if (p.status === 'active' || p.status === undefined) {
+    if (p.hidden_reason === 'member_paused') return 'paused';
+    if (p.hidden_reason === 'matched') return 'matched';
+    if (p.hidden_reason === 'admin') return 'hidden by admin';
+    return null;
+  }
+  switch (p.status) {
+    case 'closed':
+    case 'archived':
+      return 'closed';
+    case 'expired':
+      return 'expired';
+    case 'rejected':
+      return 'rejected';
+    case 'matched':
+      return 'matched';
+    case 'pending_approval':
+      return 'pending approval';
+    default:
+      return p.status.replace(/_/g, ' ');
+  }
+}
+
 function memberLabel(
   profileId: string | null,
   displayName: string | null | undefined,
   profiles: Record<string, ProfileSummary>
-): { label: string; profileId: string | null } {
+): { label: string; profileId: string | null; stateNote: string | null } {
   if (profileId && profiles[profileId]) {
     const p = profiles[profileId];
     const label =
       p.full_name?.trim() ||
       `${p.first_name}${p.reference_number ? ` (${p.reference_number})` : ''}`.trim();
-    if (label) return { label, profileId };
+    if (label) return { label, profileId, stateNote: profileStateNote(p) };
   }
+  // Profile row no longer exists - fall back to the snapshot taken at
+  // submission time so the name survives account deletion.
   const snap = displayName?.trim();
-  if (snap) return { label: snap, profileId };
-  return { label: 'Unknown member', profileId: null };
+  if (snap) return { label: snap, profileId, stateNote: 'deleted' };
+  return { label: 'Unknown member', profileId: null, stateNote: 'deleted' };
 }
 
 function MemberProfileLink({
   profileId,
   label,
+  stateNote,
 }: {
   profileId: string | null;
   label: string;
+  stateNote?: string | null;
 }) {
+  const note = stateNote ? (
+    <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: 4 }}>
+      ({stateNote})
+    </span>
+  ) : null;
   if (profileId) {
     return (
-      <Link to={`/admin/members/${profileId}`} style={{ fontWeight: 600 }}>
-        {label}
-      </Link>
+      <>
+        <Link to={`/admin/members/${profileId}`} style={{ fontWeight: 600 }}>
+          {label}
+        </Link>
+        {note}
+      </>
     );
   }
-  return <span style={{ fontWeight: 600 }}>{label}</span>;
+  return (
+    <span style={{ fontWeight: 600 }}>
+      {label}
+      {note}
+    </span>
+  );
 }
 
 function FeedbackRowActions({
@@ -174,10 +223,6 @@ function FeedbackRowActions({
   );
 }
 
-function truncate(s: string | null, len: number): string {
-  if (!s) return '-';
-  return s.length > len ? s.slice(0, len) + '…' : s;
-}
 
 function sectionBlock(title: string, text: string | null) {
   return (
@@ -341,7 +386,7 @@ export default function AdminFeedback() {
       if (visibleRows.length === 0) continue;
       const sample = visibleRows[0];
       const resolvedId = resolveCandidateId(sample, requests);
-      const { label, profileId } = memberLabel(
+      const { label, profileId, stateNote } = memberLabel(
         resolvedId,
         sample.candidate_display_name,
         profiles
@@ -359,7 +404,7 @@ export default function AdminFeedback() {
             reference_number: null,
             full_name: label,
           };
-      result.push({ candidate, rows: visibleRows, profileId });
+      result.push({ candidate, rows: visibleRows, profileId, stateNote });
     }
     return result.sort((a, b) => a.candidate.first_name.localeCompare(b.candidate.first_name));
   }, [feedback, profiles, requests, showFlaggedOnly]);
@@ -485,7 +530,7 @@ export default function AdminFeedback() {
             <p style={{ color: '#6b7280' }}>No introduction feedback entries found.</p>
           )}
 
-          {grouped.map(({ candidate, rows, profileId }) => {
+          {grouped.map(({ candidate, rows, profileId, stateNote }) => {
             const candidateLabel =
               candidate.full_name?.trim() ||
               `${candidate.first_name}${candidate.reference_number ? ` (${candidate.reference_number})` : ''}`.trim();
@@ -505,11 +550,15 @@ export default function AdminFeedback() {
                 >
                   Candidate (feedback subject)
                 </span>
-                <MemberProfileLink profileId={profileId} label={candidateLabel || 'Unknown candidate'} />
+                <MemberProfileLink
+                  profileId={profileId}
+                  label={candidateLabel || 'Unknown candidate'}
+                  stateNote={stateNote}
+                />
                 <span style={{ fontSize: 13, fontWeight: 400, color: '#6b7280', marginLeft: 8 }}>
                   {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
                 </span>
-                {!profileId && (
+                {stateNote === 'deleted' && (
                   <span
                     style={{
                       display: 'block',
@@ -542,11 +591,11 @@ export default function AdminFeedback() {
                     {rows.map((row) => {
                       const highlight = row.is_flagged || row.recommend_retain === 'no';
                       const requesterProfileId = resolveRequesterId(row, requests);
-                      const { label: fromLabel, profileId: fromProfileId } = memberLabel(
-                        requesterProfileId,
-                        row.requester_display_name,
-                        profiles
-                      );
+                      const {
+                        label: fromLabel,
+                        profileId: fromProfileId,
+                        stateNote: fromStateNote,
+                      } = memberLabel(requesterProfileId, row.requester_display_name, profiles);
                       const isArchived = !!row.archived_at;
                       return (
                         <tr
@@ -582,7 +631,11 @@ export default function AdminFeedback() {
                             )}
                           </td>
                           <td style={{ padding: '6px 8px' }}>
-                            <MemberProfileLink profileId={fromProfileId} label={fromLabel} />
+                            <MemberProfileLink
+                              profileId={fromProfileId}
+                              label={fromLabel}
+                              stateNote={fromStateNote}
+                            />
                           </td>
                           <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                           <td style={{ padding: '6px 8px' }}>
@@ -600,8 +653,16 @@ export default function AdminFeedback() {
                               {row.recommend_retain ?? '-'}
                             </span>
                           </td>
-                          <td style={{ padding: '6px 8px', maxWidth: 300 }}>
-                            {truncate(row.notes, 100)}
+                          <td
+                            style={{
+                              padding: '6px 8px',
+                              maxWidth: 420,
+                              minWidth: 220,
+                              whiteSpace: 'pre-wrap',
+                              overflowWrap: 'anywhere',
+                            }}
+                          >
+                            {row.notes ?? '-'}
                           </td>
                           <td style={{ padding: '6px 8px' }}>
                             {row.is_flagged && <span className="badge badge-warning">Flagged</span>}
