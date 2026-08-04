@@ -21,6 +21,7 @@ import DemoBrowse from './pages/DemoBrowse';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
 import AppFeedback from './pages/AppFeedback';
+import WhatsNew from './pages/WhatsNew';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import MemberBrowse from './pages/MemberBrowse';
@@ -71,6 +72,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/app-feedback" element={<AppFeedback />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />

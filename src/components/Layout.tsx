@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 /** Site chrome (logo, Hi / login, log out) lives in `SiteHeader` in App. */
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +10,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <p>
             Vanik Council. Contact:{' '}
             <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>
+            {' '}&middot; <Link to="/whats-new">What&apos;s new</Link>
           </p>
         </div>
       </footer>

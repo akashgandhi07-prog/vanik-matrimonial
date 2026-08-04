@@ -41,6 +41,12 @@ const PAGE_META: Record<string, PageMeta> = {
   '/login': {
     title: `Sign in - ${SITE_NAME}`,
   },
+  '/whats-new': {
+    title: `What's New - ${SITE_NAME}`,
+    description:
+      'Recent improvements to the Vanik Matrimonial Register, in plain English. Many changes come straight from member feedback.',
+    indexable: true,
+  },
 };
 
 function setMetaTag(name: string, content: string | null) {
