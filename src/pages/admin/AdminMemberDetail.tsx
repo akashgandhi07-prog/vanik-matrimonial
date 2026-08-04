@@ -48,6 +48,7 @@ const ACTION_LABELS: Record<string, string> = {
   password_recovery_sent: 'Password recovery email sent',
   admin_role_changed: 'Admin role changed',
   contact_request_quota_adjusted: 'Contact request limits adjusted',
+  membership_extended: 'Membership extended (free months)',
 };
 
 function fmtDateTime(iso: string): string {
@@ -73,6 +74,25 @@ function listingLabel(reason: string | null): string {
 
 function humanizeAction(type: string) {
   return ACTION_LABELS[type] ?? type.replace(/_/g, ' ');
+}
+
+/** Add calendar months, clamping the day (31 Jan + 1 month = 28/29 Feb). Mirrors the server. */
+function addCalendarMonths(base: Date, months: number): Date {
+  const d = new Date(base.getTime());
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, daysInMonth));
+  return d;
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
@@ -156,6 +176,8 @@ export default function AdminMemberDetail() {
   const [pauseReasons, setPauseReasons] = useState<
     { reason: string; note: string | null; created_at: string }[]
   >([]);
+  const [extendMonths, setExtendMonths] = useState(1);
+  const [extendBusy, setExtendBusy] = useState(false);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -851,6 +873,109 @@ export default function AdminMemberDetail() {
             <h3 style={{ marginTop: 0 }}>Membership status</h3>
             <button type="button" className="btn btn-primary" onClick={() => setMatchOpen(true)}>
               Mark as matched…
+            </button>
+          </div>
+        )}
+
+        {(profile.status === 'active' || profile.status === 'expired') && !supportOnly && (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Membership expiry</h3>
+            <p style={{ fontSize: 14, marginTop: 0 }}>
+              Current expiry: <strong>{fmtDate(profile.membership_expires_at)}</strong>
+              {profile.status === 'expired' && (
+                <span style={{ color: 'var(--color-danger)' }}> (membership has expired)</span>
+              )}
+            </p>
+            <p className="field-hint" style={{ marginTop: 0, maxWidth: 640, lineHeight: 1.5 }}>
+              Add free months without payment. Months are added on top of the current expiry date; if the membership
+              has already lapsed, they run from today
+              {profile.status === 'expired' ? ' and the account is set back to active' : ''}. The change is logged in
+              the timeline below.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                aria-label="Fewer months"
+                style={{ padding: '6px 14px', fontSize: 16, lineHeight: 1 }}
+                disabled={extendBusy || extendMonths <= 1}
+                onClick={() => setExtendMonths((m) => Math.max(1, m - 1))}
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                className="input"
+                style={{ width: 80, textAlign: 'center' }}
+                value={extendMonths}
+                disabled={extendBusy}
+                onChange={(e) => {
+                  const n = Math.floor(Number(e.target.value));
+                  if (!Number.isFinite(n)) return;
+                  setExtendMonths(Math.max(1, Math.min(24, n)));
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary"
+                aria-label="More months"
+                style={{ padding: '6px 14px', fontSize: 16, lineHeight: 1 }}
+                disabled={extendBusy || extendMonths >= 24}
+                onClick={() => setExtendMonths((m) => Math.min(24, m + 1))}
+              >
+                +
+              </button>
+              <span style={{ fontSize: 14 }}>
+                month{extendMonths === 1 ? '' : 's'} → new expiry{' '}
+                <strong>
+                  {(() => {
+                    const now = new Date();
+                    const cur = profile.membership_expires_at ? new Date(profile.membership_expires_at) : null;
+                    const base = cur && !Number.isNaN(cur.getTime()) && cur.getTime() > now.getTime() ? cur : now;
+                    return fmtDate(addCalendarMonths(base, extendMonths).toISOString());
+                  })()}
+                </strong>
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: 12 }}
+              disabled={extendBusy}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Add ${extendMonths} free month${extendMonths === 1 ? '' : 's'} to this membership?`
+                  )
+                ) {
+                  return;
+                }
+                setExtendBusy(true);
+                try {
+                  const res = (await invokeFunction('admin-manage-users', {
+                    action: 'extend_membership',
+                    profile_id: profile.id,
+                    months: extendMonths,
+                  })) as { membership_expires_at?: string; reactivated?: boolean };
+                  alert(
+                    `Membership extended to ${fmtDate(res.membership_expires_at ?? null)}.${
+                      res.reactivated ? ' The account is active again.' : ''
+                    }`
+                  );
+                  setExtendMonths(1);
+                  setReloadKey((k) => k + 1);
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : 'Failed to extend membership');
+                } finally {
+                  setExtendBusy(false);
+                }
+              }}
+            >
+              {extendBusy
+                ? 'Saving…'
+                : `Add ${extendMonths} free month${extendMonths === 1 ? '' : 's'}`}
             </button>
           </div>
         )}

@@ -1,8 +1,26 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
-import { getAdminClient } from '../_shared/dispatch-email.ts';
+import { dispatchEmail, getAdminClient, runAfterResponse } from '../_shared/dispatch-email.ts';
+import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Small facts table used in both introduction directions. */
+function profileFactsHtml(rows: Array<[string, string | null | undefined]>): string {
+  const cells = rows
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(
+      ([label, v]) =>
+        `<tr><td style="padding:4px 12px 4px 0;color:#5b6475;white-space:nowrap;">${escapeHtml(label)}</td><td style="padding:4px 0;"><strong>${escapeHtml(String(v))}</strong></td></tr>`
+    )
+    .join('');
+  if (!cells) return '';
+  return `<table style="border-collapse:collapse;font-size:14px;margin:8px 0;">${cells}</table>`;
+}
 
 /** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,7 +108,9 @@ Deno.serve(async (req) => {
 
     const { data: requester, error: reErr } = await admin
       .from('profiles')
-      .select('id, first_name, gender, seeking_gender, reference_number, status, membership_expires_at')
+      .select(
+        'id, first_name, gender, seeking_gender, reference_number, status, membership_expires_at, age, job_title, education, religion, community, nationality, place_of_birth, height_cm'
+      )
       .eq('auth_user_id', userData.user.id)
       .single();
     if (reErr || !requester) {
@@ -318,19 +338,92 @@ Deno.serve(async (req) => {
       warnings.push('Could not update requester metadata.');
     }
 
-    const { error: requestUpdateErr } = await admin
-      .from('requests')
-      .update({
-        email_sent_at: null,
-        email_status: 'skipped',
-      })
-      .eq('id', requestId);
-    if (requestUpdateErr) {
-      console.error('Failed to update request email status', {
-        request_id: requestId,
-        message: requestUpdateErr.message,
+    // Mutual introduction emails go out after the response: the requester gets
+    // the candidates' details, and every candidate gets the requester's profile
+    // summary and contact details (a request is a two-way introduction).
+    if (isTransactionalMailConfigured()) {
+      const { data: reqPriv } = await admin
+        .from('member_private')
+        .select('surname, mobile_phone, email')
+        .eq('profile_id', requester.id)
+        .maybeSingle();
+      const requesterName = `${stripHtml(requester.first_name, 80)} ${stripHtml(String(reqPriv?.surname ?? ''), 80)}`.trim();
+      const requesterFacts = profileFactsHtml([
+        ['Age', requester.age != null ? String(requester.age) : null],
+        ['Location', requester.place_of_birth as string | null],
+        ['Religion', requester.religion as string | null],
+        ['Community', requester.community as string | null],
+        ['Occupation', requester.job_title as string | null],
+        ['Education', requester.education as string | null],
+      ]);
+
+      const candidatesHtml = contactPayload
+        .map(
+          (c) =>
+            `<div style="margin:14px 0;padding:12px 14px;border:1px solid #e8e1d6;border-radius:10px;">
+              <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong>${c.reference_number ? ` (${escapeHtml(c.reference_number)})` : ''}</p>
+              ${c.mobile ? `<p style="margin:0;"><strong>Mobile:</strong> ${escapeHtml(c.mobile)}</p>` : ''}
+              ${c.father_name ? `<p style="margin:4px 0 0;font-size:13px;">Father: ${escapeHtml(c.father_name)}</p>` : ''}
+              ${c.mother_name ? `<p style="margin:4px 0 0;font-size:13px;">Mother: ${escapeHtml(c.mother_name)}</p>` : ''}
+            </div>`
+        )
+        .join('');
+
+      const requesterEmail = stripHtml(String(reqPriv?.email ?? ''), 200);
+      const requesterMobile = stripHtml(String(reqPriv?.mobile_phone ?? ''), 40);
+      const requesterProfileId = requester.id;
+      const candidateIds = [...ids];
+      runAfterResponse('introduction emails', async () => {
+        let allOk = true;
+        if (requesterEmail) {
+          const r = await dispatchEmail(admin, {
+            type: 'contact_details',
+            recipientEmail: requesterEmail,
+            recipientProfileId: requesterProfileId,
+            extraData: {
+              requester_first_name: requester.first_name,
+              requester_email: requesterEmail,
+              candidates_html: candidatesHtml,
+            },
+          });
+          if (!r.ok) allOk = false;
+        }
+        for (const cid of candidateIds) {
+          const r = await dispatchEmail(admin, {
+            type: 'introduction_received',
+            recipientProfileId: cid,
+            extraData: {
+              requester_name: requesterName || requester.first_name,
+              requester_ref: requester.reference_number ?? '',
+              requester_mobile: requesterMobile,
+              requester_facts_html: requesterFacts,
+            },
+          });
+          if (!r.ok) allOk = false;
+        }
+        await admin
+          .from('requests')
+          .update({
+            email_sent_at: new Date().toISOString(),
+            email_status: allOk ? 'sent' : 'failed',
+          })
+          .eq('id', requestId);
       });
-      warnings.push('Could not update request email status.');
+    } else {
+      const { error: requestUpdateErr } = await admin
+        .from('requests')
+        .update({
+          email_sent_at: null,
+          email_status: 'skipped',
+        })
+        .eq('id', requestId);
+      if (requestUpdateErr) {
+        console.error('Failed to update request email status', {
+          request_id: requestId,
+          message: requestUpdateErr.message,
+        });
+        warnings.push('Could not update request email status.');
+      }
     }
 
     return jsonResponse({

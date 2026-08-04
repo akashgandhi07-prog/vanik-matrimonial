@@ -22,6 +22,7 @@ export type EmailType =
   | 'referral_reward'
   | 'admin_pending_reminder'
   | 'account_freeze_reminder'
+  | 'introduction_received'
   | 'website_feedback_submission';
 
 function escapeHtmlEmail(s: string): string {
@@ -323,6 +324,25 @@ export async function dispatchEmail(
         <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Sign in</a></p>
         <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'introduction_received': {
+      const { profile } = await fetchProfile(recipientProfileId!);
+      if (!profile) return { ok: false, error: 'Profile not found' };
+      const ex = extraData as Record<string, unknown>;
+      const reqName = stripHtml(String(ex.requester_name ?? ''), 120);
+      const reqRef = stripHtml(String(ex.requester_ref ?? ''), 20);
+      const reqMobile = stripHtml(String(ex.requester_mobile ?? ''), 40);
+      const factsHtml = String(ex.requester_facts_html ?? '');
+      subject = `${reqName} would like to be introduced to you - Vanik Matrimonial Register`;
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqRef ? ` (${escapeHtmlEmail(reqRef)})` : ''} has requested your details through the register, so we are introducing you to each other. They have received your contact details and may be in touch - and here are theirs, so the conversation can start from either side.</p>
+        ${factsHtml}
+        ${reqMobile ? `<p><strong>Mobile:</strong> ${escapeHtmlEmail(reqMobile)}</p>` : ''}
+        <p>You can see their full profile, including photos, under <strong>My requests &gt; Interested in you</strong> after signing in.</p>
+        <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">View their full profile</a></p>
+        <p>If you have any concerns about this introduction, contact us at <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
+        <p>With good wishes,<br/>The register team</p>`;
       break;
     }
     case 'website_feedback_submission': {

@@ -2184,6 +2184,62 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true }, req);
   }
 
+  if (action === 'extend_membership') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot extend memberships' }, req, 403);
+    }
+    const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
+    if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
+    const months = Math.floor(Number(body.months));
+    if (!Number.isFinite(months) || months < 1 || months > 24) {
+      return jsonResponse({ error: 'months must be an integer between 1 and 24' }, req, 400);
+    }
+    const { data: profRow, error: pErr } = await admin
+      .from('profiles')
+      .select('id, status, membership_expires_at')
+      .eq('id', profileId)
+      .single();
+    if (pErr || !profRow) return jsonResponse({ error: 'Member not found' }, req, 404);
+    const prof = profRow as { id: string; status: string; membership_expires_at: string | null };
+    if (prof.status !== 'active' && prof.status !== 'expired') {
+      return jsonResponse(
+        { error: `Cannot extend membership while status is '${prof.status}'. Approve or reopen the account first.` },
+        req,
+        400
+      );
+    }
+    // Extend from the current expiry if it is still in the future, otherwise from now
+    // (an already-lapsed member gets the full N months from today, not from the past).
+    const now = new Date();
+    const currentExpiry = prof.membership_expires_at ? new Date(prof.membership_expires_at) : null;
+    const base =
+      currentExpiry && !Number.isNaN(currentExpiry.getTime()) && currentExpiry.getTime() > now.getTime()
+        ? currentExpiry
+        : now;
+    const target = new Date(base.getTime());
+    const dayOfMonth = target.getUTCDate();
+    target.setUTCDate(1);
+    target.setUTCMonth(target.getUTCMonth() + months);
+    const daysInTargetMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(dayOfMonth, daysInTargetMonth));
+    const newExpiryIso = target.toISOString();
+    const reactivated = prof.status === 'expired';
+    const update: Record<string, unknown> = { membership_expires_at: newExpiryIso };
+    if (reactivated) update.status = 'active';
+    const { error: upErr } = await admin.from('profiles').update(update).eq('id', profileId);
+    if (upErr) return jsonResponse({ error: upErr.message }, req, 500);
+    const fmt = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : 'none');
+    await admin.from('admin_actions').insert({
+      admin_user_id: callerId,
+      target_profile_id: profileId,
+      action_type: 'membership_extended',
+      notes: `Added ${months} free month${months === 1 ? '' : 's'}: expiry ${fmt(currentExpiry)} → ${fmt(target)}${
+        reactivated ? '. Status expired → active.' : '.'
+      }`,
+    });
+    return jsonResponse({ ok: true, membership_expires_at: newExpiryIso, reactivated }, req);
+  }
+
   if (action === 'get_member_detail') {
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);

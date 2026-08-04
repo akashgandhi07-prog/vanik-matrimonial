@@ -50,15 +50,25 @@ Deno.serve(async (req) => {
     const ownsTarget = requester.id === profileId;
 
     if (!ownsTarget) {
-      // Non-admin members may only view photos of profiles they have explicitly requested.
-      // Check requests: the viewer must have a request where profileId is in candidate_ids.
+      // Non-admin members may view photos of profiles they have requested, and
+      // (mutual introductions) of members who have requested THEM.
       const { count } = await admin
         .from('requests')
         .select('id', { count: 'exact', head: true })
         .eq('requester_id', requester.id)
         .contains('candidate_ids', [profileId]);
 
-      if (!count || count === 0) {
+      let allowed = !!count && count > 0;
+      if (!allowed) {
+        const { count: reverseCount } = await admin
+          .from('requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('requester_id', profileId)
+          .contains('candidate_ids', [requester.id]);
+        allowed = !!reverseCount && reverseCount > 0;
+      }
+
+      if (!allowed) {
         return jsonResponse({ error: 'Forbidden: photo only available after contact details have been requested' }, req, 403);
       }
     }

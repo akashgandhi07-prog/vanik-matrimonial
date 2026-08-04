@@ -91,7 +91,9 @@ function friendlyContactsError(err: unknown): string {
 export default function MemberRequests() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, privateRow, candidates, requests, feedbackKeys, bookmarks, toggleBookmark } = useMemberArea();
+  const { profile, privateRow, candidates, requests, feedbackKeys, bookmarks, toggleBookmark, requestersOfMe } =
+    useMemberArea();
+  const [tab, setTab] = useState<'mine' | 'interested'>('mine');
   const [contactsByRequest, setContactsByRequest] = useState<Record<string, ContactDetailRow[]>>({});
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -268,8 +270,176 @@ export default function MemberRequests() {
 
   if (!profile) return null;
 
+  const tabsBar = (
+    <div role="tablist" aria-label="Requests" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === 'mine'}
+        className={`btn ${tab === 'mine' ? 'btn-primary' : 'btn-secondary'}`}
+        onClick={() => setTab('mine')}
+      >
+        My requests
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={tab === 'interested'}
+        className={`btn ${tab === 'interested' ? 'btn-primary' : 'btn-secondary'}`}
+        onClick={() => setTab('interested')}
+      >
+        Interested in you{requestersOfMe.length > 0 ? ` (${requestersOfMe.length})` : ''}
+      </button>
+    </div>
+  );
+
+  if (tab === 'interested') {
+    return (
+      <div>
+        {tabsBar}
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Members who have requested you</h3>
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
+            When someone requests your contact details, the register introduces you to each other: they receive
+            your details, and their full profile and contact details appear here so you can get in touch too.
+          </p>
+          {requestersOfMe.length === 0 ? (
+            <p style={{ margin: '16px 0 0', color: 'var(--color-text-secondary)' }}>
+              Nobody has requested your details yet. When someone does, you will get an email and their profile
+              will appear here.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+              {requestersOfMe.map((r) => {
+                const wa = r.mobile ? whatsappUrlFromPhone(r.mobile) : null;
+                const openProfile = () =>
+                  setSelectedProfile({
+                    profile: r,
+                    contactDetails: r.mobile ? { mobile: r.mobile } : undefined,
+                  });
+                return (
+                  <div
+                    key={r.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-surface)',
+                      cursor: 'pointer',
+                    }}
+                    onClick={openProfile}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openProfile();
+                      }
+                    }}
+                    aria-label={`View full profile for ${r.full_name || r.first_name}`}
+                  >
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 8,
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        border: '1px solid var(--color-border)',
+                      }}
+                    >
+                      <ProfileThumb profileId={r.id} firstName={r.first_name} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
+                        {r.full_name || r.first_name}
+                        {r.reference_number ? (
+                          <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>
+                            {' '}
+                            ({r.reference_number})
+                          </span>
+                        ) : null}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                        Requested you on {new Date(r.requested_at).toLocaleDateString('en-GB')}
+                      </div>
+                      {r.mobile ? (
+                        <div style={{ marginTop: 4, fontSize: 13 }}>
+                          <a href={telHref(r.mobile)} style={{ fontWeight: 600 }} onClick={(e) => e.stopPropagation()}>
+                            {r.mobile}
+                          </a>
+                        </div>
+                      ) : null}
+                      <div
+                        style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {r.mobile ? (
+                          <a
+                            className="btn btn-secondary"
+                            href={telHref(r.mobile)}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                          >
+                            Call
+                          </a>
+                        ) : null}
+                        {wa ? (
+                          <a
+                            className="btn-whatsapp"
+                            href={wa}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`WhatsApp ${r.first_name}`}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                          >
+                            WhatsApp
+                          </a>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openProfile();
+                          }}
+                        >
+                          View full profile
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {selectedProfile && (
+          <ProfileModal
+            candidate={selectedProfile.profile}
+            contactDetails={selectedProfile.contactDetails}
+            inTray={false}
+            trayFull={false}
+            blocked
+            bookmarked={bookmarks.includes(selectedProfile.profile.id)}
+            allowRequestAction={false}
+            showRequestFromBrowseHint={false}
+            onClose={() => setSelectedProfile(null)}
+            onToggleBookmark={() => void toggleBookmark(selectedProfile.profile.id)}
+            onToggleTray={() => {}}
+          />
+        )}
+      </div>
+    );
+  }
+
   if (requests.length === 0) {
     return (
+      <div>
+      {tabsBar}
       <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-secondary)' }}>
         {fromBrowseFlash && (
           <div
@@ -302,10 +472,13 @@ export default function MemberRequests() {
           within your 7-day and monthly limits shown there.
         </p>
       </div>
+      </div>
     );
   }
 
   return (
+    <div>
+    {tabsBar}
     <div className="card">
       {fromBrowseFlash && (
         <div
@@ -627,6 +800,7 @@ export default function MemberRequests() {
           onToggleTray={() => {}}
         />
       )}
+    </div>
     </div>
   );
 }

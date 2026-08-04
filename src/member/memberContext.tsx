@@ -61,6 +61,14 @@ export type MemberPrivateRow = {
   referral_code?: string | null;
 };
 
+/** A member who requested the signed-in member (mutual introductions). */
+export type RequesterOfMeRow = ProfileRow & {
+  request_id: string;
+  requested_at: string;
+  full_name: string | null;
+  mobile: string | null;
+};
+
 type MemberCtx = {
   user: User | null;
   profile: ProfileRow | null;
@@ -83,6 +91,8 @@ type MemberCtx = {
     email_status: string;
   }[];
   feedbackKeys: Set<string>;
+  /** Members who have requested the signed-in member, newest first. */
+  requestersOfMe: RequesterOfMeRow[];
   notice: { type: 'error' | 'success'; text: string } | null;
   clearNotice: () => void;
   loadAll: () => Promise<void>;
@@ -119,6 +129,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     }[]
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
+  const [requestersOfMe, setRequestersOfMe] = useState<RequesterOfMeRow[]>([]);
   const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
@@ -358,6 +369,33 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
             ),
           ),
         );
+
+        // Mutual introductions: who has requested me. Best-effort - an
+        // unapplied migration must not break the dashboard.
+        const { data: reqOfMe, error: reqOfMeErr } = await supabase.rpc(
+          "member_requesters_of_me",
+        );
+        if (reqOfMeErr) {
+          console.warn("member_requesters_of_me RPC:", reqOfMeErr.message);
+          setRequestersOfMe([]);
+        } else {
+          const rows = (Array.isArray(reqOfMe) ? reqOfMe : []) as {
+            request_id: string;
+            requested_at: string;
+            profile_id: string;
+            [k: string]: unknown;
+          }[];
+          // The same person may have requested more than once - keep the newest.
+          const seen = new Set<string>();
+          const mapped: RequesterOfMeRow[] = [];
+          for (const row of rows) {
+            if (seen.has(row.profile_id)) continue;
+            seen.add(row.profile_id);
+            const { profile_id, ...rest } = row;
+            mapped.push({ ...(rest as unknown as RequesterOfMeRow), id: profile_id });
+          }
+          setRequestersOfMe(mapped);
+        }
       } catch (e) {
         console.error("member loadAll:", e);
       } finally {
@@ -416,6 +454,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setBookmarks([]);
         setRequests([]);
         setFeedbackKeys(new Set());
+        setRequestersOfMe([]);
         navigate("/", { replace: true });
       }
     });
@@ -468,6 +507,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      requestersOfMe,
       notice,
       clearNotice: () => setNotice(null),
       loadAll,
@@ -485,6 +525,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      requestersOfMe,
       notice,
       loadAll,
       toggleBookmark,

@@ -877,6 +877,10 @@ export default function MemberBrowse() {
                 );
               })}
             </div>
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              A request is a two-way introduction: your name, photo, profile and contact details will be shared
+              with the people you request, and you will receive theirs.
+            </p>
             <button
               type="button"
               className="btn btn-primary"
