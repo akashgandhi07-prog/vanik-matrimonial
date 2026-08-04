@@ -17,6 +17,14 @@ type TimelineRow = {
   admin_email: string | null;
 };
 
+const PAUSE_REASON_LABELS: Record<string, string> = {
+  found_here: 'Found someone through this register',
+  found_elsewhere: 'Found someone elsewhere',
+  taking_break: 'Taking a break',
+  other: 'Another reason',
+  prefer_not_say: 'Preferred not to say',
+};
+
 const ACTION_LABELS: Record<string, string> = {
   approved: 'Application approved',
   rejected: 'Application rejected',
@@ -145,6 +153,9 @@ export default function AdminMemberDetail() {
   const [quotaBonusWeek, setQuotaBonusWeek] = useState(0);
   const [quotaBonusMonth, setQuotaBonusMonth] = useState(0);
   const [quotaSaving, setQuotaSaving] = useState(false);
+  const [pauseReasons, setPauseReasons] = useState<
+    { reason: string; note: string | null; created_at: string }[]
+  >([]);
 
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
@@ -178,6 +189,7 @@ export default function AdminMemberDetail() {
             week_reset_at: string | null;
             month_reset_at: string;
           };
+          pause_feedback?: { reason: string; note: string | null; created_at: string }[];
         };
         if (!res.profile || !res.member_private) {
           setDetailError('Member not found or incomplete data.');
@@ -200,6 +212,7 @@ export default function AdminMemberDetail() {
         setInternalNoteDraft(res.admin_note?.body ?? '');
         setRecentEmails(res.recent_emails ?? []);
         setContactQuota(res.contact_request_quota ?? null);
+        setPauseReasons(res.pause_feedback ?? []);
         setQuotaBonusWeek(
           Math.max(0, Math.min(50, Number(res.member_private.contact_request_weekly_bonus ?? 0)))
         );
@@ -348,6 +361,8 @@ export default function AdminMemberDetail() {
           >
             {(
               [
+                ['Email', priv.email],
+                ['Mobile', priv.mobile_phone],
                 ['Gender', profile.gender],
                 ['Seeking', profile.seeking_gender ?? null],
                 ['Age', profile.age != null ? String(profile.age) : null],
@@ -382,6 +397,20 @@ export default function AdminMemberDetail() {
               {profile.hobbies?.trim() ? profile.hobbies : '-'}
             </p>
           </div>
+          {pauseReasons.length > 0 && (
+            <div style={{ marginTop: 12, fontSize: 14 }}>
+              <span style={{ color: 'var(--color-text-secondary)' }}>Pause history (member-given reasons)</span>
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {pauseReasons.map((r, i) => (
+                  <li key={`${r.created_at}-${i}`} style={{ marginBottom: 4 }}>
+                    {new Date(r.created_at).toLocaleDateString('en-GB')}:{' '}
+                    <strong>{PAUSE_REASON_LABELS[r.reason] ?? r.reason}</strong>
+                    {r.note ? <span style={{ color: 'var(--color-text-secondary)' }}> - "{r.note}"</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <p style={{ marginTop: 12 }}>
@@ -1048,7 +1077,8 @@ export default function AdminMemberDetail() {
                     onClick={async () => {
                       try {
                         await invokeFunction('admin-approve-member', { profile_id: profile.id });
-                        navigate('/admin/members');
+                        // Back to the pending queue so the admin can move straight on.
+                        navigate('/admin/members?filter=pending');
                       } catch (e) {
                         alert(e instanceof Error ? e.message : 'Failed');
                       }
@@ -1109,7 +1139,7 @@ export default function AdminMemberDetail() {
                       profile_id: profile.id,
                       reason: rejectReason,
                     });
-                    navigate('/admin/members');
+                    navigate('/admin/members?filter=pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
                   }
@@ -1142,7 +1172,7 @@ export default function AdminMemberDetail() {
                       profile_id: profile.id,
                       action: 'approve',
                     });
-                    navigate('/admin/members');
+                    navigate('/admin/members?filter=photo_pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
                   }
@@ -1159,7 +1189,7 @@ export default function AdminMemberDetail() {
                       profile_id: profile.id,
                       action: 'reject',
                     });
-                    navigate('/admin/members');
+                    navigate('/admin/members?filter=photo_pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
                   }

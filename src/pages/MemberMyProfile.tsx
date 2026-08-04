@@ -57,6 +57,9 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [paused, setPaused] = useState(() => p.hidden_reason === 'member_paused');
   const [pauseSaving, setPauseSaving] = useState(false);
   const [pauseError, setPauseError] = useState('');
+  const [pauseFormOpen, setPauseFormOpen] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseNote, setPauseNote] = useState('');
 
   useEffect(() => {
     setSeeking(p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'));
@@ -74,7 +77,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   // hide or a matched flag is not theirs to clear (enforced by enforce_profile_member_update).
   const canPause = p.status === 'active' && (p.hidden_reason == null || p.hidden_reason === 'member_paused');
 
-  async function setPauseState(next: boolean) {
+  async function setPauseState(next: boolean, reason?: string, note?: string) {
     if (!canPause) return;
     const prev = paused;
     setPaused(next);
@@ -88,6 +91,19 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
       setPauseError(error.message);
       setPaused(prev);
     } else {
+      if (next && reason) {
+        // Best-effort: knowing why members pause matters to the register team,
+        // but a logging hiccup must never block the pause itself.
+        const { error: fbErr } = await supabase.from('pause_feedback').insert({
+          profile_id: p.id,
+          reason,
+          note: note?.trim() ? note.trim().slice(0, 500) : null,
+        });
+        if (fbErr) console.warn('pause_feedback insert:', fbErr.message);
+      }
+      setPauseFormOpen(false);
+      setPauseReason('');
+      setPauseNote('');
       void loadAll();
     }
     setPauseSaving(false);
@@ -518,12 +534,90 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             >
               <input
                 type="checkbox"
-                checked={paused}
+                checked={paused || pauseFormOpen}
                 disabled={pauseSaving}
-                onChange={(e) => void setPauseState(e.target.checked)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setPauseFormOpen(true);
+                  } else {
+                    setPauseFormOpen(false);
+                    setPauseReason('');
+                    setPauseNote('');
+                    if (paused) void setPauseState(false);
+                  }
+                }}
               />
               <span>{paused ? 'Profile paused (hidden from browse)' : 'Pause my profile'}</span>
             </label>
+            {pauseFormOpen && !paused && (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface-muted)',
+                }}
+              >
+                <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600 }}>
+                  Before you pause - may we ask why? It helps us understand how the register is working.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
+                  {(
+                    [
+                      ['found_here', 'I found someone through this register'],
+                      ['found_elsewhere', 'I found someone elsewhere'],
+                      ['taking_break', 'Taking a break for now'],
+                      ['other', 'Another reason'],
+                      ['prefer_not_say', 'Prefer not to say'],
+                    ] as [string, string][]
+                  ).map(([value, label]) => (
+                    <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="pause-reason"
+                        value={value}
+                        checked={pauseReason === value}
+                        onChange={() => setPauseReason(value)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {(pauseReason === 'other' || pauseReason === 'found_here' || pauseReason === 'found_elsewhere') && (
+                  <textarea
+                    value={pauseNote}
+                    onChange={(e) => setPauseNote(e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="Anything you'd like to add (optional)"
+                    style={{ width: '100%', marginTop: 10, fontSize: 13 }}
+                  />
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={pauseSaving || !pauseReason}
+                    onClick={() => void setPauseState(true, pauseReason, pauseNote)}
+                  >
+                    Pause my profile
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={pauseSaving}
+                    onClick={() => {
+                      setPauseFormOpen(false);
+                      setPauseReason('');
+                      setPauseNote('');
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             {pauseSaving && (
               <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>Updating…</p>
             )}

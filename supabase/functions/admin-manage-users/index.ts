@@ -1449,7 +1449,7 @@ Deno.serve(async (req) => {
       fetchAllTableRows(
         admin,
         'profiles',
-        'id, first_name, reference_number, status, hidden_reason, gender, created_at, membership_expires_at',
+        'id, first_name, reference_number, status, hidden_reason, gender, age, created_at, membership_expires_at',
         'created_at'
       ),
       fetchAllTableRows(admin, 'requests', 'id, created_at, requester_id, candidate_ids', 'created_at'),
@@ -1491,6 +1491,7 @@ Deno.serve(async (req) => {
       status: string;
       hidden_reason: string | null;
       gender: string | null;
+      age: number | null;
       created_at: string;
       membership_expires_at: string | null;
     }[];
@@ -1539,6 +1540,68 @@ Deno.serve(async (req) => {
           if (exp <= in30Iso) expiring30 += 1;
           if (exp <= in60Iso) expiring60 += 1;
         }
+      }
+    }
+
+    // ---- Age profile of active members, split by gender ----
+    const AGE_BANDS = [
+      { key: '18-25', min: 18, max: 25 },
+      { key: '26-30', min: 26, max: 30 },
+      { key: '31-35', min: 31, max: 35 },
+      { key: '36-40', min: 36, max: 40 },
+      { key: '41-50', min: 41, max: 50 },
+      { key: '51+', min: 51, max: 200 },
+    ];
+    const ageBands = AGE_BANDS.map((b) => ({ band: b.key, Male: 0, Female: 0, total: 0 }));
+    let ageUnknown = 0;
+    for (const p of profiles) {
+      if (p.status !== 'active') continue;
+      const age = typeof p.age === 'number' ? p.age : null;
+      if (age == null) {
+        ageUnknown += 1;
+        continue;
+      }
+      const idx = AGE_BANDS.findIndex((b) => age >= b.min && age <= b.max);
+      if (idx === -1) {
+        ageUnknown += 1;
+        continue;
+      }
+      ageBands[idx].total += 1;
+      if (p.gender === 'Male') ageBands[idx].Male += 1;
+      else if (p.gender === 'Female') ageBands[idx].Female += 1;
+    }
+
+    // ---- Why members pause (self-reported at pause time) ----
+    const pauseReasonCounts: Record<string, number> = {
+      found_here: 0,
+      found_elsewhere: 0,
+      taking_break: 0,
+      other: 0,
+      prefer_not_say: 0,
+    };
+    let pauseFeedbackTotal = 0;
+    const recentPauseNotes: { label: string; reason: string; note: string; created_at: string }[] = [];
+    {
+      const pauseRes = await fetchAllTableRows(admin, 'pause_feedback', 'profile_id, reason, note, created_at', 'created_at');
+      if (pauseRes.error) {
+        // Table may predate this deploy; analytics must not fail over an optional stat.
+        console.error('analytics_stats: pause_feedback:', pauseRes.error);
+      } else {
+        const rows = pauseRes.rows as { profile_id: string | null; reason: string; note: string | null; created_at: string }[];
+        pauseFeedbackTotal = rows.length;
+        for (const r of rows) {
+          if (r.reason in pauseReasonCounts) pauseReasonCounts[r.reason] += 1;
+          if (r.note?.trim()) {
+            recentPauseNotes.push({
+              label: (r.profile_id ? labelById.get(r.profile_id) : null) ?? 'Removed member',
+              reason: r.reason,
+              note: r.note.trim(),
+              created_at: r.created_at,
+            });
+          }
+        }
+        recentPauseNotes.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        recentPauseNotes.splice(10);
       }
     }
 
@@ -1616,6 +1679,13 @@ Deno.serve(async (req) => {
           byHiddenReason,
           byGender,
           activeByGender,
+          ageBands,
+          ageUnknown,
+        },
+        pauses: {
+          total: pauseFeedbackTotal,
+          byReason: pauseReasonCounts,
+          recent_notes: recentPauseNotes,
         },
         expiring: { in30: expiring30, in60: expiring60 },
         registrationsByWeek,
@@ -2095,6 +2165,13 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(800);
     if (rqErr) return jsonResponse({ error: rqErr.message }, req, 500);
+
+    const { data: pauseRows } = await admin
+      .from('pause_feedback')
+      .select('reason, note, created_at')
+      .eq('profile_id', profileId)
+      .order('created_at', { ascending: false })
+      .limit(10);
     const mpQuota = memberPrivate as {
       contact_request_weekly_bonus?: number | null;
       contact_request_monthly_bonus?: number | null;
@@ -2114,6 +2191,7 @@ Deno.serve(async (req) => {
       admin_note: noteRow ?? { body: '', updated_at: null, updated_by: null },
       recent_emails: recentEmails ?? [],
       contact_request_quota,
+      pause_feedback: pauseRows ?? [],
     }, req);
   }
 

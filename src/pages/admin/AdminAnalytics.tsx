@@ -27,6 +27,14 @@ type TopReferrerRow = {
   months_earned: number;
 };
 
+type AgeBandRow = { band: string; Male: number; Female: number; total: number };
+
+type PauseStats = {
+  total: number;
+  byReason: Record<string, number>;
+  recent_notes: { label: string; reason: string; note: string; created_at: string }[];
+};
+
 type AnalyticsStats = {
   members: {
     total: number;
@@ -34,7 +42,10 @@ type AnalyticsStats = {
     byHiddenReason: Record<string, number>;
     byGender: Record<string, number>;
     activeByGender: Record<string, number>;
+    ageBands?: AgeBandRow[];
+    ageUnknown?: number;
   };
+  pauses?: PauseStats;
   expiring: { in30: number; in60: number };
   registrationsByWeek: WeekPoint[];
   requestsByWeek: WeekPoint[];
@@ -73,6 +84,14 @@ const HIDDEN_REASON_LABELS: Record<string, string> = {
   member_paused: 'Paused by member',
   matched: 'Matched',
   admin: 'Hidden by admin',
+};
+
+const PAUSE_REASON_LABELS: Record<string, string> = {
+  found_here: 'Found someone through this register',
+  found_elsewhere: 'Found someone elsewhere',
+  taking_break: 'Taking a break',
+  other: 'Another reason',
+  prefer_not_say: 'Preferred not to say',
 };
 
 function weekLabel(weekStart: string): string {
@@ -245,6 +264,100 @@ export default function AdminAnalytics() {
               <strong>{stats.members.byStatus.pending_approval ?? 0}</strong> approvals outstanding
             </p>
           </div>
+
+          {stats.members.ageBands && stats.members.ageBands.length > 0 && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h2 style={{ marginTop: 0 }}>Age profile of active members</h2>
+              <div className="table-scroll">
+                <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.12)' }}>
+                      <th style={thStyle}>Age band</th>
+                      <th style={thStyle}>Male</th>
+                      <th style={thStyle}>Female</th>
+                      <th style={thStyle}>Total</th>
+                      <th style={{ ...thStyle, width: '40%' }} aria-hidden />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const maxTotal = Math.max(1, ...stats.members.ageBands.map((b) => b.total));
+                      return stats.members.ageBands.map((b) => (
+                        <tr key={b.band} style={rowBorder}>
+                          <td style={tdStyle}>
+                            <strong>{b.band}</strong>
+                          </td>
+                          <td style={tdStyle}>{b.Male}</td>
+                          <td style={tdStyle}>{b.Female}</td>
+                          <td style={tdStyle}>
+                            <strong>{b.total}</strong>
+                          </td>
+                          <td style={tdStyle}>
+                            <div
+                              style={{
+                                height: 10,
+                                width: `${Math.round((b.total / maxTotal) * 100)}%`,
+                                minWidth: b.total > 0 ? 6 : 0,
+                                background: 'var(--color-primary)',
+                                borderRadius: 5,
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              {(stats.members.ageUnknown ?? 0) > 0 && (
+                <p className="field-hint" style={{ marginBottom: 0 }}>
+                  {stats.members.ageUnknown} active member{stats.members.ageUnknown === 1 ? '' : 's'} without a
+                  recorded age.
+                </p>
+              )}
+            </div>
+          )}
+
+          {stats.pauses && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h2 style={{ marginTop: 0 }}>Why members pause</h2>
+              <p className="field-hint" style={{ marginTop: -6 }}>
+                Self-reported when a member pauses their profile. "Found someone through this register" is the
+                success signal to watch.
+              </p>
+              {stats.pauses.total === 0 ? (
+                <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
+                  No pause reasons recorded yet (collected from now on whenever a member pauses).
+                </p>
+              ) : (
+                <>
+                  <p style={{ fontSize: 14, margin: '0 0 8px' }}>
+                    {Object.entries(stats.pauses.byReason)
+                      .filter(([, n]) => n > 0)
+                      .map(([reason, n], i, arr) => (
+                        <span key={reason}>
+                          <strong style={reason === 'found_here' ? { color: 'var(--color-success)' } : undefined}>
+                            {n}
+                          </strong>{' '}
+                          {PAUSE_REASON_LABELS[reason] ?? reason}
+                          {i < arr.length - 1 ? ' · ' : ''}
+                        </span>
+                      ))}
+                  </p>
+                  {stats.pauses.recent_notes.length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 13 }}>
+                      {stats.pauses.recent_notes.map((n, i) => (
+                        <li key={`${n.created_at}-${i}`} style={{ marginBottom: 4 }}>
+                          {new Date(n.created_at).toLocaleDateString('en-GB')} · {n.label} (
+                          {PAUSE_REASON_LABELS[n.reason] ?? n.reason}): "{n.note}"
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="card" style={{ marginBottom: 24 }}>
             <h2 style={{ marginTop: 0 }}>Registrations per week</h2>
