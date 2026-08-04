@@ -126,6 +126,40 @@ function MemberLayoutBody() {
 
   const isPaused = profile.hidden_reason === 'member_paused';
 
+  // Always-visible visibility status: members should never have to infer from
+  // the absence of warnings whether other members can see them.
+  const visibility = !profile.hidden_reason
+    ? {
+        dot: 'var(--color-success)',
+        text: 'Profile live on the register',
+        color: 'var(--color-success)',
+        bg: 'rgba(4,120,87,0.08)',
+        border: 'rgba(4,120,87,0.25)',
+      }
+    : profile.hidden_reason === 'member_paused'
+      ? {
+          dot: 'var(--color-warning)',
+          text: 'Paused - hidden from browse',
+          color: 'var(--color-warning)',
+          bg: 'rgba(161,98,7,0.08)',
+          border: 'rgba(161,98,7,0.3)',
+        }
+      : profile.hidden_reason === 'matched'
+        ? {
+            dot: 'var(--color-text-secondary)',
+            text: 'Off the register - matched',
+            color: 'var(--color-text-secondary)',
+            bg: 'var(--color-surface-muted)',
+            border: 'var(--color-border)',
+          }
+        : {
+            dot: 'var(--color-text-secondary)',
+            text: 'Hidden by the register team',
+            color: 'var(--color-text-secondary)',
+            bg: 'var(--color-surface-muted)',
+            border: 'var(--color-border)',
+          };
+
   async function unpause() {
     setUnpausing(true);
     const { error } = await supabase.from('profiles').update({ hidden_reason: null }).eq('id', profile!.id);
@@ -139,6 +173,35 @@ function MemberLayoutBody() {
         <div className="layout-max member-dashboard-header-inner">
           <div className="member-dashboard-header-meta">
             <strong className="member-dashboard-header-title">Member area</strong>
+            <span
+              title="Whether other members can currently find you in browse. Manage this under My profile."
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                marginLeft: 10,
+                padding: '2px 10px',
+                borderRadius: 999,
+                fontSize: 12,
+                fontWeight: 600,
+                color: visibility.color,
+                background: visibility.bg,
+                border: `1px solid ${visibility.border}`,
+                verticalAlign: 'middle',
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: visibility.dot,
+                  flexShrink: 0,
+                }}
+              />
+              {visibility.text}
+            </span>
             {exp && (
               <div className="member-dashboard-header-sub">
                 {expiryClose ? (
