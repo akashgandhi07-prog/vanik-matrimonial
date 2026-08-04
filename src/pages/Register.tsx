@@ -1736,7 +1736,9 @@ export default function Register() {
                   Profile photos (up to 3) <span aria-hidden="true">*</span>
                 </label>
                 <p id="reg-photo-hint" className="field-hint">
-                  A clear, recent photo of <strong>your face only</strong>. <strong>No group photos</strong>; group
+                  Your first photo is your <strong>main photo</strong>: use a clear, recent picture where{' '}
+                  <strong>your face is easy to see</strong> (head and shoulders works best). Full-length or distant
+                  shots are fine as extra photos, just not as your main one. <strong>No group photos</strong>; group
                   shots or unclear images will be rejected. <strong>JPG or PNG only.</strong> Visible to other members
                   after approval. Images are compressed before upload. Drag and drop to reorder.
                 </p>
@@ -1797,7 +1799,7 @@ export default function Register() {
                         <div style={{ flex: 1 }}>
                           <p style={{ margin: 0, fontSize: 13 }}>{idx === 0 ? 'Primary profile photo' : `Photo ${idx + 1}`}</p>
                           <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                            Drag to reorder
+                            {idx === 0 ? 'Shown first - your face should be clearly visible here. Drag to reorder.' : 'Drag to reorder'}
                           </p>
                         </div>
                         <button type="button" className="btn btn-secondary" onClick={() => removePhotoAt(idx)}>

@@ -391,14 +391,16 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           </li>
           <li style={{ marginBottom: 0 }}>
             <strong>Change order or the main image.</strong> Drag rows to reorder the gallery. Use <strong>Set main</strong>{' '}
-            so the right picture is the one others see in browse and as the first image in your profile.
+            so the right picture is the one others see in browse and as the first image in your profile. Pick a main
+            photo where <strong>your face is clearly visible</strong>, not a distant or full-length shot.
           </li>
         </ul>
         <label className="label" htmlFor="mp-photo-file">
           Add or replace a photo (JPG or PNG)
         </label>
         <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
-          Use a clear photo of your face only. Group photos are not accepted.
+          Your main photo should be a clear close-up where your face is easy to see - head and shoulders works best.
+          Full-length or distant shots are fine as extra photos. Group photos are not accepted.
         </p>
         <input
           id="mp-photo-file"
