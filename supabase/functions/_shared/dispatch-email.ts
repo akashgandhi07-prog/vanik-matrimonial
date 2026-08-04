@@ -332,14 +332,11 @@ export async function dispatchEmail(
       const ex = extraData as Record<string, unknown>;
       const reqName = stripHtml(String(ex.requester_name ?? ''), 120);
       const reqRef = stripHtml(String(ex.requester_ref ?? ''), 20);
-      const reqMobile = stripHtml(String(ex.requester_mobile ?? ''), 40);
-      const factsHtml = String(ex.requester_facts_html ?? '');
+      const reqAge = stripHtml(String(ex.requester_age ?? ''), 8);
       subject = `${reqName} has requested your details - Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqRef ? ` (${escapeHtmlEmail(reqRef)})` : ''} has requested your details through the register. They have received your contact details and may be in touch - and here are theirs, so you can get in touch from your side too.</p>
-        ${factsHtml}
-        ${reqMobile ? `<p><strong>Mobile:</strong> ${escapeHtmlEmail(reqMobile)}</p>` : ''}
-        <p>You can see their full profile, including photos, under <strong>My requests &gt; Requested your details</strong> after signing in.</p>
+        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqRef ? ` (${escapeHtmlEmail(reqRef)})` : ''}${reqAge ? `, age ${escapeHtmlEmail(reqAge)},` : ''} has requested your details through the register. They have received your contact details and may be in touch.</p>
+        <p>Sign in to see their full profile, photos, and contact details under <strong>My requests &gt; Requested your details</strong>, so you can get in touch from your side too.</p>
         <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">View their full profile</a></p>
         <p>If you have any concerns about this introduction, contact us at <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
         <p>With good wishes,<br/>The register team</p>`;

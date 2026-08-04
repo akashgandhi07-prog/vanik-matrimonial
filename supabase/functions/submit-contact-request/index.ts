@@ -9,19 +9,6 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Small facts table used in both introduction directions. */
-function profileFactsHtml(rows: Array<[string, string | null | undefined]>): string {
-  const cells = rows
-    .filter(([, v]) => v != null && String(v).trim() !== '')
-    .map(
-      ([label, v]) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#5b6475;white-space:nowrap;">${escapeHtml(label)}</td><td style="padding:4px 0;"><strong>${escapeHtml(String(v))}</strong></td></tr>`
-    )
-    .join('');
-  if (!cells) return '';
-  return `<table style="border-collapse:collapse;font-size:14px;margin:8px 0;">${cells}</table>`;
-}
-
 /** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -348,14 +335,6 @@ Deno.serve(async (req) => {
         .eq('profile_id', requester.id)
         .maybeSingle();
       const requesterName = `${stripHtml(requester.first_name, 80)} ${stripHtml(String(reqPriv?.surname ?? ''), 80)}`.trim();
-      const requesterFacts = profileFactsHtml([
-        ['Age', requester.age != null ? String(requester.age) : null],
-        ['Location', requester.place_of_birth as string | null],
-        ['Religion', requester.religion as string | null],
-        ['Community', requester.community as string | null],
-        ['Occupation', requester.job_title as string | null],
-        ['Education', requester.education as string | null],
-      ]);
 
       const candidatesHtml = contactPayload
         .map(
@@ -395,8 +374,7 @@ Deno.serve(async (req) => {
             extraData: {
               requester_name: requesterName || requester.first_name,
               requester_ref: requester.reference_number ?? '',
-              requester_mobile: requesterMobile,
-              requester_facts_html: requesterFacts,
+              requester_age: requester.age != null ? String(requester.age) : '',
             },
           });
           if (!r.ok) allOk = false;
