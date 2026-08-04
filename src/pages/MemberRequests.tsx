@@ -91,9 +91,23 @@ function friendlyContactsError(err: unknown): string {
 export default function MemberRequests() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile, privateRow, candidates, requests, feedbackKeys, bookmarks, toggleBookmark, requestersOfMe } =
-    useMemberArea();
+  const {
+    profile,
+    privateRow,
+    candidates,
+    requests,
+    feedbackKeys,
+    bookmarks,
+    toggleBookmark,
+    requestersOfMe,
+    reverseFeedbackKeys,
+  } = useMemberArea();
   const [tab, setTab] = useState<'mine' | 'interested'>('mine');
+
+  useEffect(() => {
+    const st = location.state as { tab?: string } | null;
+    if (st?.tab === 'interested') setTab('interested');
+  }, [location.state]);
   const [contactsByRequest, setContactsByRequest] = useState<Record<string, ContactDetailRow[]>>({});
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -409,6 +423,20 @@ export default function MemberRequests() {
                         >
                           View full profile
                         </button>
+                        {reverseFeedbackKeys.has(r.request_id) ? (
+                          <span className="badge badge-success" style={{ alignSelf: 'center', fontSize: 12 }}>
+                            ✓ Feedback given
+                          </span>
+                        ) : (
+                          <Link
+                            to={`/feedback/${r.request_id}/${r.id}?direction=received`}
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}
+                            title="Admin-only feedback about this member. Reviewed by the register team and never shown to them. Entirely optional."
+                          >
+                            Give admin-only feedback
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>

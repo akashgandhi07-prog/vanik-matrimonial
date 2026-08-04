@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
     token?: string;
     request_id?: string;
     candidate_id?: string;
+    direction?: string;
     made_contact?: string;
     recommend_retain?: string;
     notes?: string;
@@ -72,11 +73,12 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
+  const direction = body.direction === 'candidate_on_requester' ? 'candidate_on_requester' : 'requester_on_candidate';
   const requestId = body.request_id;
-  const candidateId = body.candidate_id;
+  let candidateId = body.candidate_id;
   const made_contact = body.made_contact;
   const recommend_retain = body.recommend_retain;
-  if (!requestId || !candidateId || !made_contact || !recommend_retain) {
+  if (!requestId || !made_contact || !recommend_retain || (direction === 'requester_on_candidate' && !candidateId)) {
     return jsonResponse({ error: 'missing_fields' }, req, 400);
   }
 
@@ -86,7 +88,41 @@ Deno.serve(async (req) => {
   let requesterId: string | null = null;
   let tokenRowId: string | null = null;
 
-  if (body.token) {
+  if (direction === 'candidate_on_requester') {
+    // Reverse feedback (the requested member about their requester): session only,
+    // author must be one of the request's candidates. Roles keep request semantics:
+    // candidate_id = author, requester_id = subject.
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return jsonResponse({ error: 'Unauthorized' }, req, 401);
+    }
+    const userClient = createClient(supabaseUrl, anon, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData.user) {
+      return jsonResponse({ error: 'Unauthorized' }, req, 401);
+    }
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', userData.user.id)
+      .single();
+    if (!prof) {
+      return jsonResponse({ error: 'Profile not found' }, req, 400);
+    }
+    const myId = prof.id as string;
+    const { data: rq } = await admin
+      .from('requests')
+      .select('requester_id, candidate_ids')
+      .eq('id', requestId)
+      .single();
+    if (!rq || !((rq.candidate_ids as string[] | null) ?? []).includes(myId)) {
+      return jsonResponse({ error: 'forbidden' }, req, 403);
+    }
+    requesterId = rq.requester_id as string;
+    candidateId = myId;
+  } else if (body.token) {
     const { data: tok, error: te } = await admin
       .from('feedback_tokens')
       .select('id, expires_at, used_at, requester_id')
@@ -172,6 +208,7 @@ Deno.serve(async (req) => {
     request_id: requestId,
     candidate_id: candidateId,
     requester_id: requesterId,
+    direction,
     candidate_display_name: candidate_display_name || null,
     requester_display_name: requester_display_name || null,
     made_contact,

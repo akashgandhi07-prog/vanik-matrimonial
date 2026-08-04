@@ -126,6 +126,9 @@ Deno.serve(async (req) => {
         .from('feedback')
         .select('request_id, candidate_id')
         .eq('requester_id', requester.id)
+        // Only feedback the requester WROTE counts towards their obligation -
+        // reverse feedback written about them must not.
+        .eq('direction', 'requester_on_candidate')
         .in('request_id', staleIds);
 
       const fed = new Set(

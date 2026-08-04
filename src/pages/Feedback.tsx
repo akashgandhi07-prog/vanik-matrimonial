@@ -19,6 +19,9 @@ export default function Feedback() {
   const { requestId, candidateId } = useParams();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  /** 'received' = feedback about the member who requested YOU (mutual introductions). */
+  const isReceivedDirection = searchParams.get('direction') === 'received';
+  const nextPath = `/feedback/${requestId}/${candidateId}${isReceivedDirection ? '?direction=received' : ''}`;
 
   const [loading, setLoading] = useState(true);
   const [validMagic, setValidMagic] = useState(false);
@@ -59,10 +62,10 @@ export default function Feedback() {
       }
       setSessionOk(true);
       setNeedLogin(false);
-      setCandidateLabel('this candidate');
+      setCandidateLabel(isReceivedDirection ? 'the member who requested you' : 'this candidate');
       setLoading(false);
     })();
-  }, [requestId, candidateId, token]);
+  }, [requestId, candidateId, token, isReceivedDirection]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +80,7 @@ export default function Feedback() {
           token: token ?? undefined,
           request_id: requestId,
           candidate_id: candidateId,
+          ...(isReceivedDirection ? { direction: 'candidate_on_requester' } : {}),
           made_contact: madeContact,
           recommend_retain: recommend,
           notes,
@@ -111,7 +115,7 @@ export default function Feedback() {
             <p style={{ color: 'var(--color-text-secondary)' }}>
               To submit feedback without a magic link, please sign in as the member who made the request.
             </p>
-            <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
+            <Link to={`/login?next=${encodeURIComponent(nextPath)}`} className="btn btn-primary">
               Sign in
             </Link>
           </div>
@@ -129,7 +133,7 @@ export default function Feedback() {
             <p style={{ color: 'var(--color-text-secondary)' }}>
               This feedback link is no longer valid. Sign in to submit feedback from your account.
             </p>
-            <Link to={`/login?next=/feedback/${requestId}/${candidateId}`} className="btn btn-primary">
+            <Link to={`/login?next=${encodeURIComponent(nextPath)}`} className="btn btn-primary">
               Sign in
             </Link>
           </div>
@@ -159,7 +163,7 @@ export default function Feedback() {
       <div className="card">
         <h1 style={{ marginTop: 0 }}>Feedback</h1>
         <p style={{ color: 'var(--color-text-secondary)' }}>
-          Candidate: <strong>{candidateLabel}</strong>
+          {isReceivedDirection ? 'About' : 'Candidate'}: <strong>{candidateLabel}</strong>
         </p>
         <p
           className="prose-safe"

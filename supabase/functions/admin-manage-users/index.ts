@@ -1262,7 +1262,7 @@ Deno.serve(async (req) => {
     let fbQuery = admin
       .from('feedback')
       .select(
-        'id, request_id, candidate_id, requester_id, candidate_display_name, requester_display_name, made_contact, recommend_retain, notes, is_flagged, submitted_at, archived_at'
+        'id, request_id, candidate_id, requester_id, direction, candidate_display_name, requester_display_name, made_contact, recommend_retain, notes, is_flagged, submitted_at, archived_at'
       )
       .order('submitted_at', { ascending: false });
     if (!includeArchived) {

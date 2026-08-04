@@ -93,6 +93,8 @@ type MemberCtx = {
   feedbackKeys: Set<string>;
   /** Members who have requested the signed-in member, newest first. */
   requestersOfMe: RequesterOfMeRow[];
+  /** request_ids for which the signed-in member has given feedback about their requester. */
+  reverseFeedbackKeys: Set<string>;
   notice: { type: 'error' | 'success'; text: string } | null;
   clearNotice: () => void;
   loadAll: () => Promise<void>;
@@ -130,6 +132,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
   const [requestersOfMe, setRequestersOfMe] = useState<RequesterOfMeRow[]>([]);
+  const [reverseFeedbackKeys, setReverseFeedbackKeys] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
@@ -361,7 +364,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         const { data: fbRows } = await supabase
           .from("feedback")
           .select("request_id, candidate_id")
-          .eq("requester_id", myId);
+          .eq("requester_id", myId)
+          .eq("direction", "requester_on_candidate");
         setFeedbackKeys(
           new Set(
             (fbRows ?? []).map(
@@ -369,6 +373,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
             ),
           ),
         );
+
+        // Feedback I have given about people who requested ME (optional, never blocking).
+        const { data: revRows, error: revErr } = await supabase
+          .from("feedback")
+          .select("request_id")
+          .eq("candidate_id", myId)
+          .eq("direction", "candidate_on_requester");
+        if (revErr) {
+          // Column may predate the migration in local dev - never break the dashboard.
+          console.warn("reverse feedback query:", revErr.message);
+          setReverseFeedbackKeys(new Set());
+        } else {
+          setReverseFeedbackKeys(
+            new Set((revRows ?? []).map((r) => r.request_id as string)),
+          );
+        }
 
         // Mutual introductions: who has requested me. Best-effort - an
         // unapplied migration must not break the dashboard.
@@ -455,6 +475,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setRequests([]);
         setFeedbackKeys(new Set());
         setRequestersOfMe([]);
+        setReverseFeedbackKeys(new Set());
         navigate("/", { replace: true });
       }
     });
@@ -508,6 +529,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       requests,
       feedbackKeys,
       requestersOfMe,
+      reverseFeedbackKeys,
       notice,
       clearNotice: () => setNotice(null),
       loadAll,
@@ -526,6 +548,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       requests,
       feedbackKeys,
       requestersOfMe,
+      reverseFeedbackKeys,
       notice,
       loadAll,
       toggleBookmark,

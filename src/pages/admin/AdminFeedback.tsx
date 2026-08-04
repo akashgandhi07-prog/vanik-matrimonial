@@ -7,6 +7,8 @@ type FeedbackRow = {
   request_id: string;
   candidate_id: string | null;
   requester_id: string | null;
+  /** requester_on_candidate (default) or candidate_on_requester (they wrote about their requester). */
+  direction?: string;
   candidate_display_name: string | null;
   requester_display_name: string | null;
   made_contact: string | null;
@@ -81,6 +83,24 @@ function resolveRequesterId(row: FeedbackRow, requests: Record<string, RequestSu
   if (row.requester_id) return row.requester_id;
   const req = row.request_id ? requests[row.request_id] : undefined;
   return req?.requester_id ?? null;
+}
+
+function isReverseRow(row: FeedbackRow): boolean {
+  return row.direction === 'candidate_on_requester';
+}
+
+/** The member the feedback is ABOUT (group heading). */
+function resolveSubject(row: FeedbackRow, requests: Record<string, RequestSummary>) {
+  return isReverseRow(row)
+    ? { id: resolveRequesterId(row, requests), displayName: row.requester_display_name }
+    : { id: resolveCandidateId(row, requests), displayName: row.candidate_display_name };
+}
+
+/** The member who WROTE the feedback (Feedback from column). */
+function resolveAuthor(row: FeedbackRow, requests: Record<string, RequestSummary>) {
+  return isReverseRow(row)
+    ? { id: resolveCandidateId(row, requests), displayName: row.candidate_display_name }
+    : { id: resolveRequesterId(row, requests), displayName: row.requester_display_name };
 }
 
 /**
@@ -367,12 +387,10 @@ export default function AdminFeedback() {
   const grouped = useMemo<GroupedFeedback[]>(() => {
     const map = new Map<string, FeedbackRow[]>();
     for (const row of feedback) {
-      const resolvedId = resolveCandidateId(row, requests);
+      const subject = resolveSubject(row, requests);
       const groupKey =
-        resolvedId ??
-        (row.candidate_display_name?.trim()
-          ? `name:${row.candidate_display_name.trim()}`
-          : '__unknown__');
+        subject.id ??
+        (subject.displayName?.trim() ? `name:${subject.displayName.trim()}` : '__unknown__');
       const list = map.get(groupKey) ?? [];
       list.push(row);
       map.set(groupKey, list);
@@ -385,10 +403,10 @@ export default function AdminFeedback() {
         : rows;
       if (visibleRows.length === 0) continue;
       const sample = visibleRows[0];
-      const resolvedId = resolveCandidateId(sample, requests);
+      const sampleSubject = resolveSubject(sample, requests);
       const { label, profileId, stateNote } = memberLabel(
-        resolvedId,
-        sample.candidate_display_name,
+        sampleSubject.id,
+        sampleSubject.displayName,
         profiles
       );
       const candidate: ProfileSummary = profileId
@@ -590,12 +608,12 @@ export default function AdminFeedback() {
                   <tbody>
                     {rows.map((row) => {
                       const highlight = row.is_flagged || row.recommend_retain === 'no';
-                      const requesterProfileId = resolveRequesterId(row, requests);
+                      const author = resolveAuthor(row, requests);
                       const {
                         label: fromLabel,
                         profileId: fromProfileId,
                         stateNote: fromStateNote,
-                      } = memberLabel(requesterProfileId, row.requester_display_name, profiles);
+                      } = memberLabel(author.id, author.displayName, profiles);
                       const isArchived = !!row.archived_at;
                       return (
                         <tr
@@ -636,6 +654,15 @@ export default function AdminFeedback() {
                               label={fromLabel}
                               stateNote={fromStateNote}
                             />
+                            {isReverseRow(row) && (
+                              <span
+                                className="badge badge-muted"
+                                style={{ marginLeft: 6, fontSize: 11 }}
+                                title="This member was requested by the feedback subject and wrote back about them."
+                              >
+                                about their requester
+                              </span>
+                            )}
                           </td>
                           <td style={{ padding: '6px 8px' }}>{row.made_contact ?? '-'}</td>
                           <td style={{ padding: '6px 8px' }}>

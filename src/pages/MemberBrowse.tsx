@@ -93,6 +93,7 @@ export default function MemberBrowse() {
     toggleBookmark,
     requests,
     feedbackKeys,
+    requestersOfMe,
     loadAll,
     notice,
     clearNotice,
@@ -144,6 +145,9 @@ export default function MemberBrowse() {
     }
     return ids;
   }, [requests]);
+
+  /** Members in this browse list who have already requested ME - we are introduced. */
+  const requesterIds = useMemo(() => new Set(requestersOfMe.map((r) => r.id)), [requestersOfMe]);
 
   const filtered = useMemo(() => {
     if (!profile) return [];
@@ -764,7 +768,10 @@ export default function MemberBrowse() {
             {filtered.map((c) => {
               const inTray = tray.includes(c.id);
               const blocked = requestedCandidateIds.has(c.id);
-              const note = blocked ? (
+              const requestedMe = requesterIds.has(c.id);
+              const note = requestedMe ? (
+                'Has requested you - you already have each other’s details.'
+              ) : blocked ? (
                 'Opens their card in My requests (photo and contact details).'
               ) : feedbackBlocking ? (
                 <span className="profile-card-note--warn">
@@ -797,7 +804,17 @@ export default function MemberBrowse() {
                       >
                         {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
                       </button>
-                      {blocked ? (
+                      {requestedMe ? (
+                        <Link
+                          to="/dashboard/requests"
+                          state={{ tab: 'interested', focusProfileId: c.id }}
+                          className="btn btn-primary"
+                          style={{ textDecoration: 'none' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View introduction
+                        </Link>
+                      ) : blocked ? (
                         <Link
                           to="/dashboard/requests"
                           state={{ focusProfileId: c.id }}
@@ -940,12 +957,17 @@ export default function MemberBrowse() {
       {selectedProfile && (
         <ProfileModal
           candidate={selectedProfile}
-          anonymous
+          anonymous={!requesterIds.has(selectedProfile.id)}
+          contactDetails={(() => {
+            const r = requestersOfMe.find((x) => x.id === selectedProfile.id);
+            return r?.mobile ? { mobile: r.mobile } : undefined;
+          })()}
           inTray={tray.includes(selectedProfile.id)}
           trayFull={atTrayCapacity}
           trayCapacity={trayMax}
           feedbackRequiredBeforeRequests={feedbackBlocking}
-          blocked={requestedCandidateIds.has(selectedProfile.id)}
+          blocked={requestedCandidateIds.has(selectedProfile.id) || requesterIds.has(selectedProfile.id)}
+          allowRequestAction={!requesterIds.has(selectedProfile.id)}
           bookmarked={bookmarks.includes(selectedProfile.id)}
           onClose={() => setSelectedProfile(null)}
           onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
