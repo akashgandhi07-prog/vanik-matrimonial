@@ -288,7 +288,7 @@ export default function MemberRequests() {
         className={`btn ${tab === 'interested' ? 'btn-primary' : 'btn-secondary'}`}
         onClick={() => setTab('interested')}
       >
-        Interested in you{requestersOfMe.length > 0 ? ` (${requestersOfMe.length})` : ''}
+        Requested your details{requestersOfMe.length > 0 ? ` (${requestersOfMe.length})` : ''}
       </button>
     </div>
   );
