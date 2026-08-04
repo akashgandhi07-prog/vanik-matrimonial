@@ -307,6 +307,33 @@ export default function AdminAnalytics() {
                       ));
                     })()}
                   </tbody>
+                  <tfoot>
+                    {(() => {
+                      const male = stats.members.ageBands.reduce((n, b) => n + b.Male, 0);
+                      const female = stats.members.ageBands.reduce((n, b) => n + b.Female, 0);
+                      const all = male + female;
+                      const pct = (n: number) => (all > 0 ? `${Math.round((n / all) * 100)}%` : '-');
+                      return (
+                        <tr style={{ borderTop: '2px solid rgba(0,0,0,0.12)' }}>
+                          <td style={tdStyle}>
+                            <strong>Total</strong>
+                          </td>
+                          <td style={tdStyle}>
+                            <strong>{male}</strong>{' '}
+                            <span style={{ color: 'var(--color-text-secondary)' }}>({pct(male)})</span>
+                          </td>
+                          <td style={tdStyle}>
+                            <strong>{female}</strong>{' '}
+                            <span style={{ color: 'var(--color-text-secondary)' }}>({pct(female)})</span>
+                          </td>
+                          <td style={tdStyle}>
+                            <strong>{all}</strong>
+                          </td>
+                          <td style={tdStyle} aria-hidden />
+                        </tr>
+                      );
+                    })()}
+                  </tfoot>
                 </table>
               </div>
               {(stats.members.ageUnknown ?? 0) > 0 && (
