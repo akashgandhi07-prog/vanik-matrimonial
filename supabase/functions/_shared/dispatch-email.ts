@@ -23,6 +23,7 @@ export type EmailType =
   | 'admin_pending_reminder'
   | 'account_freeze_reminder'
   | 'introduction_received'
+  | 'rejection_followup'
   | 'website_feedback_submission';
 
 function escapeHtmlEmail(s: string): string {
@@ -324,6 +325,26 @@ export async function dispatchEmail(
         <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Sign in</a></p>
         <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'rejection_followup': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const reason = stripHtml(String(profile.rejection_reason ?? ''), 2000);
+      const registerUrl = `${publicSiteBaseUrl()}/register`;
+      subject = 'You can still complete your Vanik Matrimonial Register application';
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>A while ago we were unable to approve your application to the Vanik Matrimonial Register, and we noticed you have not resubmitted since. Your application is still open - you are very welcome to fix it up and try again whenever suits you.</p>
+        ${reason ? `<p><strong>What needed attention:</strong> ${reason}</p>` : ''}
+        <ul>
+          <li>Sign in and open your application: <a href="${registerUrl}">${registerUrl}</a></li>
+          <li>Update any missing or incorrect details</li>
+          <li>Upload a clear photo and proof of identity if requested</li>
+          <li>Submit again - the volunteer team reviews within 10 working days</li>
+        </ul>
+        <p><a href="${registerUrl}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Finish my application</a></p>
+        <p>If you no longer wish to join, you can simply ignore this email. Questions? Just reply.</p>
+        <p>With good wishes,<br/>The register team</p>`;
       break;
     }
     case 'introduction_received': {

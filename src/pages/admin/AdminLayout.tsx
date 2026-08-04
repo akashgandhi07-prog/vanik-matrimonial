@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { invokeFunction, supabase } from '../../lib/supabase';
 import { MfaEnroll } from './MfaEnroll';
 import { useAdminGuard } from './useAdminGuard';
 
@@ -21,6 +21,28 @@ export default function AdminLayout() {
     return () => mq.removeEventListener('change', fn);
   }, []);
 
+  // Email health check: surfaces send failures and bounces in-app, because an
+  // email alert about email being broken would never arrive.
+  const [emailProblems, setEmailProblems] = useState(0);
+  useEffect(() => {
+    if (ok !== true || mfaOk !== true) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = (await invokeFunction('admin-manage-users', { action: 'email_health' })) as {
+          failed?: number;
+          undelivered?: number;
+        };
+        if (!cancelled) setEmailProblems((res.failed ?? 0) + (res.undelivered ?? 0));
+      } catch {
+        /* banner is best-effort */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ok, mfaOk]);
+
   if (ok === false) {
     if (denyReason === 'anon') {
       return <Navigate to="/login?next=%2Fadmin" replace />;
@@ -36,6 +58,29 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-layout">
+      {emailProblems > 0 && (
+        <div
+          role="alert"
+          style={{
+            background: 'rgba(185,28,28,0.08)',
+            border: '1px solid rgba(185,28,28,0.35)',
+            color: 'var(--color-danger)',
+            padding: '10px 16px',
+            fontSize: 14,
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          <strong>
+            {emailProblems} email{emailProblems === 1 ? '' : 's'} failed to send or deliver in the last 48 hours.
+          </strong>
+          <NavLink to="/admin/email-log" className="btn btn-secondary" style={{ padding: '4px 12px', fontSize: 13 }}>
+            Open Email log
+          </NavLink>
+        </div>
+      )}
       {!wide && (
         <div className="admin-mobile-bar">
           <strong className="admin-mobile-title">Admin</strong>

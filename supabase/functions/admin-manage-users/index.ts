@@ -1826,6 +1826,29 @@ Deno.serve(async (req) => {
       });
     }
 
+    // 1c. Older rejected members (before the window) who got their rejection
+    // email but never resubmitted: one gentle "still open, fix and resubmit"
+    // nudge. Skipped once a followup has ever been sent, so it never repeats.
+    const { data: oldRejected, error: orErr } = await admin
+      .from('profiles')
+      .select('id, first_name')
+      .eq('status', 'rejected');
+    if (orErr) return jsonResponse({ error: orErr.message }, req, 500);
+    for (const row of (oldRejected ?? []) as { id: string; first_name: string }[]) {
+      if (rejectedIds.includes(row.id) || approvedIds.includes(row.id)) continue;
+      const label = await labelFor(row.id);
+      if (await hasSentEmail(row.id, 'rejection_followup')) {
+        results.push({ label, email_type: 'rejection_followup', outcome: 'already sent - skipped' });
+        continue;
+      }
+      const r = await dispatchEmail(admin, { type: 'rejection_followup', recipientProfileId: row.id });
+      results.push({
+        label,
+        email_type: 'rejection_followup',
+        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
+      });
+    }
+
     // 2. Applicants who registered in the window with no confirmation email.
     const { data: newProfs, error: npErr } = await admin
       .from('profiles')
@@ -2394,6 +2417,23 @@ Deno.serve(async (req) => {
       contact_request_quota,
       pause_feedback: pauseRows ?? [],
     }, req);
+  }
+
+  // Lightweight signal for the admin banner: anything that failed to send or
+  // failed to deliver in the last 48 hours.
+  if (action === 'email_health') {
+    const cutoff = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+    const [failed, undelivered] = await Promise.all([
+      admin.from('email_log').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('sent_at', cutoff),
+      admin
+        .from('email_log')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['bounced', 'blocked', 'spam'])
+        .gte('sent_at', cutoff),
+    ]);
+    if (failed.error) return jsonResponse({ error: failed.error.message }, req, 500);
+    if (undelivered.error) return jsonResponse({ error: undelivered.error.message }, req, 500);
+    return jsonResponse({ failed: failed.count ?? 0, undelivered: undelivered.count ?? 0 }, req);
   }
 
   if (action === 'list_email_log') {
