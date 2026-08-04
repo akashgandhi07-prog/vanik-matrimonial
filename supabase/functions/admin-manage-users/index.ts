@@ -1716,6 +1716,105 @@ Deno.serve(async (req) => {
     );
   }
 
+  // One-off catch-up for the 2 Aug 2026 incident: approvals and one registration
+  // whose emails were lost when the mail library crashed the workers. Derives the
+  // affected members from the data (never a hard-coded list) and skips anyone who
+  // already has the email logged as sent, so it is safe to run more than once.
+  if (action === 'temp_fix_incident_emails') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot send emails' }, req, 403);
+    }
+    if (!isTransactionalMailConfigured()) {
+      return jsonResponse({ error: `Email is not configured. ${transactionalMailMissingReason()}` }, req, 500);
+    }
+    const WINDOW_START = '2026-08-02T00:00:00Z';
+    const WINDOW_END = '2026-08-03T00:00:00Z';
+    const results: { label: string; email_type: string; outcome: string }[] = [];
+
+    const labelFor = async (profileId: string): Promise<string> => {
+      const { data: p } = await admin
+        .from('profiles')
+        .select('first_name, reference_number')
+        .eq('id', profileId)
+        .maybeSingle();
+      if (!p) return profileId.slice(0, 8);
+      return memberDisplayLabel(p.first_name as string, null, p.reference_number as string | null) || profileId.slice(0, 8);
+    };
+
+    const hasSentEmail = async (profileId: string, emailType: string): Promise<boolean> => {
+      const { count } = await admin
+        .from('email_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_profile_id', profileId)
+        .eq('email_type', emailType)
+        .eq('status', 'sent');
+      return (count ?? 0) > 0;
+    };
+
+    // 1. Members approved during the incident window with no "account active" email.
+    const { data: acts, error: aErr } = await admin
+      .from('admin_actions')
+      .select('target_profile_id')
+      .eq('action_type', 'approved')
+      .gte('created_at', WINDOW_START)
+      .lt('created_at', WINDOW_END);
+    if (aErr) return jsonResponse({ error: aErr.message }, req, 500);
+    const approvedIds = [
+      ...new Set(
+        (acts ?? [])
+          .map((a) => (a as { target_profile_id: string | null }).target_profile_id)
+          .filter((x): x is string => !!x)
+      ),
+    ];
+    for (const pid of approvedIds) {
+      const label = await labelFor(pid);
+      if (await hasSentEmail(pid, 'registration_approved')) {
+        results.push({ label, email_type: 'registration_approved', outcome: 'already sent - skipped' });
+        continue;
+      }
+      const r = await dispatchEmail(admin, { type: 'registration_approved', recipientProfileId: pid });
+      results.push({
+        label,
+        email_type: 'registration_approved',
+        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
+      });
+    }
+
+    // 2. Applicants who registered in the window with no confirmation email.
+    const { data: newProfs, error: npErr } = await admin
+      .from('profiles')
+      .select('id, first_name')
+      .gte('created_at', WINDOW_START)
+      .lt('created_at', WINDOW_END);
+    if (npErr) return jsonResponse({ error: npErr.message }, req, 500);
+    for (const row of (newProfs ?? []) as { id: string; first_name: string }[]) {
+      if (await hasSentEmail(row.id, 'registration_received')) continue;
+      const label = await labelFor(row.id);
+      const r = await dispatchEmail(admin, {
+        type: 'registration_received',
+        recipientProfileId: row.id,
+        extra_data: { first_name: row.first_name, resubmitted: false },
+      });
+      results.push({
+        label,
+        email_type: 'registration_received',
+        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
+      });
+    }
+
+    await admin.from('admin_actions').insert({
+      admin_user_id: userData.user.id,
+      target_profile_id: null,
+      action_type: 'bulk_pending_reminder',
+      notes: stripHtml(
+        `Temp Fix Email (2 Aug incident catch-up): ${results.map((r) => `${r.label} ${r.email_type} ${r.outcome}`).join('; ')}`,
+        2000
+      ),
+    });
+
+    return jsonResponse({ results }, req);
+  }
+
   if (action === 'update_member_record') {
     if (isSupportAdmin(userData.user)) {
       return jsonResponse({ error: 'Support admin role cannot edit member records' }, req, 403);

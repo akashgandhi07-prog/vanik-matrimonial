@@ -49,6 +49,34 @@ export default function AdminSettings() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [myPowerRole, setMyPowerRole] = useState<'super' | 'support' | null>(null);
   const [mailStatus, setMailStatus] = useState<MailProviderStatus | null>(null);
+  const [tempFixBusy, setTempFixBusy] = useState(false);
+  const [tempFixResults, setTempFixResults] = useState<
+    { label: string; email_type: string; outcome: string }[] | null
+  >(null);
+  const [tempFixError, setTempFixError] = useState<string | null>(null);
+
+  async function runTempFixEmails() {
+    if (
+      !window.confirm(
+        'Send the missed 2 Aug emails now? Approval emails go to the members approved that day, and the registration confirmation to the applicant. Anyone already emailed is skipped.'
+      )
+    ) {
+      return;
+    }
+    setTempFixBusy(true);
+    setTempFixError(null);
+    setTempFixResults(null);
+    try {
+      const res = (await invokeFunction('admin-manage-users', {
+        action: 'temp_fix_incident_emails',
+      })) as { results?: { label: string; email_type: string; outcome: string }[] };
+      setTempFixResults(res.results ?? []);
+    } catch (e) {
+      setTempFixError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setTempFixBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -226,6 +254,45 @@ export default function AdminSettings() {
               for <code>{viteHost}</code>. Update Vercel (or env) so <code>VITE_SUPABASE_URL</code> matches the project
               where you set SMTP secrets, then redeploy the frontend.
             </p>
+          )}
+        </div>
+      )}
+
+      {myPowerRole === 'super' && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <h2 style={{ marginTop: 0 }}>Temp Fix Email</h2>
+          <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+            One-off catch-up for 2 August: sends the &quot;account active&quot; email to members approved that day
+            and the registration confirmation to the applicant whose email was lost. Anyone who already received
+            theirs is skipped, so it is safe to press again.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={tempFixBusy}
+            onClick={() => void runTempFixEmails()}
+          >
+            {tempFixBusy ? 'Sending…' : 'Send missed 2 Aug emails'}
+          </button>
+          {tempFixError && (
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>{tempFixError}</p>
+          )}
+          {tempFixResults && (
+            <ul style={{ margin: '10px 0 0', paddingLeft: 18, fontSize: 13 }}>
+              {tempFixResults.length === 0 && <li>Nothing to send - everyone already has their email.</li>}
+              {tempFixResults.map((r, i) => (
+                <li key={i} style={{ marginBottom: 2 }}>
+                  {r.label} · {r.email_type === 'registration_approved' ? 'account active' : 'registration received'} ·{' '}
+                  <strong
+                    style={{
+                      color: r.outcome === 'sent' ? 'var(--color-success)' : r.outcome.startsWith('failed') ? 'var(--color-danger)' : undefined,
+                    }}
+                  >
+                    {r.outcome}
+                  </strong>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
