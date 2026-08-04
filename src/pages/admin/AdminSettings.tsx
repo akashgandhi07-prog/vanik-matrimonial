@@ -262,9 +262,9 @@ export default function AdminSettings() {
         <div className="card" style={{ marginBottom: 24 }}>
           <h2 style={{ marginTop: 0 }}>Temp Fix Email</h2>
           <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
-            One-off catch-up for 2 August: sends the &quot;account active&quot; email to members approved that day
-            and the registration confirmation to the applicant whose email was lost. Anyone who already received
-            theirs is skipped, so it is safe to press again.
+            One-off catch-up for the Gmail outage (2-4 August): re-sends approval, rejection, and registration
+            confirmation emails that were blocked. Anyone who already received theirs is skipped, so it is safe
+            to press again.
           </p>
           <button
             type="button"

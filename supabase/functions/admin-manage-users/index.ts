@@ -1727,8 +1727,11 @@ Deno.serve(async (req) => {
     if (!isTransactionalMailConfigured()) {
       return jsonResponse({ error: `Email is not configured. ${transactionalMailMissingReason()}` }, req, 500);
     }
+    // Gmail blocked outbound mail from the evening of 2 Aug until the Brevo
+    // switch on 4 Aug; the window runs to "now" so everything in between is
+    // covered. email_log rows for blocked sends were flipped to 'failed'.
     const WINDOW_START = '2026-08-02T00:00:00Z';
-    const WINDOW_END = '2026-08-03T00:00:00Z';
+    const WINDOW_END = new Date().toISOString();
     const results: { label: string; email_type: string; outcome: string }[] = [];
 
     const labelFor = async (profileId: string): Promise<string> => {
@@ -1776,6 +1779,49 @@ Deno.serve(async (req) => {
       results.push({
         label,
         email_type: 'registration_approved',
+        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
+      });
+    }
+
+    // 1b. Members rejected during the window with no rejection email - they
+    // don't know they need to fix and resubmit their application.
+    const { data: rejActs, error: rjErr } = await admin
+      .from('admin_actions')
+      .select('target_profile_id')
+      .eq('action_type', 'rejected')
+      .gte('created_at', WINDOW_START)
+      .lt('created_at', WINDOW_END);
+    if (rjErr) return jsonResponse({ error: rjErr.message }, req, 500);
+    const rejectedIds = [
+      ...new Set(
+        (rejActs ?? [])
+          .map((a) => (a as { target_profile_id: string | null }).target_profile_id)
+          .filter((x): x is string => !!x && !approvedIds.includes(x))
+      ),
+    ];
+    for (const pid of rejectedIds) {
+      const label = await labelFor(pid);
+      if (await hasSentEmail(pid, 'registration_rejected')) {
+        results.push({ label, email_type: 'registration_rejected', outcome: 'already sent - skipped' });
+        continue;
+      }
+      const { data: profRow } = await admin
+        .from('profiles')
+        .select('rejection_reason, status')
+        .eq('id', pid)
+        .maybeSingle();
+      if (!profRow || profRow.status !== 'rejected') {
+        results.push({ label, email_type: 'registration_rejected', outcome: 'no longer rejected - skipped' });
+        continue;
+      }
+      const r = await dispatchEmail(admin, {
+        type: 'registration_rejected',
+        recipientProfileId: pid,
+        extra_data: { reason: (profRow.rejection_reason as string | null) ?? 'See your application for details.' },
+      });
+      results.push({
+        label,
+        email_type: 'registration_rejected',
         outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
       });
     }
