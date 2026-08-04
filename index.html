@@ -13,10 +13,157 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
       rel="stylesheet"
     />
-    <title>Vanik Matrimonial Register</title>
+    <title>Vanik Matrimonial Register - Hindu &amp; Jain Introductions UK</title>
+    <meta
+      name="description"
+      content="A private, not-for-profit matrimonial introduction service for Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years. Membership £10 a year."
+    />
+    <link rel="canonical" href="https://matrimonial.vanikcouncil.uk/" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Vanik Matrimonial Register" />
+    <meta property="og:title" content="Vanik Matrimonial Register - Hindu & Jain Introductions UK" />
+    <meta
+      property="og:description"
+      content="A private, not-for-profit matrimonial introduction service for Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years."
+    />
+    <meta property="og:url" content="https://matrimonial.vanikcouncil.uk/" />
+    <meta property="og:locale" content="en_GB" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Vanik Matrimonial Register - Hindu & Jain Introductions UK" />
+    <meta
+      name="twitter:description"
+      content="A private, not-for-profit matrimonial introduction service for Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years."
+    />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": ["Organization", "NGO"],
+          "@id": "https://matrimonial.vanikcouncil.uk/#organization",
+          "name": "Vanik Council",
+          "url": "https://matrimonial.vanikcouncil.uk/",
+          "email": "matrimonial@vanikcouncil.uk",
+          "logo": "https://matrimonial.vanikcouncil.uk/favicon.svg",
+          "description": "Vanik Council is a UK community organisation. Its volunteers run the Vanik Matrimonial Register, a not-for-profit matrimonial introduction service for Hindu and Jain families that has been running for over 40 years.",
+          "areaServed": {
+            "@type": "Country",
+            "name": "United Kingdom"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://matrimonial.vanikcouncil.uk/#website",
+          "url": "https://matrimonial.vanikcouncil.uk/",
+          "name": "Vanik Matrimonial Register",
+          "publisher": { "@id": "https://matrimonial.vanikcouncil.uk/#organization" },
+          "inLanguage": "en-GB"
+        },
+        {
+          "@type": "Service",
+          "@id": "https://matrimonial.vanikcouncil.uk/#service",
+          "name": "Vanik Matrimonial Register",
+          "serviceType": "Matrimonial introduction service",
+          "provider": { "@id": "https://matrimonial.vanikcouncil.uk/#organization" },
+          "areaServed": {
+            "@type": "Country",
+            "name": "United Kingdom"
+          },
+          "audience": {
+            "@type": "Audience",
+            "audienceType": "Hindu and Jain families seeking marriage introductions"
+          },
+          "description": "A private matrimonial introduction service for Hindu and Jain families. Every profile is verified by volunteers before it appears, contact details are only shared inside the member dashboard on request, and nothing is displayed publicly. The service is not-for-profit, shows no advertising and does not sell data.",
+          "offers": {
+            "@type": "Offer",
+            "name": "Annual membership",
+            "price": "10.00",
+            "priceCurrency": "GBP",
+            "url": "https://matrimonial.vanikcouncil.uk/register",
+            "description": "Annual membership of the Vanik Matrimonial Register, payable by card when you register."
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://matrimonial.vanikcouncil.uk/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Who can join the Vanik Matrimonial Register?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Membership is open to adults aged 18 and over from Hindu and Jain families. The register is run by Vanik Council volunteers in the UK and has helped families find respectful introductions for over 40 years."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How much does membership cost?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Annual membership is £10, payable by card when you register. The register is a not-for-profit service run by the community, for the community - there is no advertising and data is never sold."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How long does it take to be approved?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Every application is reviewed by the volunteer team, including proof of identity, within 10 working days. Once approved you can browse verified profiles and request introductions from your dashboard."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is my information kept private?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Contact details are shared only inside your member dashboard when you ask for them, and nothing is ever displayed publicly. Every profile is verified before it appears, and the service does not sell data or show advertising."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do introductions work?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Once approved, you browse verified profiles and save anyone you would like to know more about. You can then request contact details and view them in your dashboard - up to three at a time, with fair weekly and monthly limits to keep things balanced."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I see profiles before registering?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. You can browse a preview of profiles at matrimonial.vanikcouncil.uk/demo before you decide to register. Full profiles, saved lists and contact requests are available to approved members."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main style="max-width: 640px; margin: 48px auto; padding: 0 16px; font-family: sans-serif">
+        <h1>Vanik Matrimonial Register</h1>
+        <p>
+          A private introduction service for Hindu and Jain families, run by Vanik Council
+          volunteers, helping families find respectful introductions for over 40 years.
+          Annual membership is £10. Contact details are shared only inside the member
+          dashboard and nothing is displayed publicly.
+        </p>
+        <p>
+          This site requires JavaScript. Questions? Email
+          <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
+        </p>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

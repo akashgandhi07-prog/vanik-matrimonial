@@ -111,6 +111,66 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* FAQ */}
+        <section className="landing-section layout-max" aria-labelledby="landing-faq-title">
+          <header className="landing-section-head">
+            <p className="landing-eyebrow">Common questions</p>
+            <h2 id="landing-faq-title">Frequently asked questions</h2>
+          </header>
+          <div className="landing-faq">
+            <details className="landing-faq-item">
+              <summary>Who can join the Vanik Matrimonial Register?</summary>
+              <p>
+                Membership is open to adults aged 18 and over from Hindu and Jain
+                families. The register is run by Vanik Council volunteers in the UK and
+                has helped families find respectful introductions for over 40 years.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>How much does membership cost?</summary>
+              <p>
+                Annual membership is £10, payable by card when you register. The register
+                is a not-for-profit service run by the community, for the community -
+                there is no advertising and data is never sold.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>How long does it take to be approved?</summary>
+              <p>
+                Every application is reviewed by the volunteer team, including proof of
+                identity, within 10 working days. Once approved you can browse verified
+                profiles and request introductions from your dashboard.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>Is my information kept private?</summary>
+              <p>
+                Yes. Contact details are shared only inside your member dashboard when
+                you ask for them, and nothing is ever displayed publicly. Every profile
+                is verified before it appears, and the service does not sell data or
+                show advertising.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>How do introductions work?</summary>
+              <p>
+                Once approved, you browse verified profiles and save anyone you would
+                like to know more about. You can then request contact details and view
+                them in your dashboard - up to three at a time, with fair weekly and
+                monthly limits to keep things balanced.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>Can I see profiles before registering?</summary>
+              <p>
+                Yes. You can <Link to="/demo">browse a preview of profiles</Link> before
+                you decide to register. Full profiles, saved lists and contact requests
+                are available to approved members.
+              </p>
+            </details>
+          </div>
+        </section>
+
         {/* REASSURANCE / CLOSING */}
         <section className="landing-closing layout-max">
           <div className="landing-closing-card">

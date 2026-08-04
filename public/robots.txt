@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /reset-password
+Disallow: /forgot-password
+Disallow: /verify-email-success
+Disallow: /registration-pending
+Disallow: /registration-rejected
+Disallow: /membership-expired
+Disallow: /renew-membership
+Disallow: /feedback/
+Disallow: /app-feedback
+Disallow: /bff/
+
+Sitemap: https://matrimonial.vanikcouncil.uk/sitemap.xml

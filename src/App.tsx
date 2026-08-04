@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { RouteMeta } from './components/RouteMeta';
 import { SessionProvider } from './components/SessionContext';
 import { SiteHeader } from './components/SiteHeader';
 import AdminAddMember from './pages/admin/AdminAddMember';
@@ -65,6 +66,7 @@ export default function App() {
     <BrowserRouter>
       <SessionProvider>
         <AuthHashRedirect>
+          <RouteMeta />
           <SiteHeader />
           <Routes>
             <Route path="/" element={<Landing />} />

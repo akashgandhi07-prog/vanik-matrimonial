@@ -705,6 +705,63 @@ button.public-nav-link--button:hover {
   color: var(--color-text-secondary);
 }
 
+/* FAQ */
+.landing-faq {
+  display: grid;
+  gap: 12px;
+  max-width: 46rem;
+}
+
+.landing-faq-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.landing-faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 44px 16px 20px;
+  position: relative;
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.landing-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.landing-faq-item summary::after {
+  content: '+';
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--color-accent-hover);
+  transition: transform 0.15s ease;
+}
+
+.landing-faq-item[open] summary::after {
+  content: '\2212';
+}
+
+.landing-faq-item p {
+  margin: 0;
+  padding: 0 20px 18px;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--color-text-secondary);
+}
+
+.landing-faq-item a {
+  color: var(--color-accent-hover);
+}
+
 /* Closing reassurance */
 .landing-closing {
   padding-bottom: clamp(40px, 6vw, 72px);
