@@ -58,7 +58,7 @@ export default function AdminSettings() {
   async function runTempFixEmails() {
     if (
       !window.confirm(
-        'Send the missed 2 Aug emails now? Approval emails go to the members approved that day, and the registration confirmation to the applicant. Anyone already emailed is skipped.'
+        'Send the catch-up emails now? This re-sends every approval, rejection, and registration confirmation blocked during the 2-4 Aug outage, and sends older rejected applicants a one-time "still open - fix and resubmit" nudge. Anyone already emailed is skipped.'
       )
     ) {
       return;
@@ -273,7 +273,7 @@ export default function AdminSettings() {
             disabled={tempFixBusy}
             onClick={() => void runTempFixEmails()}
           >
-            {tempFixBusy ? 'Sending…' : 'Send missed 2 Aug emails'}
+            {tempFixBusy ? 'Sending…' : 'Send catch-up emails (outage re-sends + rejected nudges)'}
           </button>
           {tempFixError && (
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--color-danger)' }}>{tempFixError}</p>
