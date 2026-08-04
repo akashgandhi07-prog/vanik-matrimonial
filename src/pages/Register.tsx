@@ -709,7 +709,6 @@ export default function Register() {
         reference_number?: string;
       };
       sessionStorage.setItem('vmr_pending_email', session.user.email);
-      if (res.reference_number) sessionStorage.setItem('vmr_pending_ref', res.reference_number);
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(REFERRAL_LS_KEY);
       window.location.href = '/registration-pending';

@@ -18,7 +18,6 @@ function daysSinceRegistered(createdAt: string | null): number | null {
 export default function RegistrationPending() {
   const navigate = useNavigate();
   const [email, setEmail] = useState(() => sessionStorage.getItem('vmr_pending_email') ?? '');
-  const [ref, setRef] = useState(() => sessionStorage.getItem('vmr_pending_ref') ?? '');
   const [checking, setChecking] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [statusNote, setStatusNote] = useState<string | null>(null);
@@ -57,14 +56,6 @@ export default function RegistrationPending() {
       if (u.email) setEmail(u.email);
 
       const lite = await fetchMyProfileStatusLite(u.id);
-      if (lite?.reference_number) {
-        setRef(lite.reference_number);
-        try {
-          sessionStorage.setItem('vmr_pending_ref', lite.reference_number);
-        } catch {
-          /* ignore */
-        }
-      }
 
       const next = pathForMemberStatus(lite?.status ?? null);
       if (next && next !== '/registration-pending') {
@@ -113,11 +104,6 @@ export default function RegistrationPending() {
             There&apos;s nothing else you need to do for now - we&apos;ll email you once your membership has been
             approved (or if we need anything further). Look in junk or spam too in case our message was filtered there.
           </p>
-          {ref && (
-            <p style={{ marginTop: '1rem' }}>
-              Your reference number is <strong>{ref}</strong>. You may wish to save it for your records.
-            </p>
-          )}
           <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, marginTop: '1.25rem' }}>
             If you were approved recently, this page updates when you return to the tab or within about a minute -
             or use <strong>Check status</strong> below.
