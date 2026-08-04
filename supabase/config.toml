@@ -122,3 +122,6 @@ verify_jwt = false
 
 [functions.log-client-error]
 verify_jwt = false
+
+[functions.brevo-webhook]
+verify_jwt = false

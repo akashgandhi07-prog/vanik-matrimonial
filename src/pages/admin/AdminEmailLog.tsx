@@ -13,6 +13,17 @@ type LogRow = {
   failure_detail: string | null;
 };
 
+const STATUS_STYLE: Record<string, { color: string; label: string }> = {
+  delivered: { color: 'var(--color-success)', label: 'Delivered' },
+  sent: { color: 'var(--color-text-secondary)', label: 'Sent (awaiting delivery info)' },
+  deferred: { color: 'var(--color-warning)', label: 'Deferred (retrying)' },
+  bounced: { color: 'var(--color-danger)', label: 'Bounced' },
+  blocked: { color: 'var(--color-danger)', label: 'Blocked' },
+  spam: { color: 'var(--color-danger)', label: 'Marked spam' },
+  failed: { color: 'var(--color-danger)', label: 'Failed to send' },
+  skipped: { color: 'var(--color-text-secondary)', label: 'Skipped' },
+};
+
 export default function AdminEmailLog() {
   const [rows, setRows] = useState<LogRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -48,16 +59,28 @@ export default function AdminEmailLog() {
     }
   }
 
+  const counts = rows.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + 1;
+    return acc;
+  }, {});
+  const problems = (counts.bounced ?? 0) + (counts.blocked ?? 0) + (counts.spam ?? 0) + (counts.failed ?? 0);
+
   return (
     <div>
       <h1>Email log</h1>
       {error && <p style={{ color: 'var(--color-danger)', marginBottom: 16 }}>{error}</p>}
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-        Configure Resend webhooks to POST to your deployed Edge Function{' '}
-        <code style={{ fontSize: 13 }}>/functions/v1/resend-webhook</code>. In local dev, Vite proxies{' '}
-        <code style={{ fontSize: 13 }}>/api/resend-webhook</code> to the same function (requires a tunnel such as
-        ngrok for Resend to reach your machine).
+        Delivery statuses come from Brevo: <strong>Delivered</strong> means it reached the recipient&apos;s mail
+        server; <strong>Sent</strong> means it was accepted but no delivery confirmation has arrived yet.
       </p>
+      {rows.length > 0 && (
+        <p style={{ fontSize: 14, marginBottom: 14 }}>
+          Last {rows.length} emails:{' '}
+          <strong style={{ color: 'var(--color-success)' }}>{counts.delivered ?? 0} delivered</strong> ·{' '}
+          {counts.sent ?? 0} awaiting info · {counts.deferred ?? 0} retrying ·{' '}
+          <strong style={{ color: problems > 0 ? 'var(--color-danger)' : undefined }}>{problems} problems</strong>
+        </p>
+      )}
       <div className="table-scroll">
         <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>
           <thead>
@@ -66,7 +89,7 @@ export default function AdminEmailLog() {
               <th style={{ textAlign: 'left', padding: 8 }}>Type</th>
               <th style={{ textAlign: 'left', padding: 8 }}>To</th>
               <th style={{ textAlign: 'left', padding: 8 }}>Status</th>
-              <th style={{ textAlign: 'left', padding: 8 }}>Resend ID</th>
+              <th style={{ textAlign: 'left', padding: 8 }}>Message ID</th>
               <th style={{ textAlign: 'left', padding: 8 }} />
             </tr>
           </thead>
@@ -77,7 +100,9 @@ export default function AdminEmailLog() {
                 <td style={{ padding: 8 }}>{r.email_type}</td>
                 <td style={{ padding: 8 }}>{r.recipient_email ?? '-'}</td>
                 <td style={{ padding: 8 }}>
-                  {r.status}
+                  <span style={{ color: STATUS_STYLE[r.status]?.color, fontWeight: 600 }}>
+                    {STATUS_STYLE[r.status]?.label ?? r.status}
+                  </span>
                   {r.failure_detail && (
                     <span style={{ display: 'block', fontSize: 12, color: 'var(--color-danger)' }}>
                       {r.failure_detail.slice(0, 120)}
