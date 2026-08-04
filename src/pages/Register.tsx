@@ -705,9 +705,7 @@ export default function Register() {
         consent_privacy_terms: form.consent_privacy,
         consent_mobile_own: form.consent_mobile_own,
       };
-      const res = (await invokeFunction('submit-registration', payload)) as {
-        reference_number?: string;
-      };
+      await invokeFunction('submit-registration', payload);
       sessionStorage.setItem('vmr_pending_email', session.user.email);
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(REFERRAL_LS_KEY);
