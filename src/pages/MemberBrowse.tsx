@@ -149,7 +149,17 @@ export default function MemberBrowse() {
   /** Members in this browse list who have already requested ME - we are introduced. */
   const requesterIds = useMemo(() => new Set(requestersOfMe.map((r) => r.id)), [requestersOfMe]);
 
-  const filtered = useMemo(() => {
+  /** Everyone whose contact details this member already has, in either direction. */
+  const introducedIds = useMemo(() => {
+    const ids = new Set(requestedCandidateIds);
+    for (const id of requesterIds) ids.add(id);
+    return ids;
+  }, [requestedCandidateIds, requesterIds]);
+
+  /** Prominent scope filter: everyone / already have details / not yet introduced. */
+  const [browseScope, setBrowseScope] = useState<'all' | 'introduced' | 'new'>('all');
+
+  const attributeFiltered = useMemo(() => {
     if (!profile) return [];
     const { ageRange, dietF, religionF, heightRange, sort } = appliedFilters;
     let rows = candidates.filter((c) => {
@@ -172,6 +182,18 @@ export default function MemberBrowse() {
     return rows;
   }, [profile, candidates, appliedFilters, requestedCandidateIds]);
 
+  const scopeCounts = useMemo(() => {
+    let introduced = 0;
+    for (const c of attributeFiltered) if (introducedIds.has(c.id)) introduced += 1;
+    return { all: attributeFiltered.length, introduced, fresh: attributeFiltered.length - introduced };
+  }, [attributeFiltered, introducedIds]);
+
+  const filtered = useMemo(() => {
+    if (browseScope === 'introduced') return attributeFiltered.filter((c) => introducedIds.has(c.id));
+    if (browseScope === 'new') return attributeFiltered.filter((c) => !introducedIds.has(c.id));
+    return attributeFiltered;
+  }, [attributeFiltered, browseScope, introducedIds]);
+
   const filtersActive = useMemo(() => {
     const defaults = defaultFilters();
     return (
@@ -187,6 +209,7 @@ export default function MemberBrowse() {
     const defaults = defaultFilters();
     setDraftFilters(defaults);
     setAppliedFilters(cloneFilters(defaults));
+    setBrowseScope('all');
   }
 
   function applyFilters() {
@@ -697,6 +720,32 @@ export default function MemberBrowse() {
       </div>
 
       <section className="member-browse-grid">
+        {introducedIds.size > 0 && (
+          <div
+            role="group"
+            aria-label="Filter by introduction status"
+            style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}
+          >
+            {(
+              [
+                ['all', `Everyone (${scopeCounts.all})`],
+                ['introduced', `Already have their details (${scopeCounts.introduced})`],
+                ['new', `Not yet introduced (${scopeCounts.fresh})`],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`btn ${browseScope === value ? 'btn-primary' : 'btn-secondary'}`}
+                aria-pressed={browseScope === value}
+                style={{ padding: '8px 14px', fontSize: 13 }}
+                onClick={() => setBrowseScope(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="member-browse-result-line">
           <span>
             {refreshing ? (
