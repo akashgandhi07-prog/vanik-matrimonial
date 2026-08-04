@@ -57,19 +57,21 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="admin-layout">
+    <>
       {emailProblems > 0 && (
         <div
           role="alert"
           style={{
+            width: '100%',
             background: 'rgba(185,28,28,0.08)',
-            border: '1px solid rgba(185,28,28,0.35)',
+            borderBottom: '1px solid rgba(185,28,28,0.35)',
             color: 'var(--color-danger)',
-            padding: '10px 16px',
+            padding: '10px 20px',
             fontSize: 14,
             display: 'flex',
             gap: 12,
             alignItems: 'center',
+            justifyContent: 'center',
             flexWrap: 'wrap',
           }}
         >
@@ -81,6 +83,7 @@ export default function AdminLayout() {
           </NavLink>
         </div>
       )}
+    <div className="admin-layout">
       {!wide && (
         <div className="admin-mobile-bar">
           <strong className="admin-mobile-title">Admin</strong>
@@ -211,5 +214,6 @@ export default function AdminLayout() {
         <Outlet />
       </main>
     </div>
+    </>
   );
 }
