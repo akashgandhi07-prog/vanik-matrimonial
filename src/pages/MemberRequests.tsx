@@ -370,15 +370,9 @@ export default function MemberRequests() {
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
                         {r.full_name || r.first_name}
-                        {r.reference_number ? (
-                          <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>
-                            {' '}
-                            ({r.reference_number})
-                          </span>
-                        ) : null}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>
-                        Requested you on {new Date(r.requested_at).toLocaleDateString('en-GB')}
+                        Requested your details on {new Date(r.requested_at).toLocaleDateString('en-GB')}
                       </div>
                       {r.mobile ? (
                         <div style={{ marginTop: 4, fontSize: 13 }}>

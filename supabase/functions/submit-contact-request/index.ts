@@ -343,7 +343,7 @@ Deno.serve(async (req) => {
         .map(
           (c) =>
             `<div style="margin:14px 0;padding:12px 14px;border:1px solid #e8e1d6;border-radius:10px;">
-              <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong>${c.reference_number ? ` (${escapeHtml(c.reference_number)})` : ''}</p>
+              <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong></p>
               ${c.mobile ? `<p style="margin:0;"><strong>Mobile:</strong> ${escapeHtml(c.mobile)}</p>` : ''}
               ${c.father_name ? `<p style="margin:4px 0 0;font-size:13px;">Father: ${escapeHtml(c.father_name)}</p>` : ''}
               ${c.mother_name ? `<p style="margin:4px 0 0;font-size:13px;">Mother: ${escapeHtml(c.mother_name)}</p>` : ''}
@@ -375,7 +375,6 @@ Deno.serve(async (req) => {
             recipientProfileId: cid,
             extraData: {
               requester_name: requesterName || requester.first_name,
-              requester_ref: requester.reference_number ?? '',
               requester_age: requester.age != null ? String(requester.age) : '',
             },
           });

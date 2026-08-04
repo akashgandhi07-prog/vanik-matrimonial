@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     return jsonResponse({
       valid: true,
       magic: true,
-      candidate_label: `${stripHtml(String(cand?.first_name ?? ''), 60)} (${stripHtml(String(cand?.reference_number ?? ''), 20)})`,
+      candidate_label: stripHtml(String(cand?.first_name ?? ''), 60),
     }, req);
   }
 

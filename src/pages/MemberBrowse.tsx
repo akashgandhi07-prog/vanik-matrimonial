@@ -819,7 +819,7 @@ export default function MemberBrowse() {
               const blocked = requestedCandidateIds.has(c.id);
               const requestedMe = requesterIds.has(c.id);
               const note = requestedMe ? (
-                'Has requested you - you already have each other’s details.'
+                'Has requested your details - you already have each other’s contact details.'
               ) : blocked ? (
                 'Opens their card in My requests (photo and contact details).'
               ) : feedbackBlocking ? (

@@ -113,11 +113,10 @@ Deno.serve(async (req) => {
           .select('reference_number, first_name')
           .eq('id', cid)
           .single();
-        const ref = stripHtml(String(cand?.reference_number ?? cid), 20);
-        const nm = stripHtml(String(cand?.first_name ?? ''), 60);
+        const nm = stripHtml(String(cand?.first_name ?? ''), 60) || 'this member';
         const url = `${publicSiteBaseUrl()}/feedback/${rid}/${cid}?token=${token}`;
         linkParts.push(
-          `<p style="margin:12px 0;"><a href="${url}">Feedback for ${nm} (${ref})</a></p>`
+          `<p style="margin:12px 0;"><a href="${url}">Feedback for ${nm}</a></p>`
         );
       }
 

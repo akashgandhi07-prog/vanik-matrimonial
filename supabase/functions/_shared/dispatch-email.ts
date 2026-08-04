@@ -331,11 +331,10 @@ export async function dispatchEmail(
       if (!profile) return { ok: false, error: 'Profile not found' };
       const ex = extraData as Record<string, unknown>;
       const reqName = stripHtml(String(ex.requester_name ?? ''), 120);
-      const reqRef = stripHtml(String(ex.requester_ref ?? ''), 20);
       const reqAge = stripHtml(String(ex.requester_age ?? ''), 8);
       subject = `${reqName} has requested your details - Vanik Matrimonial Register`;
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqRef ? ` (${escapeHtmlEmail(reqRef)})` : ''}${reqAge ? `, age ${escapeHtmlEmail(reqAge)},` : ''} has requested your details through the register. They have received your contact details and may be in touch.</p>
+        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqAge ? `, age ${escapeHtmlEmail(reqAge)},` : ''} has requested your details through the register. They have received your contact details and may be in touch.</p>
         <p>Sign in to see their full profile, photos, and contact details under <strong>My requests &gt; Requested your details</strong>, so you can get in touch from your side too.</p>
         <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">View their full profile</a></p>
         <p>If you have any concerns about this introduction, contact us at <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
