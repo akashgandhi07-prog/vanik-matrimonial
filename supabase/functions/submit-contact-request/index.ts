@@ -349,7 +349,6 @@ Deno.serve(async (req) => {
         .join('');
 
       const requesterEmail = stripHtml(String(reqPriv?.email ?? ''), 200);
-      const requesterMobile = stripHtml(String(reqPriv?.mobile_phone ?? ''), 40);
       const requesterProfileId = requester.id;
       const candidateIds = [...ids];
       runAfterResponse('introduction emails', async () => {
