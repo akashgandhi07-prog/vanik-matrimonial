@@ -2419,21 +2419,36 @@ Deno.serve(async (req) => {
     }, req);
   }
 
-  // Lightweight signal for the admin banner: anything that failed to send or
-  // failed to deliver in the last 48 hours.
+  // Signal for the admin banner: UNRESOLVED failures in the last 48 hours.
+  // A failure followed by a later successful send of the same email type to
+  // the same recipient (e.g. via Temp Fix or the Resend button) is resolved
+  // and no longer counts - the banner should clear once the admin has acted.
   if (action === 'email_health') {
     const cutoff = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
-    const [failed, undelivered] = await Promise.all([
-      admin.from('email_log').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('sent_at', cutoff),
-      admin
-        .from('email_log')
-        .select('id', { count: 'exact', head: true })
-        .in('status', ['bounced', 'blocked', 'spam'])
-        .gte('sent_at', cutoff),
-    ]);
-    if (failed.error) return jsonResponse({ error: failed.error.message }, req, 500);
-    if (undelivered.error) return jsonResponse({ error: undelivered.error.message }, req, 500);
-    return jsonResponse({ failed: failed.count ?? 0, undelivered: undelivered.count ?? 0 }, req);
+    const { data: rows, error: ehErr } = await admin
+      .from('email_log')
+      .select('recipient_email, email_type, status, sent_at')
+      .gte('sent_at', cutoff)
+      .order('sent_at', { ascending: true })
+      .limit(2000);
+    if (ehErr) return jsonResponse({ error: ehErr.message }, req, 500);
+    const all = (rows ?? []) as { recipient_email: string | null; email_type: string; status: string; sent_at: string }[];
+    const okStatuses = new Set(['sent', 'delivered']);
+    const resolvedLater = (p: (typeof all)[number]) =>
+      all.some(
+        (r) =>
+          r.recipient_email === p.recipient_email &&
+          r.email_type === p.email_type &&
+          okStatuses.has(r.status) &&
+          r.sent_at > p.sent_at
+      );
+    let failedCount = 0;
+    let undeliveredCount = 0;
+    for (const r of all) {
+      if (r.status === 'failed' && !resolvedLater(r)) failedCount += 1;
+      else if (['bounced', 'blocked', 'spam'].includes(r.status) && !resolvedLater(r)) undeliveredCount += 1;
+    }
+    return jsonResponse({ failed: failedCount, undelivered: undeliveredCount }, req);
   }
 
   if (action === 'list_email_log') {
