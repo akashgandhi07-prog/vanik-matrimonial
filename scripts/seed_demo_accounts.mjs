@@ -8,7 +8,7 @@
  * Downloads stock portrait images (randomuser.me CDN), uploads to bucket `profile-photos`.
  *
  * Usage: node scripts/seed_demo_accounts.mjs
- * Env:   SEED_DEMO_PASSWORD (default: VanikDemo2026!)
+ * Env:   SEED_DEMO_PASSWORD (required unless SEED_DEMO_PHOTOS_ONLY; no default - never commit a real password)
  *       SEED_DEMO_PHOTOS_ONLY=1  - only uploads profile photos for existing vanik-demo-* accounts (pairs with DB migration seed).
  */
 
@@ -41,9 +41,19 @@ loadEnvFile();
 
 const supabaseUrl = process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim();
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const demoPassword = process.env.SEED_DEMO_PASSWORD?.trim() || 'VanikDemo2026!';
+const demoPassword = process.env.SEED_DEMO_PASSWORD?.trim() || '';
 const photosOnly =
   process.env.SEED_DEMO_PHOTOS_ONLY === '1' || process.env.SEED_DEMO_PHOTOS_ONLY === 'true';
+
+// Creating accounts needs a password; the photos-only pass does not. Never fall back
+// to a hardcoded default - that is exactly how a real credential ends up committed.
+if (!photosOnly && !demoPassword) {
+  console.error(
+    'Missing SEED_DEMO_PASSWORD. Set it to a strong, non-committed value before seeding demo accounts.\n' +
+      'Example: export SEED_DEMO_PASSWORD="$(openssl rand -base64 18)" && npm run seed:demo'
+  );
+  process.exit(1);
+}
 
 if (!supabaseUrl || !serviceKey) {
   console.error(
