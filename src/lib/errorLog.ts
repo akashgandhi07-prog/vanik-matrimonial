@@ -30,6 +30,10 @@ export function reportError(
   message?: string,
 ): void {
   console.error(`[${code}] ${area}`, message ?? '', detail);
+  // Local development must not pollute the production error log (or trigger
+  // admin alert emails) - the console line above is enough for a developer.
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  if (host === 'localhost' || host === '127.0.0.1') return;
   void (async () => {
     try {
       const token = await getAccessToken().catch(() => null);
