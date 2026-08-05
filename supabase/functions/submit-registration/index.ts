@@ -346,7 +346,16 @@ Deno.serve(async (req) => {
     }
 
     if (couponValid && couponRaw !== prevCouponCode) {
-      await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+      const { data: claimed, error: incErr } = await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+      if (claimed === false) {
+        // Coupon exhausted by a concurrent registration. A resubmission never gates
+        // on payment and is already saved, so we keep it - but drop the unearned
+        // coupon so approval does not grant its benefit over the limit.
+        await admin.from('member_private').update({ coupon_used: null }).eq('profile_id', profileId);
+        console.warn('coupon exhausted on resubmit; coupon dropped', { code: couponRaw, profileId });
+      } else if (incErr) {
+        console.warn('coupon claim errored on resubmit; proceeding', { code: couponRaw, profileId, error: incErr.message });
+      }
     }
   } else {
     const { data: insProfile, error: pErr } = await admin
@@ -394,7 +403,27 @@ Deno.serve(async (req) => {
     referenceNumber = refResult as string;
 
     if (couponValid) {
-      await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+      const { data: claimed, error: incErr } = await admin.rpc('increment_coupon_use', { p_code: couponRaw });
+      if (claimed === false) {
+        // Lost the race for the last coupon slot: the coupon is now exhausted.
+        // Payment was skipped on the strength of this coupon (paymentRequired is
+        // false when couponValid), so granting the membership would be a free,
+        // over-limit redemption. Roll back the rows we just created - nothing
+        // external references them yet and there is no Stripe session on the
+        // coupon path - and ask the applicant to pay or use another code.
+        await admin.from('profile_photos').delete().eq('profile_id', profileId);
+        await admin.from('member_private').delete().eq('profile_id', profileId);
+        await admin.from('profiles').delete().eq('id', profileId);
+        return jsonResponse({
+          error: 'This coupon has just reached its usage limit. Please complete payment or use a different code.',
+          code: 'COUPON_LIMIT_REACHED',
+        }, req, 409);
+      }
+      if (incErr) {
+        // Ambiguous: the claim may or may not have applied. Do not fail a saved
+        // registration on a transient error; surface it for the manual approval step.
+        console.warn('coupon claim errored; leaving for manual approval', { code: couponRaw, profileId, error: incErr.message });
+      }
     }
 
     if (stripeCheckoutSessionId) {

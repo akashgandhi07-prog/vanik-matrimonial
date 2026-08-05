@@ -60,8 +60,12 @@ function collectAllowedOrigins(): Set<string> {
 
 function originAllowed(origin: string, allowed: Set<string>): boolean {
   if (allowed.has(origin)) return true;
-  // Allow Vercel preview/production subdomains unless explicitly disabled.
-  if (envFlag('CORS_ALLOW_VERCEL', true) && isVercelOrigin(origin)) return true;
+  // The blanket "*.vercel.app" reflection is OFF by default: any attacker can deploy
+  // to a *.vercel.app host, so reflecting all of them defeats CORS on authed
+  // endpoints. Real production runs on the custom domain (already in the explicit
+  // allowlist). Opt back in with CORS_ALLOW_VERCEL=1, or list specific preview
+  // origins via CORS_ALLOWED_ORIGINS, when a Vercel preview genuinely needs access.
+  if (envFlag('CORS_ALLOW_VERCEL', false) && isVercelOrigin(origin)) return true;
   return false;
 }
 

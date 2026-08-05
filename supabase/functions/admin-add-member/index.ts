@@ -105,8 +105,6 @@ Deno.serve(async (req) => {
       diet: body.diet ? String(body.diet) : null,
       hobbies: body.hobbies ? String(body.hobbies) : null,
       future_settlement_plans: body.future_settlement_plans ? String(body.future_settlement_plans) : null,
-      father_name: body.father_name ? String(body.father_name) : null,
-      mother_name: body.mother_name ? String(body.mother_name) : null,
       membership_expires_at: membershipExpiresAt,
       hidden_reason: listed ? null : 'admin',
     })
@@ -129,9 +127,11 @@ Deno.serve(async (req) => {
     date_of_birth: body.date_of_birth ? String(body.date_of_birth) : null,
     surname: body.surname ? String(body.surname) : null,
     home_address_line1: body.home_address_line1 ? String(body.home_address_line1) : null,
-    city: body.city ? String(body.city) : null,
-    postcode: body.postcode ? String(body.postcode) : null,
-    country: body.country ? String(body.country) : 'UK',
+    home_address_city: body.city ? String(body.city) : null,
+    home_address_postcode: body.postcode ? String(body.postcode) : null,
+    home_address_country: body.country ? String(body.country) : 'UK',
+    father_name: body.father_name ? String(body.father_name) : null,
+    mother_name: body.mother_name ? String(body.mother_name) : null,
   });
 
   if (privateErr) {

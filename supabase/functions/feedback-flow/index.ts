@@ -82,8 +82,17 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'missing_fields' }, req, 400);
   }
 
-  const notes = stripHtml(String(body.notes ?? ''), 4000);
-  const is_flagged = !!body.is_flagged;
+  // Validate the enum answers against the values the feedback CHECK constraints
+  // allow, rather than trusting arbitrary client strings.
+  if (!['yes', 'no', 'no_response'].includes(made_contact)) {
+    return jsonResponse({ error: 'invalid_made_contact' }, req, 400);
+  }
+  if (!['yes', 'no', 'unsure'].includes(recommend_retain)) {
+    return jsonResponse({ error: 'invalid_recommend_retain' }, req, 400);
+  }
+
+  const notes = stripHtml(String(body.notes ?? ''), 2000);
+  const is_flagged = body.is_flagged === true;
 
   let requesterId: string | null = null;
   let tokenRowId: string | null = null;
@@ -162,8 +171,17 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Profile not found' }, req, 400);
     }
     const myId = prof.id as string;
-    const { data: rq } = await admin.from('requests').select('requester_id').eq('id', requestId).single();
+    const { data: rq } = await admin
+      .from('requests')
+      .select('requester_id, candidate_ids')
+      .eq('id', requestId)
+      .single();
     if (!rq || (rq.requester_id as string) !== myId) {
+      return jsonResponse({ error: 'forbidden' }, req, 403);
+    }
+    // Bind the client-supplied candidate to this request: the caller may only leave
+    // feedback on a candidate that was actually part of their request.
+    if (!(((rq.candidate_ids as string[] | null) ?? []).includes(candidateId as string))) {
       return jsonResponse({ error: 'forbidden' }, req, 403);
     }
     requesterId = myId;

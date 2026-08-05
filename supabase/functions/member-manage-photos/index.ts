@@ -22,6 +22,20 @@ function indexFromUnknown(v: unknown): number {
   return n;
 }
 
+async function verifyObjectExists(
+  admin: ReturnType<typeof createClient>,
+  bucket: string,
+  path: string
+): Promise<boolean> {
+  const parts = path.split('/');
+  const name = parts.pop();
+  const folder = parts.join('/');
+  if (!name) return false;
+  const { data, error } = await admin.storage.from(bucket).list(folder, { limit: 200 });
+  if (error || !data?.length) return false;
+  return data.some((o) => o.name === name);
+}
+
 function sortByPosition(rows: ProfilePhotoRow[]): ProfilePhotoRow[] {
   return [...rows].sort((a, b) => a.position - b.position);
 }
@@ -65,13 +79,15 @@ Deno.serve(async (req) => {
 
   const { data: profile, error: profileErr } = await admin
     .from('profiles')
-    .select('id, auth_user_id')
+    .select('id, auth_user_id, gender')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
   if (profileErr || !profile?.id) {
     return jsonResponse({ error: 'Profile required' }, req, 403);
   }
   const profileId = profile.id as string;
+  const authUserId = userData.user.id;
+  const gender = profile.gender === 'Female' ? 'Female' : 'Male';
 
   let body: Record<string, unknown>;
   try {
@@ -96,6 +112,15 @@ Deno.serve(async (req) => {
   if (action === 'add') {
     const storagePath = sanitizePath(body.storage_path);
     if (!storagePath) return jsonResponse({ error: 'storage_path required' }, req, 400);
+    // Only accept an object the caller uploaded under their own prefix, and confirm it
+    // actually exists in the bucket - never trust an arbitrary client-supplied path.
+    const expectedPhotoPrefix = `${gender}/${authUserId}/`;
+    if (!storagePath.startsWith(expectedPhotoPrefix)) {
+      return jsonResponse({ error: 'Upload path is invalid for this account.' }, req, 400);
+    }
+    if (!(await verifyObjectExists(admin, 'profile-photos', storagePath))) {
+      return jsonResponse({ error: 'Upload not found' }, req, 400);
+    }
     if (currentRows.length >= MAX_PHOTOS) {
       return jsonResponse({ error: 'You can upload up to 3 photos.' }, req, 400);
     }

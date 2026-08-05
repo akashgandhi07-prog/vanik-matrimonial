@@ -1229,6 +1229,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'manage_feedback') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot manage feedback' }, req, 403);
+    }
     const kind = body.kind === 'website' ? 'website' : 'introduction';
     const op =
       body.op === 'archive' || body.op === 'delete' || body.op === 'restore' ? body.op : null;
@@ -2182,6 +2185,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'set_contact_request_bonuses') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot change contact request bonuses' }, req, 403);
+    }
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
     const parseBonus = (v: unknown): number | null => {
@@ -2517,6 +2523,9 @@ Deno.serve(async (req) => {
 
   /** Trigger a cron edge function using CRON_SECRET (browser cannot safely send x-cron-secret). */
   if (action === 'run_cron_job') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot run cron jobs' }, req, 403);
+    }
     const allowed = new Set([
       'send-feedback-reminders',
       'send-renewal-reminders',
@@ -2804,6 +2813,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'set_internal_note') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot edit internal notes' }, req, 403);
+    }
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     const noteBody = stripHtml(String(body.note ?? ''), 20000);
     if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
@@ -2858,6 +2870,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'resend_member_email') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot resend member emails' }, req, 403);
+    }
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     const template = typeof body.template === 'string' ? body.template : '';
     const allowed = new Set([
@@ -2911,6 +2926,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'send_pending_reminders') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot send reminders' }, req, 403);
+    }
     const ids = Array.isArray(body.profile_ids) ? body.profile_ids.filter((x): x is string => typeof x === 'string') : [];
     if (ids.length === 0 || ids.length > 40) {
       return jsonResponse({ error: 'profile_ids array required (max 40)' }, req, 400);

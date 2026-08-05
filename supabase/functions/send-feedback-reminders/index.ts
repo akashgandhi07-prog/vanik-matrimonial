@@ -73,7 +73,10 @@ Deno.serve(async (req) => {
           .from('feedback')
           .select('id', { count: 'exact', head: true })
           .eq('request_id', rid)
-          .eq('candidate_id', cid);
+          .eq('candidate_id', cid)
+          // Only forward feedback the requester WROTE clears the reminder -
+          // reverse feedback written about them must not suppress it.
+          .eq('direction', 'requester_on_candidate');
         if ((count ?? 0) === 0) outstanding.push(cid);
       }
       if (outstanding.length === 0) continue;
