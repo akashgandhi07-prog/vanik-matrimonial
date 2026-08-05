@@ -180,7 +180,7 @@ async function fetchAllFilteredProfileRows(admin: any, f: string, selectCols: st
     } else if (f !== 'all') return { rows: [], error: 'Invalid filter' };
 
     q = f === 'pending'
-      ? q.order('created_at', { ascending: true })
+      ? q.order('pending_since', { ascending: true, nullsFirst: true })
       : q.order('created_at', { ascending: false });
 
     const { data, error } = await q.range(offset, offset + ADMIN_PROFILE_PAGE_SIZE - 1);

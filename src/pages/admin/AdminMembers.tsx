@@ -26,6 +26,8 @@ type Profile = {
   pending_photo_url: string | null;
   photo_status: string;
   created_at: string;
+  /** When the profile last entered pending_approval (resubmits reset it); null on rows predating the column. */
+  pending_since?: string | null;
 };
 
 const FILTERS = [
@@ -61,9 +63,9 @@ function fmtDate(iso: string | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function daysWaiting(createdAt: string | undefined): number | null {
-  if (!createdAt) return null;
-  const t = new Date(createdAt).getTime();
+function daysWaiting(pendingSince: string | null | undefined): number | null {
+  if (!pendingSince) return null;
+  const t = new Date(pendingSince).getTime();
   if (Number.isNaN(t)) return null;
   return Math.max(0, Math.floor((Date.now() - t) / 864e5));
 }
@@ -572,7 +574,7 @@ export default function AdminMembers() {
             {!loading &&
               filteredMembers.map((m) => {
                 const prev = pendingPreviews[m.id];
-                const wait = daysWaiting(m.created_at);
+                const wait = daysWaiting(m.pending_since ?? m.created_at);
                 const thumbStyle: CSSProperties = {
                   width: 56,
                   height: 56,
