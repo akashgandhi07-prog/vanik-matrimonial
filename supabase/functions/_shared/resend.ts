@@ -48,6 +48,7 @@ export async function sendResendEmail(
 export function letterHtml(title: string, innerHtml: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
 <body style="margin:0;padding:0;background:#f5f1ea;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.65;color:#1c2230;">
+  <div style="display:none;font-size:1px;color:#f5f1ea;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">${title}</div>
   <div style="padding:32px 16px;">
     <div style="max-width:560px;margin:0 auto;">
       <div style="background:#7b2e3b;border-radius:14px 14px 0 0;padding:22px 32px;text-align:center;">
