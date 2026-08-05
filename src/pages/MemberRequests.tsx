@@ -101,7 +101,39 @@ export default function MemberRequests() {
     toggleBookmark,
     requestersOfMe,
     reverseFeedbackKeys,
+    archivedRequests,
+    loadAll,
   } = useMemberArea();
+  const [archiveBusy, setArchiveBusy] = useState<string | null>(null);
+
+  /** Only for entries whose feedback is already recorded; otherwise the UI
+   *  routes through the feedback form with ?archive=1. */
+  async function archiveDirect(requestId: string, direction: 'made' | 'received') {
+    if (!profile) return;
+    setArchiveBusy(`${direction}:${requestId}`);
+    const { error } = await supabase.from('member_archived_requests').insert({
+      member_id: profile.id,
+      request_id: requestId,
+      direction,
+    });
+    if (error) console.warn('archive request:', error.message);
+    else await loadAll();
+    setArchiveBusy(null);
+  }
+
+  async function restoreArchived(requestId: string, direction: 'made' | 'received') {
+    if (!profile) return;
+    setArchiveBusy(`${direction}:${requestId}`);
+    const { error } = await supabase
+      .from('member_archived_requests')
+      .delete()
+      .eq('member_id', profile.id)
+      .eq('request_id', requestId)
+      .eq('direction', direction);
+    if (error) console.warn('restore archived:', error.message);
+    else await loadAll();
+    setArchiveBusy(null);
+  }
   const [tab, setTab] = useState<'mine' | 'interested'>('mine');
 
   useEffect(() => {
@@ -324,8 +356,16 @@ export default function MemberRequests() {
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-              {requestersOfMe.map((r) => {
+              {[...requestersOfMe]
+                .sort((a, b) => {
+                  // Archived entries sit beneath the active ones.
+                  const aArch = archivedRequests.received.has(a.request_id) ? 1 : 0;
+                  const bArch = archivedRequests.received.has(b.request_id) ? 1 : 0;
+                  return aArch - bArch;
+                })
+                .map((r) => {
                 const wa = r.mobile ? whatsappUrlFromPhone(r.mobile) : null;
+                const isArchived = archivedRequests.received.has(r.request_id);
                 const openProfile = () =>
                   setSelectedProfile({
                     profile: r,
@@ -341,7 +381,8 @@ export default function MemberRequests() {
                       padding: 10,
                       borderRadius: 10,
                       border: '1px solid var(--color-border)',
-                      background: 'var(--color-surface)',
+                      background: isArchived ? 'var(--color-surface-muted)' : 'var(--color-surface)',
+                      opacity: isArchived ? 0.75 : 1,
                       cursor: 'pointer',
                     }}
                     onClick={openProfile}
@@ -370,6 +411,11 @@ export default function MemberRequests() {
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
                         {r.full_name || r.first_name}
+                        {isArchived && (
+                          <span className="badge badge-muted" style={{ marginLeft: 8, fontWeight: 500, fontSize: 11 }}>
+                            Archived
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>
                         Requested your details on {new Date(r.requested_at).toLocaleDateString('en-GB')}
@@ -429,6 +475,36 @@ export default function MemberRequests() {
                             title="Admin-only feedback about this member. Reviewed by the register team and never shown to them. Entirely optional."
                           >
                             Give admin-only feedback
+                          </Link>
+                        )}
+                        {isArchived ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={archiveBusy === `received:${r.request_id}`}
+                            onClick={() => void restoreArchived(r.request_id, 'received')}
+                          >
+                            Restore
+                          </button>
+                        ) : reverseFeedbackKeys.has(r.request_id) ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                            disabled={archiveBusy === `received:${r.request_id}`}
+                            onClick={() => void archiveDirect(r.request_id, 'received')}
+                          >
+                            Archive
+                          </button>
+                        ) : (
+                          <Link
+                            to={`/feedback/${r.request_id}/${r.id}?direction=received&archive=1`}
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}
+                            title="Give brief admin-only feedback, then this introduction moves to the bottom of your list."
+                          >
+                            Feedback &amp; archive
                           </Link>
                         )}
                       </div>
@@ -605,25 +681,44 @@ export default function MemberRequests() {
             <th style={{ padding: 8 }}>Date</th>
             <th style={{ padding: 8 }}>Candidates</th>
             <th style={{ padding: 8 }}>Feedback</th>
+            <th style={{ padding: 8, width: 96 }} />
           </tr>
         </thead>
         <tbody>
-          {requests.map((r) => {
+          {[...requests]
+            .sort((a, b) => {
+              // Archived requests sit beneath the active ones.
+              const aArch = archivedRequests.made.has(a.id) ? 1 : 0;
+              const bArch = archivedRequests.made.has(b.id) ? 1 : 0;
+              return aArch - bArch;
+            })
+            .map((r) => {
             const candidateIds = Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [];
             const allFeedbackGiven = candidateIds.every((cid) =>
               feedbackKeys.has(`${r.id}:${cid}`)
             );
+            const isArchived = archivedRequests.made.has(r.id);
             const contacts = contactsByRequest[r.id] ?? [];
             return (
               <tr
                 key={r.id}
                 style={{
                   borderBottom: '1px solid var(--color-border)',
-                  background: allFeedbackGiven ? undefined : 'rgba(217, 119, 6, 0.04)',
+                  background: isArchived
+                    ? 'var(--color-surface-muted)'
+                    : allFeedbackGiven
+                      ? undefined
+                      : 'rgba(217, 119, 6, 0.04)',
+                  opacity: isArchived ? 0.75 : 1,
                 }}
               >
                 <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
                   {new Date(r.created_at).toLocaleDateString('en-GB')}
+                  {isArchived && (
+                    <span className="badge badge-muted" style={{ display: 'block', marginTop: 4, fontSize: 11 }}>
+                      Archived
+                    </span>
+                  )}
                 </td>
                 <td style={{ padding: 8, minWidth: 0 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -800,6 +895,36 @@ export default function MemberRequests() {
                       );
                     })}
                   </ul>
+                </td>
+                <td style={{ padding: 8, verticalAlign: 'top' }}>
+                  {isArchived ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      disabled={archiveBusy === `made:${r.id}`}
+                      onClick={() => void restoreArchived(r.id, 'made')}
+                    >
+                      Restore
+                    </button>
+                  ) : allFeedbackGiven ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      disabled={archiveBusy === `made:${r.id}`}
+                      onClick={() => void archiveDirect(r.id, 'made')}
+                    >
+                      Archive
+                    </button>
+                  ) : (
+                    <span
+                      style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}
+                      title="Give feedback for everyone in this request first, then you can archive it."
+                    >
+                      Feedback needed to archive
+                    </span>
+                  )}
                 </td>
               </tr>
             );

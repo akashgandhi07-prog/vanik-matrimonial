@@ -95,6 +95,8 @@ type MemberCtx = {
   requestersOfMe: RequesterOfMeRow[];
   /** request_ids for which the signed-in member has given feedback about their requester. */
   reverseFeedbackKeys: Set<string>;
+  /** request_ids this member archived, by direction ("made" / "received"). */
+  archivedRequests: { made: Set<string>; received: Set<string> };
   notice: { type: 'error' | 'success'; text: string } | null;
   clearNotice: () => void;
   loadAll: () => Promise<void>;
@@ -133,6 +135,10 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
   const [requestersOfMe, setRequestersOfMe] = useState<RequesterOfMeRow[]>([]);
   const [reverseFeedbackKeys, setReverseFeedbackKeys] = useState<Set<string>>(new Set());
+  const [archivedRequests, setArchivedRequests] = useState<{ made: Set<string>; received: Set<string> }>({
+    made: new Set(),
+    received: new Set(),
+  });
   const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
@@ -390,6 +396,24 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           );
         }
 
+        const { data: archRows, error: archErr } = await supabase
+          .from("member_archived_requests")
+          .select("request_id, direction")
+          .eq("member_id", myId);
+        if (archErr) {
+          console.warn("archived requests query:", archErr.message);
+          setArchivedRequests({ made: new Set(), received: new Set() });
+        } else {
+          const made = new Set<string>();
+          const received = new Set<string>();
+          for (const r of archRows ?? []) {
+            const id = r.request_id as string;
+            if ((r.direction as string) === "received") received.add(id);
+            else made.add(id);
+          }
+          setArchivedRequests({ made, received });
+        }
+
         // Mutual introductions: who has requested me. Best-effort - an
         // unapplied migration must not break the dashboard.
         const { data: reqOfMe, error: reqOfMeErr } = await supabase.rpc(
@@ -476,6 +500,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setFeedbackKeys(new Set());
         setRequestersOfMe([]);
         setReverseFeedbackKeys(new Set());
+        setArchivedRequests({ made: new Set(), received: new Set() });
         navigate("/", { replace: true });
       }
     });
@@ -530,6 +555,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       feedbackKeys,
       requestersOfMe,
       reverseFeedbackKeys,
+      archivedRequests,
       notice,
       clearNotice: () => setNotice(null),
       loadAll,
@@ -549,6 +575,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       feedbackKeys,
       requestersOfMe,
       reverseFeedbackKeys,
+      archivedRequests,
       notice,
       loadAll,
       toggleBookmark,

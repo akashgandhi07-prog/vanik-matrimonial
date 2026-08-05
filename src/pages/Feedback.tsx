@@ -21,7 +21,12 @@ export default function Feedback() {
   const token = searchParams.get('token');
   /** 'received' = feedback about the member who requested YOU (mutual introductions). */
   const isReceivedDirection = searchParams.get('direction') === 'received';
-  const nextPath = `/feedback/${requestId}/${candidateId}${isReceivedDirection ? '?direction=received' : ''}`;
+  /** Feedback was opened from an Archive action: archive the entry once submitted. */
+  const archiveAfter = searchParams.get('archive') === '1';
+  const nextParams = [isReceivedDirection ? 'direction=received' : '', archiveAfter ? 'archive=1' : '']
+    .filter(Boolean)
+    .join('&');
+  const nextPath = `/feedback/${requestId}/${candidateId}${nextParams ? `?${nextParams}` : ''}`;
 
   const [loading, setLoading] = useState(true);
   const [validMagic, setValidMagic] = useState(false);
@@ -88,6 +93,23 @@ export default function Feedback() {
         },
         token ? null : tok
       );
+      if (archiveAfter && requestId) {
+        // Best-effort: the feedback is saved either way, and the member can
+        // archive again from the list if this fails.
+        const { data: me } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('auth_user_id', s.session?.user?.id ?? '')
+          .maybeSingle();
+        if (me?.id) {
+          const { error: archErr } = await supabase.from('member_archived_requests').insert({
+            member_id: me.id as string,
+            request_id: requestId,
+            direction: isReceivedDirection ? 'received' : 'made',
+          });
+          if (archErr) console.warn('archive after feedback:', archErr.message);
+        }
+      }
       setDone(true);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Submit failed');
@@ -147,10 +169,16 @@ export default function Feedback() {
       <div className="layout-max" style={{ maxWidth: 480, marginTop: 48 }}>
         <div className="card">
           <h1>Thank you</h1>
-          <p>Your feedback has been recorded.</p>
+          <p>
+            Your feedback has been recorded.
+            {archiveAfter ? ' This introduction has been moved to your archived list.' : ''}
+          </p>
           {(sessionOk || token) && (
-            <Link to="/dashboard/browse" className="btn btn-primary">
-              Back to dashboard
+            <Link
+              to={archiveAfter ? '/dashboard/requests' : '/dashboard/browse'}
+              className="btn btn-primary"
+            >
+              {archiveAfter ? 'Back to my requests' : 'Back to dashboard'}
             </Link>
           )}
         </div>
