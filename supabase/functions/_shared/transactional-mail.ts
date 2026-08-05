@@ -6,15 +6,42 @@ import { sendResendEmail, type EmailPayload } from './resend.ts';
 // "BadResource at TlsConn.close"). Those never pass through a try/catch and
 // would otherwise kill the whole worker - the gateway then returns 502/503 to
 // the browser even though the function's DB writes already committed
-// (observed in production on 2026-08-02). Swallow them at the event-loop
-// level so a mail failure can never crash the function.
+// (observed in production on 2026-08-02). Swallow ONLY that specific teardown
+// crash at the event-loop level so a mail failure can never crash the function.
+// Every other unhandled error must still surface - suppressing them all would
+// mask unrelated bugs in any function that transitively imports this module.
+function isDenomailerTeardownCrash(reason: unknown): boolean {
+  const msg =
+    reason instanceof Error
+      ? `${reason.name}: ${reason.message}`
+      : typeof reason === 'string'
+        ? reason
+        : reason && typeof reason === 'object' && 'message' in reason
+          ? String((reason as { message: unknown }).message)
+          : String(reason ?? '');
+  // Signatures documented above: the datamode write failure and the follow-on
+  // BadResource raised while denomailer closes the TLS connection.
+  return /while in datamode/i.test(msg) || /BadResource/i.test(msg) || /TlsConn/i.test(msg);
+}
+
 globalThis.addEventListener('unhandledrejection', (ev) => {
-  console.error('transactional-mail: suppressed unhandled rejection:', ev.reason);
-  ev.preventDefault();
+  if (isDenomailerTeardownCrash(ev.reason)) {
+    console.error('transactional-mail: suppressed denomailer SMTP teardown crash:', ev.reason);
+    ev.preventDefault();
+    return;
+  }
+  // Not the known mail crash - log it but let it surface so real bugs are not hidden.
+  console.error('transactional-mail: passing through unhandled rejection:', ev.reason);
 });
 globalThis.addEventListener('error', (ev) => {
-  console.error('transactional-mail: suppressed uncaught error:', ev.error ?? ev.message);
-  ev.preventDefault();
+  const reason = ev.error ?? ev.message;
+  if (isDenomailerTeardownCrash(reason)) {
+    console.error('transactional-mail: suppressed denomailer SMTP teardown crash:', reason);
+    ev.preventDefault();
+    return;
+  }
+  // Not the known mail crash - log it but let it surface so real bugs are not hidden.
+  console.error('transactional-mail: passing through uncaught error:', reason);
 });
 
 const SMTP_SEND_TIMEOUT_MS = 25_000;
@@ -85,19 +112,81 @@ export function transactionalMailMissingReason(): string {
   return `Edge sees smtp_user=${s.smtp_user_present} smtp_pass=${s.smtp_pass_present} resend=${s.resend_present} (functions project host: ${s.edge_supabase_host ?? 'unknown'}). If the dashboard shows SMTP secrets but this is false, your browser app may be calling a different Supabase project; check VITE_SUPABASE_URL matches that host.`;
 }
 
-/** Base64 body with 76-char lines; avoids denomailer's quoted-printable (=20 before line breaks). */
-function htmlToBase64MimeBody(html: string): string {
-  const bytes = new TextEncoder().encode(html);
-  let binary = '';
+/**
+ * Brevo's click/open-tracking rewriter (cannot be disabled on our plan)
+ * re-serializes the HTML part without re-escaping literal `=`, so after a
+ * client decodes its quoted-printable output, any `=` followed by two hex
+ * digits in the raw HTML becomes a stray byte ("width=device-width" ->
+ * "width\xDEvice-width"; observed 5 Aug 2026). `&#61;` renders identically
+ * in text and quoted attribute values but survives the rewrite. Only `=`
+ * followed by 2 hex chars is armored, so markup `="` stays untouched.
+ */
+export function armorEqualsHexForBrevo(html: string): string {
+  return html.replace(/=(?=[0-9A-Fa-f]{2})/g, '&#61;');
+}
+
+/**
+ * RFC 2045 quoted-printable body, encoded by us. Both library options are
+ * broken: denomailer's QP encoder never applies its `=` escaping (the
+ * `replaceAll` result is discarded), and its pre-encoded base64 path is
+ * mangled by Brevo's tracking rewriter (the first 76-char line of the body
+ * is swallowed and no rewrite happens; observed 5 Aug 2026). Brevo parses
+ * and re-serializes correctly-encoded QP parts.
+ */
+export function htmlToQuotedPrintableBody(html: string): string {
+  const bytes = new TextEncoder().encode(html.replace(/\r\n|\r|\n/g, '\r\n'));
+  let out = '';
+  let line = '';
+  const encodeTrailingWhitespace = () => {
+    if (line.endsWith(' ')) line = `${line.slice(0, -1)}=20`;
+    else if (line.endsWith('\t')) line = `${line.slice(0, -1)}=09`;
+  };
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+    const b = bytes[i]!;
+    if (b === 13 && bytes[i + 1] === 10) {
+      encodeTrailingWhitespace();
+      out += `${line}\r\n`;
+      line = '';
+      i++;
+      continue;
+    }
+    let tok: string;
+    if (b === 9) {
+      tok = '\t';
+    } else if (b === 61 || b < 32 || b > 126) {
+      tok = `=${b.toString(16).toUpperCase().padStart(2, '0')}`;
+    } else if (b === 46 && line.length === 0) {
+      // Leading "." must not reach SMTP DATA unescaped (denomailer does not
+      // dot-stuff); "=2E" is equivalent and always safe.
+      tok = '=2E';
+    } else {
+      tok = String.fromCharCode(b);
+    }
+    if (line.length + tok.length > 75) {
+      out += `${line}=\r\n`;
+      line = '';
+      if (tok === '.') tok = '=2E';
+    }
+    line += tok;
   }
-  const raw = btoa(binary);
-  const lines: string[] = [];
-  for (let i = 0; i < raw.length; i += 76) {
-    lines.push(raw.slice(i, i + 76));
+  encodeTrailingWhitespace();
+  return out + line;
+}
+
+/**
+ * Explicit TLS opt-in for non-465 ports. Returns true/false when SMTP_TLS or
+ * SMTP_SECURE is set to a recognised boolean, null when neither is set, and
+ * throws on an unrecognised value so a typo can never be read as "plaintext".
+ */
+function readExplicitTlsSetting(): boolean | null {
+  for (const key of ['SMTP_TLS', 'SMTP_SECURE'] as const) {
+    const raw = Deno.env.get(key)?.trim().toLowerCase();
+    if (raw === undefined || raw === '') continue;
+    if (['1', 'true', 'yes', 'on'].includes(raw)) return true;
+    if (['0', 'false', 'no', 'off'].includes(raw)) return false;
+    throw new Error(`Invalid ${key}="${raw}": expected a boolean (true/false).`);
   }
-  return lines.join('\r\n');
+  return null;
 }
 
 async function sendViaSmtp(
@@ -107,7 +196,24 @@ async function sendViaSmtp(
   const pass = readSmtpPass()!;
   const host = Deno.env.get('SMTP_HOST')?.trim() || 'smtp.gmail.com';
   const port = Number(Deno.env.get('SMTP_PORT') || '587');
-  const tls = port === 465;
+  // Port 465 is implicit TLS - the current production path (Brevo) and always
+  // encrypted; it must keep working exactly as before. For any other port, TLS
+  // has to be declared explicitly via SMTP_TLS/SMTP_SECURE: we refuse to guess,
+  // because a silent plaintext fallback would send the SMTP credentials in the
+  // clear. We do NOT attempt STARTTLS on 587 - the denomailer version in use
+  // cannot upgrade a plaintext connection reliably.
+  let tls: boolean;
+  if (port === 465) {
+    tls = true;
+  } else {
+    const explicit = readExplicitTlsSetting();
+    if (explicit === null) {
+      throw new Error(
+        `SMTP_PORT=${port} is not the implicit-TLS port 465. Set SMTP_TLS (or SMTP_SECURE) to true or false to declare whether this connection is encrypted; refusing to send SMTP credentials over an undeclared connection.`
+      );
+    }
+    tls = explicit;
+  }
   const fromEmail = Deno.env.get('SMTP_FROM_EMAIL')?.trim() || user;
   const fromName = Deno.env.get('SMTP_FROM_NAME')?.trim() || 'Vanik Matrimonial Register';
   const replyTo = Deno.env.get('SMTP_REPLY_TO')?.trim();
@@ -132,8 +238,8 @@ async function sendViaSmtp(
         mimeContent: [
           {
             mimeType: 'text/html; charset="utf-8"',
-            content: htmlToBase64MimeBody(payload.html),
-            transferEncoding: 'base64',
+            content: htmlToQuotedPrintableBody(armorEqualsHexForBrevo(payload.html)),
+            transferEncoding: 'quoted-printable',
           },
         ],
         ...(replyTo ? { replyTo } : {}),
