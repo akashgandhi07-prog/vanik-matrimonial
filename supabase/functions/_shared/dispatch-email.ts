@@ -339,8 +339,8 @@ export async function dispatchEmail(
         <p>It has been a little while since you signed in, and the register keeps growing.</p>
         ${
           newCount > 0
-            ? `<p><strong>${newCount} new ${newCount === 1 ? 'profile has' : 'profiles have'}</strong> joined since your last visit. Have a browse and see who is new.</p>`
-            : '<p>New members join regularly, so it is worth a look whenever you have a moment.</p>'
+            ? `<p><strong>${newCount} new ${newCount === 1 ? 'profile' : 'profiles'}</strong> matching who you are looking for ${newCount === 1 ? 'has' : 'have'} joined since your last visit, and you have not asked about ${newCount === 1 ? 'them' : 'any of them'} yet.</p>`
+            : ''
         }
         ${
           waiting > 0

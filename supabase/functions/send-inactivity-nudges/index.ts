@@ -50,25 +50,53 @@ Deno.serve(async (req) => {
     // admin-hidden members should not be told to come back and browse.
     const { data: profiles, error } = await admin
       .from('profiles')
-      .select('id, auth_user_id, created_at, inactivity_nudge_sent_at, membership_expires_at')
-      .eq('status', 'active')
-      .is('hidden_reason', null);
+      .select(
+        'id, auth_user_id, gender, seeking_gender, created_at, inactivity_nudge_sent_at, membership_expires_at, status, hidden_reason'
+      );
     if (error) {
       await finish('error', { error: error.message });
       return jsonResponse({ error: error.message }, req, 500);
     }
 
-    const candidates = (profiles ?? []).filter((p) => {
-      const row = p as { membership_expires_at: string | null; inactivity_nudge_sent_at: string | null };
-      if (!row.membership_expires_at || new Date(row.membership_expires_at) <= new Date()) return false;
-      if (row.inactivity_nudge_sent_at && row.inactivity_nudge_sent_at > repeatCutoff) return false;
-      return true;
-    }) as {
+    type ProfileRow = {
       id: string;
       auth_user_id: string | null;
+      gender: string | null;
+      seeking_gender: string | null;
       created_at: string;
       inactivity_nudge_sent_at: string | null;
+      membership_expires_at: string | null;
+      status: string;
+      hidden_reason: string | null;
+    };
+    const allProfiles = (profiles ?? []) as ProfileRow[];
+    /** Profiles a member could actually see in Browse today. */
+    const browsable = allProfiles.filter(
+      (p) =>
+        p.status === 'active' &&
+        p.hidden_reason == null &&
+        !!p.membership_expires_at &&
+        new Date(p.membership_expires_at) > new Date()
+    );
+
+    // Requests are used twice: to skip candidates the member already asked
+    // about, and to count people waiting for them.
+    const { data: requestRows, error: rqErr } = await admin
+      .from('requests')
+      .select('requester_id, candidate_ids, created_at');
+    if (rqErr) {
+      await finish('error', { error: rqErr.message });
+      return jsonResponse({ error: rqErr.message }, req, 500);
+    }
+    const allRequests = (requestRows ?? []) as {
+      requester_id: string | null;
+      candidate_ids: string[] | null;
+      created_at: string;
     }[];
+
+    const candidates = browsable.filter(
+      (p) => !(p.inactivity_nudge_sent_at && p.inactivity_nudge_sent_at > repeatCutoff)
+    );
 
     // Last sign-in lives in auth.users.
     const lastSignIn = new Map<string, string | null>();
@@ -95,26 +123,41 @@ Deno.serve(async (req) => {
       // "you have not been back" note would be confusing. Skip.
       if (!seenAt) continue;
       if (seenAt > inactiveCutoff) continue;
-      eligible++;
 
-      const [{ count: newProfiles }, { count: waitingRequests }] = await Promise.all([
-        admin
-          .from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'active')
-          .is('hidden_reason', null)
-          .neq('id', p.id)
-          .gt('created_at', seenAt),
-        admin
-          .from('requests')
-          .select('id', { count: 'exact', head: true })
-          .contains('candidate_ids', [p.id]),
-      ]);
+      // Who this member is actually shown in Browse.
+      const seeking = p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female');
+      // Everyone they have already asked about: those are not "new to you".
+      const alreadyRequested = new Set<string>();
+      for (const r of allRequests) {
+        if (r.requester_id !== p.id) continue;
+        for (const cid of r.candidate_ids ?? []) alreadyRequested.add(cid);
+      }
+
+      const newProfiles = browsable.filter(
+        (c) =>
+          c.id !== p.id &&
+          (seeking === 'Both' || c.gender === seeking) &&
+          c.created_at > seenAt &&
+          !alreadyRequested.has(c.id)
+      ).length;
+
+      // People who asked for their details since they were last here, deduped
+      // by requester so two requests from one person count once.
+      const newRequesters = new Set<string>();
+      for (const r of allRequests) {
+        if (!r.requester_id || r.created_at <= seenAt) continue;
+        if ((r.candidate_ids ?? []).includes(p.id)) newRequesters.add(r.requester_id);
+      }
+      const waitingRequests = newRequesters.size;
+
+      // Nothing new to come back for: stay quiet rather than send a hollow nudge.
+      if (newProfiles === 0 && waitingRequests === 0) continue;
+      eligible++;
 
       const r = await dispatchEmail(admin, {
         type: 'inactivity_nudge',
         recipientProfileId: p.id,
-        extraData: { new_profiles: newProfiles ?? 0, waiting_requests: waitingRequests ?? 0 },
+        extraData: { new_profiles: newProfiles, waiting_requests: waitingRequests },
       });
       if (!r.ok) {
         errors.push(`${p.id}: ${r.error ?? 'send failed'}`);
