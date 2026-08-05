@@ -18,6 +18,13 @@ additional_redirect_urls = [
 ]
 
 [auth.email]
+# SECURITY NOTE: signup is open and email confirmation is off, so anyone can obtain an
+# authenticated session before verifying an email or paying. That is by design for the
+# registration/verification flow and is NOT the trust boundary: browse access and PII
+# exposure are gated entirely by RLS and the service-role edge functions (a fresh auth
+# user has no active profile, and members can no longer self-insert one - see
+# 20260805170000_lock_down_member_table_inserts.sql). Do not "harden" by disabling
+# signup or enabling confirmations here; that risks breaking live registration.
 enable_confirmations = false
 max_frequency = "1m0s"
 otp_length = 8
