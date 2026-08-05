@@ -20,6 +20,8 @@ type Profile = {
   age: number | null;
   membership_expires_at: string | null;
   last_request_at: string | null;
+  /** From auth.users; null if the member has never signed in. */
+  last_sign_in_at?: string | null;
   photo_url: string | null;
   pending_photo_url: string | null;
   photo_status: string;
@@ -520,6 +522,7 @@ export default function AdminMembers() {
               <th style={{ padding: 8, width: 52, whiteSpace: 'nowrap' }}>Age</th>
               <th style={{ padding: 8, width: 128, whiteSpace: 'nowrap' }}>Status</th>
               <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Expires</th>
+              <th style={{ padding: 8, width: 100, whiteSpace: 'nowrap' }}>Last login</th>
               <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Last request</th>
               <th style={{ padding: 8, width: 110, whiteSpace: 'nowrap' }}>Notes</th>
               <th style={{ padding: 8, width: 98, whiteSpace: 'nowrap' }}>Actions</th>
@@ -649,6 +652,28 @@ export default function AdminMembers() {
                       )}
                     </td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.membership_expires_at)}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        if (!m.last_sign_in_at) {
+                          return <span style={{ color: 'var(--color-text-secondary)' }}>Never</span>;
+                        }
+                        const days = Math.floor(
+                          (Date.now() - new Date(m.last_sign_in_at).getTime()) / 864e5
+                        );
+                        const stale = m.status === 'active' && days >= 14;
+                        return (
+                          <span
+                            style={{ color: stale ? 'var(--color-warning)' : undefined, fontWeight: stale ? 600 : undefined }}
+                            title={new Date(m.last_sign_in_at).toLocaleString('en-GB')}
+                          >
+                            {fmtDate(m.last_sign_in_at)}
+                            <span style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
+                              {days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`}
+                            </span>
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.last_request_at)}</td>
                     <td style={{ padding: 8 }}>
                       {m.pending_photo_url && (

@@ -24,6 +24,7 @@ export type EmailType =
   | 'account_freeze_reminder'
   | 'introduction_received'
   | 'rejection_followup'
+  | 'inactivity_nudge'
   | 'website_feedback_submission';
 
 function escapeHtmlEmail(s: string): string {
@@ -325,6 +326,30 @@ export async function dispatchEmail(
         <p><a href="${dash}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Sign in</a></p>
         <p>If you meant to stay hidden, you can ignore this email. Questions? <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
         <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'inactivity_nudge': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const ex = extraData as Record<string, unknown>;
+      const newCount = Number(ex.new_profiles ?? 0);
+      const waiting = Number(ex.waiting_requests ?? 0);
+      subject = 'New profiles are waiting on the Vanik Matrimonial Register';
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>It has been a little while since you signed in, and the register keeps growing.</p>
+        ${
+          newCount > 0
+            ? `<p><strong>${newCount} new ${newCount === 1 ? 'profile has' : 'profiles have'}</strong> joined since your last visit. Have a browse and see who is new.</p>`
+            : '<p>New members join regularly, so it is worth a look whenever you have a moment.</p>'
+        }
+        ${
+          waiting > 0
+            ? `<p>You also have <strong>${waiting} ${waiting === 1 ? 'person who has' : 'people who have'}</strong> requested your details waiting under <strong>My requests &gt; Requested your details</strong>.</p>`
+            : ''
+        }
+        <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Sign in and browse profiles</a></p>
+        <p>If you would rather not be visible for now, you can pause your profile any time under <strong>My profile</strong>.</p>
+        <p>With good wishes,<br/>The register team</p>`;
       break;
     }
     case 'rejection_followup': {

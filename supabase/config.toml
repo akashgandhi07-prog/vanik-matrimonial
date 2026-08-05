@@ -125,3 +125,6 @@ verify_jwt = false
 
 [functions.brevo-webhook]
 verify_jwt = false
+
+[functions.send-inactivity-nudges]
+verify_jwt = false

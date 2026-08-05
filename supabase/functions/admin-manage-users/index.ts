@@ -528,12 +528,29 @@ Deno.serve(async (req) => {
         }
       }
     }
+    // Last sign-in lives in auth.users, so pull it once and map by auth_user_id.
+    const lastSignInByAuthId = new Map<string, string | null>();
+    {
+      let page = 1;
+      const perPage = 1000;
+      for (;;) {
+        const { data, error: auErr } = await admin.auth.admin.listUsers({ page, perPage });
+        if (auErr) break;
+        const batch = data?.users ?? [];
+        for (const u of batch) {
+          lastSignInByAuthId.set(u.id, (u as { last_sign_in_at?: string | null }).last_sign_in_at ?? null);
+        }
+        if (batch.length < perPage) break;
+        page++;
+      }
+    }
     const profilesWithNames = profiles.map((p) => {
-      const row = p as { id: string; first_name?: string | null };
+      const row = p as { id: string; first_name?: string | null; auth_user_id?: string | null };
       const first = (row.first_name ?? '').trim();
       const surname = surnamesByProfile[row.id] ?? '';
       const full_name = `${first} ${surname}`.trim() || first;
-      return { ...p, full_name };
+      const last_sign_in_at = row.auth_user_id ? lastSignInByAuthId.get(row.auth_user_id) ?? null : null;
+      return { ...p, full_name, last_sign_in_at };
     });
     return jsonResponse(
       { profiles: profilesWithNames, emails, pending_previews: pendingPreviews },
@@ -2504,6 +2521,7 @@ Deno.serve(async (req) => {
       'send-feedback-reminders',
       'send-renewal-reminders',
       'send-account-freeze-reminders',
+      'send-inactivity-nudges',
       'expire-memberships',
       'archive-lapsed-members',
       'purge-archived-accounts',
