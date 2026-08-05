@@ -20,7 +20,8 @@ export default function AdminRequests() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchPage = useCallback(
-    async (pageNum: number, append: boolean) => {
+    async (pageNum: number, append: boolean, isActive?: () => boolean) => {
+      const active = () => isActive?.() ?? true;
       setLoading(true);
       setError(null);
       try {
@@ -29,6 +30,7 @@ export default function AdminRequests() {
           page: pageNum,
           page_size: PAGE_SIZE,
         })) as { requests?: RequestRow[]; names?: Record<string, string> };
+        if (!active()) return;
         const rows = (res.requests ?? []) as RequestRow[];
         setHasMore(rows.length === PAGE_SIZE);
         if (append) {
@@ -40,17 +42,22 @@ export default function AdminRequests() {
           setNames((prev) => ({ ...prev, ...res.names }));
         }
       } catch (e) {
+        if (!active()) return;
         setError(e instanceof Error ? e.message : 'Failed to load requests');
       } finally {
-        setLoading(false);
+        if (active()) setLoading(false);
       }
     },
     []
   );
 
   useEffect(() => {
+    let cancelled = false;
     setPage(1);
-    void fetchPage(1, false);
+    void fetchPage(1, false, () => !cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [fetchPage]);
 
   function loadMore() {

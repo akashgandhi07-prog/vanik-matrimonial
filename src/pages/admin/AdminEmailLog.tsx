@@ -27,6 +27,8 @@ const STATUS_STYLE: Record<string, { color: string; label: string }> = {
 export default function AdminEmailLog() {
   const [rows, setRows] = useState<LogRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Row id currently being resent, so its button disables and we avoid duplicate sends. */
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -47,6 +49,8 @@ export default function AdminEmailLog() {
   }, [load]);
 
   async function resend(r: LogRow) {
+    if (resendingId) return;
+    setResendingId(r.id);
     try {
       await invokeFunction('send-email', {
         type: r.email_type,
@@ -56,6 +60,8 @@ export default function AdminEmailLog() {
       void load();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -112,8 +118,13 @@ export default function AdminEmailLog() {
                 <td style={{ padding: 8, fontSize: 12 }}>{r.resend_message_id ?? '-'}</td>
                 <td style={{ padding: 8 }}>
                   {(r.status === 'failed' || r.status === 'bounced') && (
-                    <button type="button" className="btn btn-secondary" onClick={() => void resend(r)}>
-                      Resend
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={resendingId === r.id}
+                      onClick={() => void resend(r)}
+                    >
+                      {resendingId === r.id ? 'Resending…' : 'Resend'}
                     </button>
                   )}
                 </td>

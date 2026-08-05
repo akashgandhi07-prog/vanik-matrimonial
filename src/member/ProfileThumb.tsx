@@ -11,6 +11,9 @@ export function useProfilePhotoDisplayUrl(profileId: string, firstName: string, 
   const [signed, setSigned] = useState<string | null>(null);
 
   useEffect(() => {
+    // Reset so a reused instance never shows the previous profile's photo while
+    // the new signed URL is being fetched.
+    setSigned(null);
     if (!enabled) return;
     let alive = true;
     fetchPhotoSignedUrl(profileId).then((u) => {
@@ -31,6 +34,9 @@ export function useProfilePhotoDisplayUrls(profileId: string, firstName: string,
   const [signed, setSigned] = useState<string[] | null>(null);
 
   useEffect(() => {
+    // Reset so a reused instance never shows the previous profile's photos while
+    // the new signed URLs are being fetched.
+    setSigned(null);
     if (!enabled) return;
     let alive = true;
     fetchProfilePhotoSignedUrls(profileId).then((urls) => {
@@ -71,6 +77,9 @@ export function ProfileThumb({
   const alt = `${firstName}'s profile photo`;
 
   useEffect(() => {
+    // Reset so a reused instance never shows the previous profile's photo while
+    // the new signed URL is being fetched.
+    setSrc(null);
     if (anonymous || isControlled) return;
     let alive = true;
     fetchPhotoSignedUrl(profileId).then((u) => {

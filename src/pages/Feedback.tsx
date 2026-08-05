@@ -39,6 +39,7 @@ export default function Feedback() {
   const [notes, setNotes] = useState('');
   const [flagged, setFlagged] = useState(false);
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +77,10 @@ export default function Feedback() {
     e.preventDefault();
     setErr(null);
     if (!requestId || !candidateId) return;
+    // Guard against a double submit: with ?archive=1 a second run would insert a
+    // duplicate member_archived_requests row and error on the unique constraint.
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const { data: s } = await supabase.auth.getSession();
       const tok = s.session?.access_token ?? null;
@@ -113,6 +118,8 @@ export default function Feedback() {
       setDone(true);
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Submit failed');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -241,8 +248,8 @@ export default function Feedback() {
             Flag for admin review
           </label>
           {err && <p style={{ color: 'var(--color-danger)' }}>{err}</p>}
-          <button type="submit" className="btn btn-primary">
-            Submit feedback
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? 'Submitting…' : 'Submit feedback'}
           </button>
         </form>
       </div>

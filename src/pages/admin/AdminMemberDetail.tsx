@@ -178,15 +178,34 @@ export default function AdminMemberDetail() {
   >([]);
   const [extendMonths, setExtendMonths] = useState(1);
   const [extendBusy, setExtendBusy] = useState(false);
+  const [approveBusy, setApproveBusy] = useState(false);
+  const [rejectBusy, setRejectBusy] = useState(false);
+  const [matchBusy, setMatchBusy] = useState(false);
+  const [pendingPhotoBusy, setPendingPhotoBusy] = useState(false);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setSupportOnly(isSupportAdmin(data.user));
-    });
+    let cancelled = false;
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!cancelled) setSupportOnly(isSupportAdmin(data.user));
+      })
+      .catch(() => {
+        // Fail closed: if the role cannot be read, assume the most restricted
+        // (support-only) UI. Server-side checks remain the real gate regardless.
+        if (!cancelled) setSupportOnly(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!id || ok !== true || mfaOk !== true) return;
+    // Guard against a stale response for a previous `id` overwriting state: only
+    // the latest request may apply. Without this, member A's private data/ID doc
+    // could be shown while the URL says B, and actions would target the wrong person.
+    let cancelled = false;
     void (async () => {
       setDetailError(null);
       try {
@@ -213,6 +232,7 @@ export default function AdminMemberDetail() {
           };
           pause_feedback?: { reason: string; note: string | null; created_at: string }[];
         };
+        if (cancelled) return;
         if (!res.profile || !res.member_private) {
           setDetailError('Member not found or incomplete data.');
           setProfile(null);
@@ -242,6 +262,7 @@ export default function AdminMemberDetail() {
           Math.max(0, Math.min(50, Number(res.member_private.contact_request_monthly_bonus ?? 0)))
         );
       } catch (e) {
+        if (cancelled) return;
         setDetailError(e instanceof Error ? e.message : 'Failed to load member');
         setProfile(null);
         setPriv(null);
@@ -250,6 +271,9 @@ export default function AdminMemberDetail() {
         setContactQuota(null);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [id, ok, mfaOk, reloadKey]);
 
   async function removeMemberPhoto(photoId: string) {
@@ -1199,19 +1223,27 @@ export default function AdminMemberDetail() {
                     type="button"
                     className="btn btn-primary"
                     style={{ background: 'var(--color-success)' }}
+                    disabled={approveBusy}
                     onClick={async () => {
+                      setApproveBusy(true);
                       try {
                         await invokeFunction('admin-approve-member', { profile_id: profile.id });
                         // Back to the pending queue so the admin can move straight on.
                         navigate('/admin/members?filter=pending');
                       } catch (e) {
                         alert(e instanceof Error ? e.message : 'Failed');
+                        setApproveBusy(false);
                       }
                     }}
                   >
-                    Yes, approve
+                    {approveBusy ? 'Approving…' : 'Yes, approve'}
                   </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setConfirmApprove(false)}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={approveBusy}
+                    onClick={() => setConfirmApprove(false)}
+                  >
                     Cancel
                   </button>
                 </div>
@@ -1257,8 +1289,9 @@ export default function AdminMemberDetail() {
                 type="button"
                 className="btn btn-primary"
                 style={{ background: 'var(--color-danger)', marginTop: 8 }}
-                disabled={!rejectReason.trim()}
+                disabled={!rejectReason.trim() || rejectBusy}
                 onClick={async () => {
+                  setRejectBusy(true);
                   try {
                     await invokeFunction('admin-reject-member', {
                       profile_id: profile.id,
@@ -1267,10 +1300,11 @@ export default function AdminMemberDetail() {
                     navigate('/admin/members?filter=pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
+                    setRejectBusy(false);
                   }
                 }}
               >
-                Reject
+                {rejectBusy ? 'Rejecting…' : 'Reject'}
               </button>
             </div>
           </div>
@@ -1291,7 +1325,9 @@ export default function AdminMemberDetail() {
                 type="button"
                 className="btn btn-primary"
                 style={{ background: 'var(--color-success)' }}
+                disabled={pendingPhotoBusy}
                 onClick={async () => {
+                  setPendingPhotoBusy(true);
                   try {
                     await invokeFunction('admin-resolve-pending-photo', {
                       profile_id: profile.id,
@@ -1300,15 +1336,18 @@ export default function AdminMemberDetail() {
                     navigate('/admin/members?filter=photo_pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
+                    setPendingPhotoBusy(false);
                   }
                 }}
               >
-                Approve new photo
+                {pendingPhotoBusy ? 'Working…' : 'Approve new photo'}
               </button>
               <button
                 type="button"
                 className="btn btn-secondary"
+                disabled={pendingPhotoBusy}
                 onClick={async () => {
+                  setPendingPhotoBusy(true);
                   try {
                     await invokeFunction('admin-resolve-pending-photo', {
                       profile_id: profile.id,
@@ -1317,6 +1356,7 @@ export default function AdminMemberDetail() {
                     navigate('/admin/members?filter=photo_pending');
                   } catch (e) {
                     alert(e instanceof Error ? e.message : 'Failed');
+                    setPendingPhotoBusy(false);
                   }
                 }}
               >
@@ -1541,23 +1581,31 @@ export default function AdminMemberDetail() {
                 congratulations email, and logs an admin action. Their membership keeps running.
               </p>
               <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setMatchOpen(false)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={matchBusy}
+                  onClick={() => setMatchOpen(false)}
+                >
                   Cancel
                 </button>
                 <button
                   type="button"
                   className="btn btn-primary"
+                  disabled={matchBusy}
                   onClick={async () => {
+                    setMatchBusy(true);
                     try {
                       await invokeFunction('admin-mark-matched', { profile_id: profile.id });
                       setMatchOpen(false);
                       navigate('/admin/members');
                     } catch (e) {
                       alert(e instanceof Error ? e.message : 'Failed');
+                      setMatchBusy(false);
                     }
                   }}
                 >
-                  Confirm
+                  {matchBusy ? 'Working…' : 'Confirm'}
                 </button>
               </div>
             </div>

@@ -83,9 +83,20 @@ export default function AdminAddMember() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setSupportGate(isSupportAdmin(data.user) ? 'yes' : 'no');
-    });
+    let cancelled = false;
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!cancelled) setSupportGate(isSupportAdmin(data.user) ? 'yes' : 'no');
+      })
+      .catch(() => {
+        // Fail safe: assume least privilege (treat as support) so a failed role
+        // lookup redirects away from this restricted page rather than opening it.
+        if (!cancelled) setSupportGate('yes');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (supportGate === 'unknown') {

@@ -292,55 +292,78 @@ export default function AdminFeedback() {
   const [websiteError, setWebsiteError] = useState<string | null>(null);
   const [showWebsiteArchived, setShowWebsiteArchived] = useState(false);
 
-  const loadIntro = useCallback(async () => {
-    setIntroLoading(true);
-    setIntroError(null);
-    try {
-      const res = (await invokeFunction('admin-manage-users', {
-        action: 'list_feedback',
-        include_archived: showArchived,
-      })) as {
-        feedback?: FeedbackRow[];
-        profiles?: Record<string, ProfileSummary>;
-        requests?: Record<string, RequestSummary>;
-      };
-      setFeedback((res.feedback ?? []) as FeedbackRow[]);
-      setProfiles(res.profiles ?? {});
-      setRequests(res.requests ?? {});
-    } catch (ex) {
-      setIntroError(ex instanceof Error ? ex.message : 'Failed to load feedback');
-    } finally {
-      setIntroLoading(false);
-    }
-  }, [showArchived]);
+  // `isActive` lets the loading effect drop a stale response (e.g. the archived
+  // toggle changed while a request was in flight, or the component unmounted).
+  // Manual refreshes pass no checker so they always apply.
+  const loadIntro = useCallback(
+    async (isActive?: () => boolean) => {
+      const active = () => isActive?.() ?? true;
+      setIntroLoading(true);
+      setIntroError(null);
+      try {
+        const res = (await invokeFunction('admin-manage-users', {
+          action: 'list_feedback',
+          include_archived: showArchived,
+        })) as {
+          feedback?: FeedbackRow[];
+          profiles?: Record<string, ProfileSummary>;
+          requests?: Record<string, RequestSummary>;
+        };
+        if (!active()) return;
+        setFeedback((res.feedback ?? []) as FeedbackRow[]);
+        setProfiles(res.profiles ?? {});
+        setRequests(res.requests ?? {});
+      } catch (ex) {
+        if (!active()) return;
+        setIntroError(ex instanceof Error ? ex.message : 'Failed to load feedback');
+      } finally {
+        if (active()) setIntroLoading(false);
+      }
+    },
+    [showArchived]
+  );
 
   useEffect(() => {
-    void loadIntro();
+    let cancelled = false;
+    void loadIntro(() => !cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [loadIntro]);
 
-  const loadWebsite = useCallback(async () => {
-    setWebsiteLoading(true);
-    setWebsiteError(null);
-    try {
-      const res = (await invokeFunction('admin-manage-users', {
-        action: 'list_website_feedback',
-        include_archived: showWebsiteArchived,
-      })) as {
-        website_feedback?: WebsiteFeedbackRow[];
-        profiles?: Record<string, ProfileSummary>;
-      };
-      setWebsiteRows((res.website_feedback ?? []) as WebsiteFeedbackRow[]);
-      setWebsiteProfiles(res.profiles ?? {});
-    } catch (ex) {
-      setWebsiteError(ex instanceof Error ? ex.message : 'Failed to load website feedback');
-    } finally {
-      setWebsiteLoading(false);
-    }
-  }, [showWebsiteArchived]);
+  const loadWebsite = useCallback(
+    async (isActive?: () => boolean) => {
+      const active = () => isActive?.() ?? true;
+      setWebsiteLoading(true);
+      setWebsiteError(null);
+      try {
+        const res = (await invokeFunction('admin-manage-users', {
+          action: 'list_website_feedback',
+          include_archived: showWebsiteArchived,
+        })) as {
+          website_feedback?: WebsiteFeedbackRow[];
+          profiles?: Record<string, ProfileSummary>;
+        };
+        if (!active()) return;
+        setWebsiteRows((res.website_feedback ?? []) as WebsiteFeedbackRow[]);
+        setWebsiteProfiles(res.profiles ?? {});
+      } catch (ex) {
+        if (!active()) return;
+        setWebsiteError(ex instanceof Error ? ex.message : 'Failed to load website feedback');
+      } finally {
+        if (active()) setWebsiteLoading(false);
+      }
+    },
+    [showWebsiteArchived]
+  );
 
   useEffect(() => {
     if (tab !== 'website') return;
-    void loadWebsite();
+    let cancelled = false;
+    void loadWebsite(() => !cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [tab, loadWebsite]);
 
   const selectedIdList = useMemo(

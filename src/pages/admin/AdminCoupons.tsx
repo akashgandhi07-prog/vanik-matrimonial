@@ -65,6 +65,9 @@ export default function AdminCoupons() {
     expires_at: '' as string,
     notes: '',
   });
+  const [createBusy, setCreateBusy] = useState(false);
+  /** Coupon code currently being paused/resumed or edited, so its row buttons disable. */
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -86,9 +89,20 @@ export default function AdminCoupons() {
   }, [load]);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setSupportOnly(isSupportAdmin(data.user));
-    });
+    let cancelled = false;
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!cancelled) setSupportOnly(isSupportAdmin(data.user));
+      })
+      .catch(() => {
+        // Fail closed: if the role cannot be read, assume the most restricted
+        // (support-only) UI. Server-side checks remain the real gate regardless.
+        if (!cancelled) setSupportOnly(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function createCoupon(e: React.FormEvent) {
@@ -109,6 +123,8 @@ export default function AdminCoupons() {
         return;
       }
     }
+    if (createBusy) return;
+    setCreateBusy(true);
     try {
       await invokeFunction('admin-manage-users', {
         action: 'create_coupon',
@@ -132,16 +148,22 @@ export default function AdminCoupons() {
       void load();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to create coupon');
+    } finally {
+      setCreateBusy(false);
     }
   }
 
   async function setActive(code: string, active: boolean) {
     if (!active && !confirm(`Pause coupon ${code}? It cannot be used until resumed.`)) return;
+    if (rowBusy) return;
+    setRowBusy(code);
     try {
       await invokeFunction('admin-manage-users', { action: 'update_coupon', code, is_active: active });
       void load();
     } catch (e) {
       alert(e instanceof Error ? e.message : `Failed to ${active ? 'resume' : 'pause'} coupon`);
+    } finally {
+      setRowBusy(null);
     }
   }
 
@@ -161,12 +183,16 @@ export default function AdminCoupons() {
     if (c.type === 'free') {
       payload.free_months = editFreeMonths ? Number(editFreeMonths) : null;
     }
+    if (rowBusy) return;
+    setRowBusy(c.code);
     try {
       await invokeFunction('admin-manage-users', payload);
       setEditingCode(null);
       void load();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to update coupon');
+    } finally {
+      setRowBusy(null);
     }
   }
 
@@ -263,8 +289,8 @@ export default function AdminCoupons() {
             <span className="label">Notes</span>
             <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} />
           </div>
-          <button type="submit" className="btn btn-primary">
-            Create
+          <button type="submit" className="btn btn-primary" disabled={createBusy}>
+            {createBusy ? 'Creating…' : 'Create'}
           </button>
           </fieldset>
         </form>
@@ -340,13 +366,15 @@ export default function AdminCoupons() {
                         <button
                           type="button"
                           className="btn btn-primary"
+                          disabled={rowBusy === c.code}
                           onClick={() => void saveEdit(c)}
                         >
-                          Save
+                          {rowBusy === c.code ? 'Saving…' : 'Save'}
                         </button>{' '}
                         <button
                           type="button"
                           className="btn btn-secondary"
+                          disabled={rowBusy === c.code}
                           onClick={() => setEditingCode(null)}
                         >
                           Cancel
@@ -357,7 +385,7 @@ export default function AdminCoupons() {
                         <button
                           type="button"
                           className="btn btn-secondary"
-                          disabled={supportOnly}
+                          disabled={supportOnly || rowBusy === c.code}
                           onClick={() => void setActive(c.code, !c.is_active)}
                         >
                           {c.is_active ? 'Pause' : 'Resume'}

@@ -14,16 +14,31 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Only unlock the form when the session was established via a PASSWORD_RECOVERY link.
-    // Checking an existing session would let any logged-in user change their password
-    // by navigating directly to this URL without having clicked a reset email.
+    let cancelled = false;
+    // Unlock the form when a recovery session is present. The listener handles the
+    // live PASSWORD_RECOVERY event.
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
-    // An expired or already-used link never fires PASSWORD_RECOVERY. Without this the page would
-    // sit on "Checking your reset link..." forever with no way forward.
+    // With detectSessionInUrl the recovery session can be established (and
+    // PASSWORD_RECOVERY fired) before this component subscribes - new subscribers
+    // get INITIAL_SESSION, not a replay - so the event alone would never flip
+    // `ready` for a valid link and the timer below would wrongly show "expired".
+    // Proactively check for an existing session too. A genuinely expired/used link
+    // has no session, so the expiry path is preserved.
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!cancelled && data.session) setReady(true);
+      })
+      .catch(() => {
+        /* fall back to the event listener / expiry timer */
+      });
+    // An expired or already-used link never fires PASSWORD_RECOVERY and has no session.
+    // Without this the page would sit on "Checking your reset link..." forever.
     const timer = setTimeout(() => setLinkTimedOut(true), 6000);
     return () => {
+      cancelled = true;
       sub.subscription.unsubscribe();
       clearTimeout(timer);
     };

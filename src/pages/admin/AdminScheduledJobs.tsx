@@ -71,8 +71,13 @@ export default function AdminScheduledJobs() {
         limit: 100,
       })) as { runs?: CronJobRun[] };
 
+      // Sort by started_at desc so the newest run per job is picked regardless of
+      // the order the server returns rows in.
+      const runs = ((res.runs ?? []) as CronJobRun[])
+        .slice()
+        .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
       const map: Record<string, CronJobRun> = {};
-      for (const row of (res.runs ?? []) as CronJobRun[]) {
+      for (const row of runs) {
         if (!map[row.job_name]) {
           map[row.job_name] = row;
         }

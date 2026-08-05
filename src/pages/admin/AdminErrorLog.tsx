@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invokeFunction } from '../../lib/supabase';
 
 type ErrorRow = {
@@ -21,8 +21,13 @@ export default function AdminErrorLog() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Sequence guard: searches are user-driven and can resolve out of order, so
+  // only the most recent request may apply its results. Bumped on unmount too.
+  const loadSeq = useRef(0);
 
   const load = useCallback(async (term: string) => {
+    const seq = ++loadSeq.current;
+    const active = () => seq === loadSeq.current;
     setError(null);
     setLoading(true);
     try {
@@ -31,16 +36,22 @@ export default function AdminErrorLog() {
         limit: 200,
         search: term,
       })) as { rows?: ErrorRow[] };
+      if (!active()) return;
       setRows((res.rows ?? []) as ErrorRow[]);
     } catch (e) {
+      if (!active()) return;
       setError(e instanceof Error ? e.message : 'Failed to load error log');
     } finally {
-      setLoading(false);
+      if (active()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load('');
+    return () => {
+      // Invalidate any in-flight request on unmount.
+      loadSeq.current += 1;
+    };
   }, [load]);
 
   return (

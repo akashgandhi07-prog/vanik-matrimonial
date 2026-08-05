@@ -138,10 +138,23 @@ export default function AdminSettings() {
   }, [load]);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setCurrentUserId(data.user?.id ?? null);
-      setMyPowerRole(data.user ? adminPowerRole(data.user) : null);
-    });
+    let cancelled = false;
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setCurrentUserId(data.user?.id ?? null);
+        setMyPowerRole(data.user ? adminPowerRole(data.user) : null);
+      })
+      .catch(() => {
+        // Fail safe: no known user / role (server still enforces permissions).
+        if (cancelled) return;
+        setCurrentUserId(null);
+        setMyPowerRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function promote(id: string) {

@@ -178,50 +178,59 @@ export default function AdminMembers() {
   );
   const exportColumnsValid = selectedExportColumnIds.length > 0;
 
-  const loadMembers = useCallback(async () => {
-    setLoadError(null);
-    setLoading(true);
-    try {
-      let res:
-        | {
-            profiles?: Profile[];
-            emails?: Record<string, string>;
-            pending_previews?: PendingPreviews;
+  // `isActive` lets the initial-load effect drop a stale response (e.g. the filter
+  // changed while a request was in flight, or the component unmounted). Manual
+  // refreshes (approve, bulk, delete) call with no checker so they always apply.
+  const loadMembers = useCallback(
+    async (isActive?: () => boolean) => {
+      const active = () => isActive?.() ?? true;
+      setLoadError(null);
+      setLoading(true);
+      try {
+        let res:
+          | {
+              profiles?: Profile[];
+              emails?: Record<string, string>;
+              pending_previews?: PendingPreviews;
+            }
+          | null = null;
+        let lastError: unknown = null;
+        const candidates = filterCandidates(filter);
+        for (const f of candidates) {
+          try {
+            res = (await invokeFunction('admin-manage-users', {
+              action: 'list_profiles',
+              filter: f,
+            })) as {
+              profiles?: Profile[];
+              emails?: Record<string, string>;
+              pending_previews?: PendingPreviews;
+            };
+            break;
+          } catch (e) {
+            lastError = e;
+            const msg = e instanceof Error ? e.message.toLowerCase() : '';
+            if (!msg.includes('invalid filter')) throw e;
           }
-        | null = null;
-      let lastError: unknown = null;
-      const candidates = filterCandidates(filter);
-      for (const f of candidates) {
-        try {
-          res = (await invokeFunction('admin-manage-users', {
-            action: 'list_profiles',
-            filter: f,
-          })) as {
-            profiles?: Profile[];
-            emails?: Record<string, string>;
-            pending_previews?: PendingPreviews;
-          };
-          break;
-        } catch (e) {
-          lastError = e;
-          const msg = e instanceof Error ? e.message.toLowerCase() : '';
-          if (!msg.includes('invalid filter')) throw e;
         }
+        if (!active()) return;
+        if (!res) throw (lastError instanceof Error ? lastError : new Error('Could not load members'));
+        setMembers((res.profiles ?? []) as Profile[]);
+        setEmailByProfileId(res.emails ?? {});
+        setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});
+        setSelectedIds({});
+      } catch (e) {
+        if (!active()) return;
+        setMembers([]);
+        setEmailByProfileId({});
+        setPendingPreviews({});
+        setLoadError(e instanceof Error ? e.message : 'Could not load members');
+      } finally {
+        if (active()) setLoading(false);
       }
-      if (!res) throw (lastError instanceof Error ? lastError : new Error('Could not load members'));
-      setMembers((res.profiles ?? []) as Profile[]);
-      setEmailByProfileId(res.emails ?? {});
-      setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});
-      setSelectedIds({});
-    } catch (e) {
-      setMembers([]);
-      setEmailByProfileId({});
-      setPendingPreviews({});
-      setLoadError(e instanceof Error ? e.message : 'Could not load members');
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+    },
+    [filter]
+  );
 
   const quickApprove = useCallback(
     async (profileId: string) => {
@@ -246,13 +255,28 @@ export default function AdminMembers() {
   );
 
   useEffect(() => {
-    void loadMembers();
+    let cancelled = false;
+    void loadMembers(() => !cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [loadMembers]);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => {
-      setSupportOnly(isSupportAdmin(data.user));
-    });
+    let cancelled = false;
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!cancelled) setSupportOnly(isSupportAdmin(data.user));
+      })
+      .catch(() => {
+        // Fail closed: if the role cannot be read, assume the most restricted
+        // (support-only) UI. Server-side checks remain the real gate regardless.
+        if (!cancelled) setSupportOnly(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function changeFilter(f: (typeof FILTERS)[number]) {
