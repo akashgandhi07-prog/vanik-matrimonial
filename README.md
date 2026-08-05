@@ -1,73 +1,25 @@
-# React + TypeScript + Vite
+# Vanik Matrimonial Register
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A private, members-only matrimonial introduction platform for Hindu and Jain families in the UK, run by Vanik Council volunteers. Members register, are verified by the volunteer team, then browse verified profiles and request introductions from their dashboard. It handles sensitive personal data, so every profile is verified before it appears and contact details are shared only inside the member dashboard on request.
 
-Currently, two official plugins are available:
+Built by Junopets. Frontend is React + Vite + TypeScript; the backend (auth, database, file storage, Edge Functions) runs on Supabase. Hosted on Vercel.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Scripts
 
-## React Compiler
+- `npm run dev` - start the Vite dev server (defaults to http://localhost:3000)
+- `npm run build` - type-check (`tsc -b`) and produce the production build
+- `npm run lint` - run ESLint over the project
+- `npm run preview` - preview the production build locally
+- `npm run seed:demo` - seed demo accounts (see `scripts/seed_demo_accounts.mjs`)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Prerequisites and environment
 
-## Expanding the ESLint configuration
+- Node.js and npm.
+- A Supabase project for auth, database, storage, and Edge Functions.
+- Copy `.env.example` to `.env` and set the values (at minimum `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_PUBLIC_SITE_URL`). `.env.example` documents every frontend `VITE_*` variable and the optional Edge Function secrets (email/SMTP, CORS, Stripe, cron).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Documentation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- `docs/SETUP.md` - full setup: first admin account, Edge Functions and secrets, and pre-launch URL alignment across Vercel, Supabase Auth, and Edge.
+- `docs/STRIPE_LAUNCH.md` - enabling card payments (registration and renewals) via Stripe Checkout.
+- `docs/SECURITY_RLS_PRELAUNCH.md` - row-level-security checks to run before launch.
