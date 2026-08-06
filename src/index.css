@@ -3470,10 +3470,12 @@ textarea:focus-visible {
   line-height: 1;
 }
 
+/* Rendered via portal on <body>; must sit above every sticky bar (header 40,
+   admin bar 40, member sheet/tray 46-50) but below modals (200+). */
 .public-nav-drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 41;
+  z-index: 100;
   margin: 0;
   padding: 0;
   border: none;
@@ -3487,7 +3489,7 @@ textarea:focus-visible {
   right: 0;
   bottom: 0;
   width: min(320px, 92vw);
-  z-index: 42;
+  z-index: 101;
   box-sizing: border-box;
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);

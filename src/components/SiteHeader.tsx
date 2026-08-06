@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -117,35 +118,41 @@ export function SiteHeader() {
               </span>
               <span className="public-nav-menu-btn-label">Menu</span>
             </button>
-            {menuOpen ? (
-              <>
-                <button
-                  type="button"
-                  className="public-nav-drawer-backdrop"
-                  aria-label="Close menu"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <nav
-                  id="public-nav-drawer"
-                  className="public-nav-drawer"
-                  aria-label="Main"
-                  aria-labelledby={drawerTitleId}
-                >
-                  <div className="public-nav-drawer-head">
-                    <span id={drawerTitleId} className="public-nav-drawer-title">
-                      Menu
-                    </span>
-                    <button type="button" className="btn btn-secondary public-nav-drawer-close" onClick={() => setMenuOpen(false)}>
-                      Close
-                    </button>
-                  </div>
-                  <div className="public-nav-drawer-links">
-                    {feedbackLink}
-                    {navLinks}
-                  </div>
-                </nav>
-              </>
-            ) : null}
+            {menuOpen
+              ? // Portal to <body>: the sticky header creates a stacking context, so a
+                // drawer rendered inside it can be painted over by the admin/member
+                // sticky bars no matter how high its own z-index is.
+                createPortal(
+                  <>
+                    <button
+                      type="button"
+                      className="public-nav-drawer-backdrop"
+                      aria-label="Close menu"
+                      onClick={() => setMenuOpen(false)}
+                    />
+                    <nav
+                      id="public-nav-drawer"
+                      className="public-nav-drawer"
+                      aria-label="Main"
+                      aria-labelledby={drawerTitleId}
+                    >
+                      <div className="public-nav-drawer-head">
+                        <span id={drawerTitleId} className="public-nav-drawer-title">
+                          Menu
+                        </span>
+                        <button type="button" className="btn btn-secondary public-nav-drawer-close" onClick={() => setMenuOpen(false)}>
+                          Close
+                        </button>
+                      </div>
+                      <div className="public-nav-drawer-links">
+                        {feedbackLink}
+                        {navLinks}
+                      </div>
+                    </nav>
+                  </>,
+                  document.body
+                )
+              : null}
           </>
         ) : (
           <nav className="public-nav" aria-label="Main">
