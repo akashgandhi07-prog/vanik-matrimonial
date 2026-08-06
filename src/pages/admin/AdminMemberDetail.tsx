@@ -95,6 +95,18 @@ function fmtDate(iso: string | null): string {
     : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function fmtMoney(pence: number | null, currency: string | null): string {
+  if (pence == null) return '-';
+  try {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: (currency ?? 'gbp').toUpperCase(),
+    }).format(pence / 100);
+  } catch {
+    return `${(pence / 100).toFixed(2)} ${(currency ?? '').toUpperCase()}`;
+  }
+}
+
 const REJECTION_REASON_TEMPLATES: { label: string; text: string }[] = [
   {
     label: 'Profile photo',
@@ -175,6 +187,19 @@ export default function AdminMemberDetail() {
   const [pauseReasons, setPauseReasons] = useState<
     { reason: string; note: string | null; created_at: string }[]
   >([]);
+  const [payments, setPayments] = useState<
+    {
+      checkout_session_id: string;
+      purpose: string;
+      payment_status: string;
+      amount_total: number | null;
+      currency: string | null;
+      refund_id: string | null;
+      refund_amount: number | null;
+      refunded_at: string | null;
+      created_at: string;
+    }[]
+  >([]);
   const [extendMonths, setExtendMonths] = useState(1);
   const [extendBusy, setExtendBusy] = useState(false);
   const [approveBusy, setApproveBusy] = useState(false);
@@ -230,6 +255,7 @@ export default function AdminMemberDetail() {
             month_reset_at: string;
           };
           pause_feedback?: { reason: string; note: string | null; created_at: string }[];
+          payments?: typeof payments;
         };
         if (cancelled) return;
         if (!res.profile || !res.member_private) {
@@ -254,6 +280,7 @@ export default function AdminMemberDetail() {
         setRecentEmails(res.recent_emails ?? []);
         setContactQuota(res.contact_request_quota ?? null);
         setPauseReasons(res.pause_feedback ?? []);
+        setPayments(res.payments ?? []);
         setQuotaBonusWeek(
           Math.max(0, Math.min(50, Number(res.member_private.contact_request_weekly_bonus ?? 0)))
         );
@@ -412,6 +439,48 @@ export default function AdminMemberDetail() {
           />
         )}
       </div>
+
+        {payments.length > 0 && (
+          <div
+            className="card"
+            style={{
+              marginTop: 20,
+              padding: '10px 14px',
+              borderLeft: payments.some((p) => p.refund_id)
+                ? '4px solid var(--color-danger)'
+                : undefined,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 14 }}>
+              <strong style={{ marginRight: 4 }}>Payments:</strong>
+              {payments.map((p) => (
+                <span
+                  key={p.checkout_session_id}
+                  style={{
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 999,
+                    padding: '3px 12px',
+                    whiteSpace: 'nowrap',
+                    background: p.refund_id ? 'rgba(185,28,28,0.06)' : 'var(--color-surface)',
+                  }}
+                >
+                  {fmtDate(p.created_at)} · {p.purpose} · {fmtMoney(p.amount_total, p.currency)}
+                  {p.refund_id ? (
+                    <strong style={{ color: 'var(--color-danger)' }}>
+                      {' '}
+                      · refunded {fmtMoney(p.refund_amount, p.currency)} on {fmtDate(p.refunded_at)}
+                    </strong>
+                  ) : (
+                    <span style={{ color: 'var(--color-success)' }}> · paid</span>
+                  )}
+                </span>
+              ))}
+              <Link to="/admin/payments" style={{ fontSize: 13 }}>
+                Open Payments
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 20 }}>
           <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Profile snapshot</h2>

@@ -48,6 +48,7 @@ export default function AdminPayments() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [refundsOnly, setRefundsOnly] = useState(false);
   /** Session id whose row action is in flight, so its buttons disable. */
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   /** Session id whose member-actions panel is expanded. */
@@ -182,13 +183,19 @@ export default function AdminPayments() {
   }
 
   const q = search.trim().toLowerCase();
-  const filtered = q
+  const searched = q
     ? rows.filter((r) =>
         [r.member_name, r.member_reference, r.member_email, r.purpose]
           .filter(Boolean)
           .some((v) => (v as string).toLowerCase().includes(q))
       )
     : rows;
+  const filtered = refundsOnly ? searched.filter((r) => r.refund_id != null) : searched;
+
+  const currency = rows[0]?.currency ?? 'gbp';
+  const paidTotal = rows.reduce((sum, r) => sum + (r.amount_total ?? 0), 0);
+  const refunds = rows.filter((r) => r.refund_id != null);
+  const refundTotal = refunds.reduce((sum, r) => sum + (r.refund_amount ?? 0), 0);
 
   return (
     <div>
@@ -204,18 +211,55 @@ export default function AdminPayments() {
         </div>
       )}
 
-      <input
-        type="search"
-        placeholder="Search by name, reference, email or purpose"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ marginBottom: 16, maxWidth: 380, width: '100%' }}
-      />
+      {!loading && rows.length > 0 && (
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+          <div className="card" style={{ padding: '10px 16px' }}>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>Payments</div>
+            <strong>
+              {rows.length} · {fmtAmount(paidTotal, currency)}
+            </strong>
+          </div>
+          <div className="card" style={{ padding: '10px 16px', borderLeft: refunds.length > 0 ? '4px solid var(--color-danger)' : undefined }}>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>Refunded</div>
+            <strong style={{ color: refunds.length > 0 ? 'var(--color-danger)' : undefined }}>
+              {refunds.length} · {fmtAmount(refundTotal, currency)}
+            </strong>
+          </div>
+          <div className="card" style={{ padding: '10px 16px' }}>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>Net</div>
+            <strong>{fmtAmount(paidTotal - refundTotal, currency)}</strong>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <input
+          type="search"
+          placeholder="Search by name, reference, email or purpose"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: 380, width: '100%' }}
+        />
+        <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 14, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={refundsOnly}
+            onChange={(e) => setRefundsOnly(e.target.checked)}
+          />
+          Refunds only
+        </label>
+      </div>
 
       {loading ? (
         <p>Loading…</p>
       ) : filtered.length === 0 ? (
-        <p>{rows.length === 0 ? 'No payments recorded yet.' : 'No payments match the search.'}</p>
+        <p>
+          {rows.length === 0
+            ? 'No payments recorded yet.'
+            : refundsOnly && refunds.length === 0
+              ? 'No refunds issued yet.'
+              : 'No payments match the search.'}
+        </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="admin-data-table" style={{ borderCollapse: 'collapse', fontSize: 14, background: 'white' }}>

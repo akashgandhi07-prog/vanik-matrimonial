@@ -2429,6 +2429,22 @@ Deno.serve(async (req) => {
       Number(mpQuota.contact_request_monthly_bonus ?? 0)
     );
 
+    // Stripe payments for the refund strip on the member page. Registration
+    // payments predate the profile, so match on auth_user_id rather than profile_id.
+    const profAuthId = (profile as { auth_user_id?: string | null }).auth_user_id ?? null;
+    let payments: unknown[] = [];
+    if (profAuthId) {
+      const { data: payRows } = await admin
+        .from('stripe_checkout_sessions')
+        .select(
+          'checkout_session_id, purpose, payment_status, amount_total, currency, refund_id, refund_amount, refunded_at, created_at'
+        )
+        .eq('auth_user_id', profAuthId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      payments = payRows ?? [];
+    }
+
     return jsonResponse({
       profile,
       member_private: memberPrivate,
@@ -2439,6 +2455,7 @@ Deno.serve(async (req) => {
       recent_emails: recentEmails ?? [],
       contact_request_quota,
       pause_feedback: pauseRows ?? [],
+      payments,
     }, req);
   }
 
