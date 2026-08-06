@@ -24,6 +24,7 @@ export default function AdminLayout() {
   // Email health check: surfaces send failures and bounces in-app, because an
   // email alert about email being broken would never arrive.
   const [emailProblems, setEmailProblems] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
     if (ok !== true || mfaOk !== true) return;
     let cancelled = false;
@@ -38,10 +39,42 @@ export default function AdminLayout() {
         /* banner is best-effort */
       }
     })();
+    void (async () => {
+      try {
+        const res = (await invokeFunction('admin-manage-users', { action: 'pending_count' })) as {
+          pending?: number;
+        };
+        if (!cancelled) setPendingCount(res.pending ?? 0);
+      } catch {
+        /* badge is best-effort */
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [ok, mfaOk]);
+
+  const pendingBadge =
+    pendingCount > 0 ? (
+      <span
+        aria-label={`${pendingCount} pending application${pendingCount === 1 ? '' : 's'}`}
+        style={{
+          display: 'inline-block',
+          minWidth: 20,
+          padding: '1px 6px',
+          marginLeft: 8,
+          borderRadius: 999,
+          background: 'var(--color-danger)',
+          color: 'white',
+          fontSize: 12,
+          fontWeight: 700,
+          lineHeight: '18px',
+          textAlign: 'center',
+        }}
+      >
+        {pendingCount}
+      </span>
+    ) : null;
 
   if (ok === false) {
     if (denyReason === 'anon') {
@@ -93,6 +126,7 @@ export default function AdminLayout() {
             </NavLink>
             <NavLink to="/admin/members" className={navCls}>
               Members
+              {pendingBadge}
             </NavLink>
             <NavLink to="/admin/requests" className={navCls}>
               Requests
@@ -158,6 +192,7 @@ export default function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/members" className={navCls}>
           Members
+          {pendingBadge}
         </NavLink>
         <NavLink to="/admin/requests" className={navCls}>
           Requests

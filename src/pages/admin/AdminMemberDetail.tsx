@@ -133,7 +133,6 @@ export default function AdminMemberDetail() {
   const [reloadKey, setReloadKey] = useState(0);
   const [editingRecord, setEditingRecord] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [checklist, setChecklist] = useState([false, false, false, false]);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [photoGallery, setPhotoGallery] = useState<
@@ -345,14 +344,16 @@ export default function AdminMemberDetail() {
       <p style={{ marginBottom: 16 }}>
         <Link to="/admin/members">← Members</Link>
       </p>
-      <h1>
-          {profile.first_name} {priv.surname}
-        </h1>
-        <p style={{ color: 'var(--color-text-secondary)' }}>
-          {profile.reference_number} · {profile.status} · {listingLabel(profile.hidden_reason)}
-        </p>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 460px', minWidth: 300, maxWidth: 760 }}>
+          <h1>
+            {profile.first_name} {priv.surname}
+          </h1>
+          <p style={{ color: 'var(--color-text-secondary)' }}>
+            {profile.reference_number} · {profile.status} · {listingLabel(profile.hidden_reason)}
+          </p>
 
-        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card" style={{ marginTop: 20 }}>
           <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Registration consent record</h2>
           {priv.consent_recorded_at == null &&
           priv.consent_contact == null &&
@@ -393,7 +394,24 @@ export default function AdminMemberDetail() {
               </li>
             </ul>
           )}
+          </div>
         </div>
+        {photoUrl && (
+          <img
+            src={photoUrl}
+            alt={`${profile.first_name}'s profile photo`}
+            style={{
+              width: 220,
+              maxWidth: '45vw',
+              borderRadius: 12,
+              border: '1px solid var(--color-border)',
+              marginTop: 8,
+              marginLeft: 'auto',
+              display: 'block',
+            }}
+          />
+        )}
+      </div>
 
         <div className="card" style={{ marginTop: 20 }}>
           <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Profile snapshot</h2>
@@ -1195,26 +1213,10 @@ export default function AdminMemberDetail() {
 
         {pending && !supportOnly && (
           <div className="card" style={{ marginTop: 24 }}>
-            <h3>Approval checklist</h3>
-            {[
-              'Name on ID matches registration name',
-              'Date of birth on ID matches stated DOB',
-              'Photo is appropriate and clearly shows face',
-              'Age 18+',
-            ].map((label, i) => (
-              <label key={label} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={checklist[i]}
-                  onChange={(e) => {
-                    const n = [...checklist];
-                    n[i] = e.target.checked;
-                    setChecklist(n);
-                  }}
-                />
-                {label}
-              </label>
-            ))}
+            <h3>Approve or reject</h3>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Check the photo and ID above match (name, DOB, 18+) before approving.
+            </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
               {confirmApprove ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1252,7 +1254,6 @@ export default function AdminMemberDetail() {
                   type="button"
                   className="btn btn-primary"
                   style={{ background: 'var(--color-success)' }}
-                  disabled={!checklist.every(Boolean)}
                   onClick={() => setConfirmApprove(true)}
                 >
                   Approve

@@ -166,6 +166,12 @@ export default function AdminMembers() {
   const [loading, setLoading] = useState(false);
   const [pendingPreviews, setPendingPreviews] = useState<PendingPreviews>({});
   const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
+  /** Row whose Approve button is showing its confirm step. */
+  const [confirmApproveId, setConfirmApproveId] = useState<string | null>(null);
+  /** Member whose photos/ID are open full-size for comparison. */
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
+  /** Live pending-approval count for the chip badge; null until first fetch. */
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const [bulkBusy, setBulkBusy] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -221,6 +227,8 @@ export default function AdminMembers() {
         setEmailByProfileId(res.emails ?? {});
         setPendingPreviews(filter === 'pending' ? res.pending_previews ?? {} : {});
         setSelectedIds({});
+        setConfirmApproveId(null);
+        if (filter === 'pending') setPendingCount((res.profiles ?? []).length);
       } catch (e) {
         if (!active()) return;
         setMembers([]);
@@ -236,16 +244,13 @@ export default function AdminMembers() {
 
   const quickApprove = useCallback(
     async (profileId: string) => {
-      if (
-        !window.confirm(
-          'Approve this applicant? Only confirm if you have reviewed their profile photo and ID document.'
-        )
-      ) {
-        return;
-      }
       setApproveBusyId(profileId);
       try {
         await invokeFunction('admin-approve-member', { profile_id: profileId });
+        setConfirmApproveId(null);
+        setLightboxId(null);
+        // Optimistic; a pending-filter reload below replaces it with the exact count.
+        setPendingCount((c) => (c == null ? c : Math.max(0, c - 1)));
         await loadMembers();
       } catch (e) {
         alert(e instanceof Error ? e.message : 'Approval failed');
@@ -255,6 +260,20 @@ export default function AdminMembers() {
     },
     [loadMembers]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void invokeFunction('admin-manage-users', { action: 'pending_count' })
+      .then((res) => {
+        if (!cancelled) setPendingCount((res as { pending?: number }).pending ?? 0);
+      })
+      .catch(() => {
+        /* badge is best-effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -302,7 +321,46 @@ export default function AdminMembers() {
     [selectedIds]
   );
 
-  const tableColCount = filter === 'pending' ? 14 : 11;
+  const tableColCount = filter === 'pending' ? 15 : 11;
+
+  function renderApprove(m: Profile) {
+    if (m.status !== 'pending_approval' || supportOnly) return null;
+    const busy = approveBusyId === m.id;
+    if (confirmApproveId === m.id) {
+      return (
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ background: 'var(--color-success)', padding: '4px 10px', fontSize: 13 }}
+            disabled={busy}
+            onClick={() => void quickApprove(m.id)}
+          >
+            {busy ? 'Approving…' : 'Confirm approve'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 10px', fontSize: 13 }}
+            disabled={busy}
+            onClick={() => setConfirmApproveId(null)}
+          >
+            Cancel
+          </button>
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="btn btn-primary"
+        style={{ background: 'var(--color-success)', padding: '4px 10px', fontSize: 13 }}
+        onClick={() => setConfirmApproveId(m.id)}
+      >
+        Approve
+      </button>
+    );
+  }
 
   return (
     <div>
@@ -332,6 +390,26 @@ export default function AdminMembers() {
             onClick={() => changeFilter(f)}
           >
             {filterLabel(f)}
+            {f === 'pending' && pendingCount != null && pendingCount > 0 && (
+              <span
+                aria-label={`${pendingCount} pending application${pendingCount === 1 ? '' : 's'}`}
+                style={{
+                  display: 'inline-block',
+                  minWidth: 20,
+                  padding: '1px 6px',
+                  marginLeft: 6,
+                  borderRadius: 999,
+                  background: 'var(--color-danger)',
+                  color: 'white',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  lineHeight: '18px',
+                  textAlign: 'center',
+                }}
+              >
+                {pendingCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -382,6 +460,241 @@ export default function AdminMembers() {
           </button>
         )}
       </div>
+      <div className="table-scroll">
+        <table
+          className="admin-data-table admin-data-table--xl"
+          style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 13, background: 'white' }}
+        >
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
+              <th style={{ padding: 8, width: 80, whiteSpace: 'nowrap' }}>Ref</th>
+              <th style={{ padding: 8, width: 108, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>Select</span>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}
+                    disabled={loading || filteredMembers.length === 0}
+                    onClick={() => {
+                      setSelectedIds((prev) => {
+                        const next = { ...prev };
+                        for (const m of filteredMembers) next[m.id] = true;
+                        return next;
+                      });
+                    }}
+                  >
+                    Select all
+                  </button>
+                </div>
+              </th>
+              {filter === 'pending' && (
+                <>
+                  <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Photo</th>
+                  <th style={{ padding: 8, width: 56, whiteSpace: 'nowrap' }}>ID</th>
+                  <th style={{ padding: 8, width: 86, whiteSpace: 'nowrap' }}>Waiting</th>
+                  <th style={{ padding: 8, width: 150, whiteSpace: 'nowrap' }}>Approve</th>
+                </>
+              )}
+              <th style={{ padding: 8, width: 124 }}>Name</th>
+              <th style={{ padding: 8, width: 220 }}>Email</th>
+              <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Gender</th>
+              <th style={{ padding: 8, width: 52, whiteSpace: 'nowrap' }}>Age</th>
+              <th style={{ padding: 8, width: 128, whiteSpace: 'nowrap' }}>Status</th>
+              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Expires</th>
+              <th style={{ padding: 8, width: 100, whiteSpace: 'nowrap' }}>Last login</th>
+              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Last request</th>
+              <th style={{ padding: 8, width: 110, whiteSpace: 'nowrap' }}>Notes</th>
+              <th style={{ padding: 8, width: 98, whiteSpace: 'nowrap' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr>
+                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                  Loading…
+                </td>
+              </tr>
+            )}
+            {!loading && filteredMembers.length === 0 && (
+              <tr>
+                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
+                  {loadError
+                    ? 'Could not load members.'
+                    : 'No rows for this filter. If you expect pending applications, confirm their status is pending_approval in Supabase and that your admin session can read all profiles (see note above).'}
+                </td>
+              </tr>
+            )}
+            {!loading &&
+              filteredMembers.map((m) => {
+                const prev = pendingPreviews[m.id];
+                const wait = daysWaiting(m.pending_since ?? m.created_at);
+                const thumbStyle: CSSProperties = {
+                  width: 56,
+                  height: 56,
+                  objectFit: 'cover',
+                  borderRadius: 6,
+                  display: 'block',
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                };
+                return (
+                  <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.reference_number}</td>
+                    <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!selectedIds[m.id]}
+                        onChange={(e) => setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))}
+                        aria-label={`Select ${memberDisplayName(m)}`}
+                      />
+                    </td>
+                    {filter === 'pending' && (
+                      <>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                          {(prev?.photos?.length ?? 0) > 0 ? (
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                              {prev?.photos?.slice(0, 3).map((url, idx) => (
+                                <img
+                                  key={url}
+                                  src={url}
+                                  alt=""
+                                  style={{ ...thumbStyle, cursor: 'zoom-in' }}
+                                  title={`Photo ${idx + 1} - click to compare full size`}
+                                  onClick={() => setLightboxId(m.id)}
+                                />
+                              ))}
+                            </div>
+                          ) : prev?.photo ? (
+                            <img
+                              src={prev.photo}
+                              alt=""
+                              style={{ ...thumbStyle, cursor: 'zoom-in' }}
+                              title="Click to compare full size"
+                              onClick={() => setLightboxId(m.id)}
+                            />
+                          ) : (
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
+                          {prev?.id_document && prev.id_is_image ? (
+                            <img
+                              src={prev.id_document}
+                              alt=""
+                              style={{ ...thumbStyle, cursor: 'zoom-in' }}
+                              title="Click to compare full size"
+                              onClick={() => setLightboxId(m.id)}
+                            />
+                          ) : prev?.id_document && !prev.id_is_image ? (
+                            <a href={prev.id_document} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
+                              PDF
+                            </a>
+                          ) : (
+                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
+                          )}
+                        </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle', fontSize: 13 }}>
+                          {wait != null ? (
+                            <>
+                              <span>{wait}d</span>
+                              {wait >= 7 && (
+                                <span className="badge badge-warning" style={{ marginLeft: 6, whiteSpace: 'nowrap' }}>
+                                  7d+
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td style={{ padding: 8, verticalAlign: 'middle' }}>{renderApprove(m)}</td>
+                      </>
+                    )}
+                    <td style={{ padding: 8 }}>
+                      <span
+                        title={memberDisplayName(m)}
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'bottom',
+                        }}
+                      >
+                        {memberDisplayName(m)}
+                      </span>
+                    </td>
+                    <td style={{ padding: 8, maxWidth: 280 }}>
+                      <span
+                        title={emailByProfileId[m.id] ?? '-'}
+                        style={{
+                          display: 'inline-block',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'bottom',
+                        }}
+                      >
+                        {emailByProfileId[m.id] ?? '-'}
+                      </span>
+                    </td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.gender}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.age}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                      {m.status}
+                      {m.hidden_reason && (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                          {LISTING_BADGE[m.hidden_reason]}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.membership_expires_at)}</td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        if (!m.last_sign_in_at) {
+                          return <span style={{ color: 'var(--color-text-secondary)' }}>Never</span>;
+                        }
+                        const days = Math.floor(
+                          (Date.now() - new Date(m.last_sign_in_at).getTime()) / 864e5
+                        );
+                        const stale = m.status === 'active' && days >= 14;
+                        return (
+                          <span
+                            style={{ color: stale ? 'var(--color-warning)' : undefined, fontWeight: stale ? 600 : undefined }}
+                            title={new Date(m.last_sign_in_at).toLocaleString('en-GB')}
+                          >
+                            {fmtDate(m.last_sign_in_at)}
+                            <span style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
+                              {days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`}
+                            </span>
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.last_request_at)}</td>
+                    <td style={{ padding: 8 }}>
+                      {m.pending_photo_url && (
+                        <span className="badge badge-warning" style={{ whiteSpace: 'nowrap' }}>
+                          Photo pending review
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: 8 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <Link to={`/admin/members/${m.id}`}>Details</Link>
+                        {filter !== 'pending' && renderApprove(m)}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+
       <div className="card" style={{ padding: 12, marginBottom: 12 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Registration report (Excel / Sheets)</div>
         <p className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
@@ -507,229 +820,84 @@ export default function AdminMembers() {
           </button>
         </div>
       </div>
-      <div className="table-scroll">
-        <table
-          className="admin-data-table admin-data-table--xl"
-          style={{ borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 13, background: 'white' }}
-        >
-          <thead>
-            <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ padding: 8, width: 80, whiteSpace: 'nowrap' }}>Ref</th>
-              <th style={{ padding: 8, width: 108, verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>Select</span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap' }}
-                    disabled={loading || filteredMembers.length === 0}
-                    onClick={() => {
-                      setSelectedIds((prev) => {
-                        const next = { ...prev };
-                        for (const m of filteredMembers) next[m.id] = true;
-                        return next;
-                      });
-                    }}
-                  >
-                    Select all
+      {lightboxId &&
+        (() => {
+          const m = members.find((x) => x.id === lightboxId);
+          const prev = pendingPreviews[lightboxId];
+          if (!m) return null;
+          const photos = (prev?.photos?.length ? prev.photos : prev?.photo ? [prev.photo] : []).filter(Boolean);
+          const wait = daysWaiting(m.pending_since ?? m.created_at);
+          const imgStyle: CSSProperties = {
+            maxHeight: '62vh',
+            maxWidth: 'min(44vw, 520px)',
+            borderRadius: 10,
+            border: '1px solid var(--color-border)',
+            display: 'block',
+          };
+          return (
+            <div
+              role="dialog"
+              aria-modal
+              aria-label={`Photos and ID for ${memberDisplayName(m)}`}
+              className="modal-backdrop"
+              onClick={() => setLightboxId(null)}
+            >
+              <div
+                className="card modal-panel"
+                style={{ maxWidth: '94vw', width: 'auto', maxHeight: '92vh', overflowY: 'auto' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ marginTop: 0 }}>
+                  {memberDisplayName(m)}{' '}
+                  <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', fontSize: '0.85em' }}>
+                    {m.reference_number} · {m.gender} · {m.age} · waiting {wait != null ? `${wait}d` : '-'}
+                  </span>
+                </h3>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  {photos.map((url, i) => (
+                    <figure key={url} style={{ margin: 0 }}>
+                      <figcaption style={{ fontSize: 13, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+                        Photo {i + 1}
+                      </figcaption>
+                      <img src={url} alt={`Profile photo ${i + 1}`} style={imgStyle} />
+                    </figure>
+                  ))}
+                  {photos.length === 0 && (
+                    <p style={{ color: 'var(--color-text-secondary)' }}>No profile photo uploaded.</p>
+                  )}
+                  {prev?.id_document && prev.id_is_image ? (
+                    <figure style={{ margin: 0 }}>
+                      <figcaption style={{ fontSize: 13, marginBottom: 6, color: 'var(--color-text-secondary)' }}>
+                        ID document
+                      </figcaption>
+                      <img src={prev.id_document} alt="ID document" style={imgStyle} />
+                    </figure>
+                  ) : prev?.id_document ? (
+                    <p>
+                      <a href={prev.id_document} target="_blank" rel="noreferrer">
+                        Open ID document (PDF)
+                      </a>
+                    </p>
+                  ) : (
+                    <p style={{ color: 'var(--color-text-secondary)' }}>No ID document uploaded.</p>
+                  )}
+                </div>
+                <div
+                  className="modal-actions"
+                  style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}
+                >
+                  <Link to={`/admin/members/${m.id}`} style={{ marginRight: 'auto' }}>
+                    Full details
+                  </Link>
+                  {renderApprove(m)}
+                  <button type="button" className="btn btn-secondary" onClick={() => setLightboxId(null)}>
+                    Close
                   </button>
                 </div>
-              </th>
-              {filter === 'pending' && (
-                <>
-                  <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Photo</th>
-                  <th style={{ padding: 8, width: 56, whiteSpace: 'nowrap' }}>ID</th>
-                  <th style={{ padding: 8, width: 86, whiteSpace: 'nowrap' }}>Waiting</th>
-                </>
-              )}
-              <th style={{ padding: 8, width: 124 }}>Name</th>
-              <th style={{ padding: 8, width: 220 }}>Email</th>
-              <th style={{ padding: 8, width: 72, whiteSpace: 'nowrap' }}>Gender</th>
-              <th style={{ padding: 8, width: 52, whiteSpace: 'nowrap' }}>Age</th>
-              <th style={{ padding: 8, width: 128, whiteSpace: 'nowrap' }}>Status</th>
-              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Expires</th>
-              <th style={{ padding: 8, width: 100, whiteSpace: 'nowrap' }}>Last login</th>
-              <th style={{ padding: 8, width: 92, whiteSpace: 'nowrap' }}>Last request</th>
-              <th style={{ padding: 8, width: 110, whiteSpace: 'nowrap' }}>Notes</th>
-              <th style={{ padding: 8, width: 98, whiteSpace: 'nowrap' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!loading && filteredMembers.length === 0 && (
-              <tr>
-                <td colSpan={tableColCount} style={{ padding: 16, color: 'var(--color-text-secondary)' }}>
-                  {loadError
-                    ? 'Could not load members.'
-                    : 'No rows for this filter. If you expect pending applications, confirm their status is pending_approval in Supabase and that your admin session can read all profiles (see note above).'}
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              filteredMembers.map((m) => {
-                const prev = pendingPreviews[m.id];
-                const wait = daysWaiting(m.pending_since ?? m.created_at);
-                const thumbStyle: CSSProperties = {
-                  width: 56,
-                  height: 56,
-                  objectFit: 'cover',
-                  borderRadius: 6,
-                  display: 'block',
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                };
-                return (
-                  <tr key={m.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.reference_number}</td>
-                    <td style={{ padding: 8, verticalAlign: 'middle' }}>
-                      <input
-                        type="checkbox"
-                        checked={!!selectedIds[m.id]}
-                        onChange={(e) => setSelectedIds((s) => ({ ...s, [m.id]: e.target.checked }))}
-                        aria-label={`Select ${memberDisplayName(m)}`}
-                      />
-                    </td>
-                    {filter === 'pending' && (
-                      <>
-                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
-                          {(prev?.photos?.length ?? 0) > 0 ? (
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                              {prev?.photos?.slice(0, 3).map((url, idx) => (
-                                <img key={url} src={url} alt="" style={thumbStyle} title={`Photo ${idx + 1}`} />
-                              ))}
-                            </div>
-                          ) : prev?.photo ? (
-                            <img src={prev.photo} alt="" style={thumbStyle} />
-                          ) : (
-                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
-                          )}
-                        </td>
-                        <td style={{ padding: 8, verticalAlign: 'middle' }}>
-                          {prev?.id_document && prev.id_is_image ? (
-                            <img src={prev.id_document} alt="" style={thumbStyle} />
-                          ) : prev?.id_document && !prev.id_is_image ? (
-                            <a href={prev.id_document} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
-                              PDF
-                            </a>
-                          ) : (
-                            <span style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>-</span>
-                          )}
-                        </td>
-                        <td style={{ padding: 8, verticalAlign: 'middle', fontSize: 13 }}>
-                          {wait != null ? (
-                            <>
-                              <span>{wait}d</span>
-                              {wait >= 7 && (
-                                <span className="badge badge-warning" style={{ marginLeft: 6, whiteSpace: 'nowrap' }}>
-                                  7d+
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
-                      </>
-                    )}
-                    <td style={{ padding: 8 }}>
-                      <span
-                        title={memberDisplayName(m)}
-                        style={{
-                          display: 'inline-block',
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          verticalAlign: 'bottom',
-                        }}
-                      >
-                        {memberDisplayName(m)}
-                      </span>
-                    </td>
-                    <td style={{ padding: 8, maxWidth: 280 }}>
-                      <span
-                        title={emailByProfileId[m.id] ?? '-'}
-                        style={{
-                          display: 'inline-block',
-                          maxWidth: '100%',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          verticalAlign: 'bottom',
-                        }}
-                      >
-                        {emailByProfileId[m.id] ?? '-'}
-                      </span>
-                    </td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.gender}</td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{m.age}</td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
-                      {m.status}
-                      {m.hidden_reason && (
-                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                          {LISTING_BADGE[m.hidden_reason]}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.membership_expires_at)}</td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
-                      {(() => {
-                        if (!m.last_sign_in_at) {
-                          return <span style={{ color: 'var(--color-text-secondary)' }}>Never</span>;
-                        }
-                        const days = Math.floor(
-                          (Date.now() - new Date(m.last_sign_in_at).getTime()) / 864e5
-                        );
-                        const stale = m.status === 'active' && days >= 14;
-                        return (
-                          <span
-                            style={{ color: stale ? 'var(--color-warning)' : undefined, fontWeight: stale ? 600 : undefined }}
-                            title={new Date(m.last_sign_in_at).toLocaleString('en-GB')}
-                          >
-                            {fmtDate(m.last_sign_in_at)}
-                            <span style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
-                              {days === 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`}
-                            </span>
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{fmtDate(m.last_request_at)}</td>
-                    <td style={{ padding: 8 }}>
-                      {m.pending_photo_url && (
-                        <span className="badge badge-warning" style={{ whiteSpace: 'nowrap' }}>
-                          Photo pending review
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: 8 }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                        <Link to={`/admin/members/${m.id}`}>Details</Link>
-                        {m.status === 'pending_approval' && !supportOnly && (
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            style={{ padding: '4px 10px', fontSize: 13 }}
-                            disabled={approveBusyId === m.id}
-                            onClick={() => void quickApprove(m.id)}
-                          >
-                            {approveBusyId === m.id ? '…' : 'Approve'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
-      </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {deleteModalOpen && (
         <div

@@ -2474,6 +2474,16 @@ Deno.serve(async (req) => {
     return jsonResponse({ failed: failedCount, undelivered: undeliveredCount }, req);
   }
 
+  // Cheap head-count for the pending badge shown on the admin nav and Members page.
+  if (action === 'pending_count') {
+    const { count, error: pcErr } = await admin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending_approval');
+    if (pcErr) return jsonResponse({ error: pcErr.message }, req, 500);
+    return jsonResponse({ pending: count ?? 0 }, req);
+  }
+
   if (action === 'list_email_log') {
     const limit =
       typeof body.limit === 'number' && body.limit >= 1 && body.limit <= 1000 ? Math.floor(body.limit) : 300;
