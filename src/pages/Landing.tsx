@@ -36,9 +36,9 @@ export default function Landing() {
             <p className="landing-kicker">Vanik Council</p>
             <h1 className="landing-title">Vanik Matrimonial Register</h1>
             <p className="landing-lead">
-              A private introduction service for Hindu and Jain families, run by Vanik
-              Council volunteers, helping families find respectful introductions for
-              over 40 years.
+              Looking for a life partner who shares your values? Meet genuine, verified
+              Hindu and Jain singles through a private register trusted by our community
+              for over 40 years - no endless swiping, no strangers, no time-wasters.
             </p>
             <div className="landing-actions landing-actions--primary">
               <Link to="/register" className="btn btn-primary landing-cta-register">
@@ -70,24 +70,25 @@ export default function Landing() {
               <span className="landing-step-num">1</span>
               <h3>Register &amp; verify</h3>
               <p>
-                Create your account and upload proof of identity. Our team reviews every
-                application within 10 working days.
+                Create your profile and upload proof of identity. A real person checks
+                every application, so you only ever meet genuine, verified members.
               </p>
             </li>
             <li className="landing-step">
               <span className="landing-step-num">2</span>
               <h3>Browse &amp; save</h3>
               <p>
-                Once approved, browse verified profiles and save anyone you&rsquo;d like
-                to know more about.
+                Browse people who are looking for the same thing you are - marriage, not
+                endless chatting - and save anyone who catches your eye.
               </p>
             </li>
             <li className="landing-step">
               <span className="landing-step-num">3</span>
               <h3>Request contact</h3>
               <p>
-                Ask for contact details and view them in your dashboard. Line up to three
-                at a time; fair weekly and monthly limits keep things balanced.
+                When you&rsquo;re ready, request contact details and take it from there -
+                a phone call, a coffee, a proper conversation. Up to three introductions
+                at a time keeps it personal.
               </p>
             </li>
           </ol>
@@ -97,16 +98,24 @@ export default function Landing() {
         <section className="landing-section layout-max">
           <div className="landing-trust-grid" aria-label="Service highlights">
             <article className="landing-trust-card">
-              <h2>Verified members</h2>
-              <p>Each profile is reviewed by our team before it appears.</p>
+              <h2>Real, verified people</h2>
+              <p>
+                Every profile is checked by our volunteers before it appears. No bots, no
+                fake accounts.
+              </p>
             </article>
             <article className="landing-trust-card">
-              <h2>Running for 40+ years</h2>
-              <p>Many successful marriages through our community register.</p>
+              <h2>40+ years of marriages</h2>
+              <p>
+                Generations of couples in our community first met through this register.
+              </p>
             </article>
             <article className="landing-trust-card">
-              <h2>Community run</h2>
-              <p>Not-for-profit service managed by Vanik Council volunteers.</p>
+              <h2>Community run, not-for-profit</h2>
+              <p>
+                Run by Vanik Council volunteers. £10 a year, no advertising, and your
+                data is never sold.
+              </p>
             </article>
           </div>
         </section>
@@ -124,6 +133,18 @@ export default function Landing() {
                 Membership is open to adults aged 18 and over from Hindu and Jain
                 families. The register is run by Vanik Council volunteers in the UK and
                 has helped families find respectful introductions for over 40 years.
+              </p>
+            </details>
+            <details className="landing-faq-item">
+              <summary>I&rsquo;m a parent - can I register on behalf of my son or daughter?</summary>
+              <p>
+                We love that parents want to help - many happy matches in our community
+                started exactly that way. The account itself, though, should be created
+                by the person looking to marry: they are the one who will browse
+                profiles, receive introductions and speak with matches, and we verify
+                each member&rsquo;s own identity. The best way to help is to share this
+                page with them and encourage them to register - it only takes a few
+                minutes, and you are very welcome to sit with them while they do.
               </p>
             </details>
             <details className="landing-faq-item">
