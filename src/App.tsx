@@ -14,6 +14,7 @@ import AdminLayout from './pages/admin/AdminLayout';
 import AdminMemberDetail from './pages/admin/AdminMemberDetail';
 import AdminMembers from './pages/admin/AdminMembers';
 import AdminOverview from './pages/admin/AdminOverview';
+import AdminPayments from './pages/admin/AdminPayments';
 import AdminRequests from './pages/admin/AdminRequests';
 import AdminScheduledJobs from './pages/admin/AdminScheduledJobs';
 import AdminSettings from './pages/admin/AdminSettings';
@@ -102,6 +103,7 @@ export default function App() {
               <Route path="analytics" element={<AdminAnalytics />} />
               <Route path="add-member" element={<AdminAddMember />} />
               <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
+              <Route path="payments" element={<AdminPayments />} />
               <Route path="coupons" element={<AdminCoupons />} />
               <Route path="email-log" element={<AdminEmailLog />} />
               <Route path="email-export" element={<AdminEmailExport />} />

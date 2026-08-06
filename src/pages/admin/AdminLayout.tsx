@@ -111,6 +111,9 @@ export default function AdminLayout() {
             <NavLink to="/admin/scheduled-jobs" className={navCls}>
               Scheduled jobs
             </NavLink>
+            <NavLink to="/admin/payments" className={navCls}>
+              Payments
+            </NavLink>
             <NavLink to="/admin/coupons" className={navCls}>
               Coupons
             </NavLink>
@@ -172,6 +175,9 @@ export default function AdminLayout() {
         )}
         <NavLink to="/admin/scheduled-jobs" className={navCls}>
           Scheduled jobs
+        </NavLink>
+        <NavLink to="/admin/payments" className={navCls}>
+          Payments
         </NavLink>
         <NavLink to="/admin/coupons" className={navCls}>
           Coupons

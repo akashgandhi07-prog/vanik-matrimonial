@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
   const checkoutSessionId = session.id;
   const amountTotal = session.amount_total ?? null;
   const currency = session.currency ?? null;
+  const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
 
   if (!checkoutSessionId || typeof authUserId !== 'string') {
     return jsonResponse({ received: true, skipped: 'bad_metadata' }, req);
@@ -71,6 +72,7 @@ Deno.serve(async (req) => {
       payment_status: 'paid',
       amount_total: amountTotal,
       currency,
+      payment_intent_id: paymentIntentId,
       updated_at: new Date().toISOString(),
     };
     const { error } = await admin.from('stripe_checkout_sessions').insert(row);
@@ -131,6 +133,7 @@ Deno.serve(async (req) => {
       payment_status: 'paid',
       amount_total: amountTotal,
       currency,
+      payment_intent_id: paymentIntentId,
       renewal_applied_at: appliedAt,
       updated_at: appliedAt,
     });
