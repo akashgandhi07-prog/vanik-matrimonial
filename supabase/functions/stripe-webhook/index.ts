@@ -77,6 +77,25 @@ Deno.serve(async (req) => {
     };
     const { error } = await admin.from('stripe_checkout_sessions').insert(row);
     if (error?.code === '23505') {
+      // The row already exists, almost always because submit-registration created
+      // it first - it is the only writer that knows consumed_at, and the member
+      // submits within seconds of paying. It records the payment but not the
+      // amount, so a duplicate key is not "nothing left to do": fill in what only
+      // Stripe knows. Guarded on amount_total being null so retries are no-ops and
+      // a good value is never overwritten.
+      const { error: backfillErr } = await admin
+        .from('stripe_checkout_sessions')
+        .update({
+          amount_total: amountTotal,
+          currency,
+          payment_intent_id: paymentIntentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('checkout_session_id', checkoutSessionId)
+        .is('amount_total', null);
+      if (backfillErr) {
+        console.error('stripe_checkout_sessions backfill registration', backfillErr);
+      }
       return jsonResponse({ received: true, idempotent: true }, req);
     }
     if (error) {

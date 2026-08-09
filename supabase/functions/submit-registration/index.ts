@@ -226,6 +226,7 @@ Deno.serve(async (req) => {
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
   const paymentRequired = !!stripeSecret && !couponValid && !isResubmit;
   let stripeCheckoutSessionId: string | null = null;
+  let paidSession: { amount_total: number | null; currency: string | null } | null = null;
   if (paymentRequired) {
     const sid = stripHtml(String(body.stripe_checkout_session_id ?? ''), 128);
     if (!sid.startsWith('cs_')) {
@@ -235,7 +236,7 @@ Deno.serve(async (req) => {
       }, req, 402);
     }
     try {
-      await verifyPaidCheckoutSession({
+      paidSession = await verifyPaidCheckoutSession({
         secretKey: stripeSecret,
         sessionId: sid,
         authUserId: userData.user.id,
@@ -425,18 +426,26 @@ Deno.serve(async (req) => {
     }
 
     if (stripeCheckoutSessionId) {
-      await admin.from('stripe_checkout_sessions').upsert(
-        {
-          checkout_session_id: stripeCheckoutSessionId,
-          auth_user_id: userData.user.id,
-          profile_id: profileId,
-          purpose: 'registration',
-          payment_status: 'paid',
-          consumed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'checkout_session_id' }
-      );
+      // Record what was actually paid, not just that it was paid. Stripe told us
+      // during verification above, and the webhook cannot be relied on to fill it
+      // in later: this upsert usually wins the race against it (the member submits
+      // seconds after returning from Stripe), and the webhook skips rows that
+      // already exist. Only set the amount when Stripe gave us one, so a surprise
+      // null can never blank a value the webhook did manage to record first.
+      const paymentRow: Record<string, unknown> = {
+        checkout_session_id: stripeCheckoutSessionId,
+        auth_user_id: userData.user.id,
+        profile_id: profileId,
+        purpose: 'registration',
+        payment_status: 'paid',
+        consumed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if (paidSession?.amount_total != null) paymentRow.amount_total = paidSession.amount_total;
+      if (paidSession?.currency != null) paymentRow.currency = paidSession.currency;
+      await admin
+        .from('stripe_checkout_sessions')
+        .upsert(paymentRow, { onConflict: 'checkout_session_id' });
     }
   }
 
