@@ -19,6 +19,16 @@ const ENTRIES: Entry[] = [
     note: 'Several of these came straight from member feedback. Keep it coming!',
     items: [
       {
+        text: (
+          <>
+            <strong>We no longer ask for your parents&apos; names.</strong> Father&apos;s name and
+            mother&apos;s name have been removed from registration, and every one we already held has been
+            deleted. They used to be passed on with your details when an introduction was made, and they no
+            longer are.
+          </>
+        ),
+      },
+      {
         fromFeedback: true,
         text: (
           <>
