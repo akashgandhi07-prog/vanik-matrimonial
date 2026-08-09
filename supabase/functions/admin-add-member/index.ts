@@ -130,8 +130,6 @@ Deno.serve(async (req) => {
     home_address_city: body.city ? String(body.city) : null,
     home_address_postcode: body.postcode ? String(body.postcode) : null,
     home_address_country: body.country ? String(body.country) : 'UK',
-    father_name: body.father_name ? String(body.father_name) : null,
-    mother_name: body.mother_name ? String(body.mother_name) : null,
   });
 
   if (privateErr) {

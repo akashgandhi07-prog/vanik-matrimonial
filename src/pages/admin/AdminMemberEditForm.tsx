@@ -44,8 +44,6 @@ export type MemberPrivateFull = {
   home_address_city: string | null;
   home_address_postcode: string | null;
   home_address_country: string | null;
-  father_name: string | null;
-  mother_name: string | null;
   id_document_url: string | null;
   coupon_used: string | null;
   /** This member's own recommend-a-friend code. */
@@ -122,8 +120,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
   const [city, setCity] = useState(priv.home_address_city ?? '');
   const [postcode, setPostcode] = useState(priv.home_address_postcode ?? '');
   const [country, setCountry] = useState(priv.home_address_country ?? 'UK');
-  const [fatherName, setFatherName] = useState(priv.father_name ?? '');
-  const [motherName, setMotherName] = useState(priv.mother_name ?? '');
   const [idDocPath, setIdDocPath] = useState(priv.id_document_url ?? '');
   const [couponUsed, setCouponUsed] = useState(priv.coupon_used ?? '');
 
@@ -158,8 +154,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     setCity(priv.home_address_city ?? '');
     setPostcode(priv.home_address_postcode ?? '');
     setCountry(priv.home_address_country ?? 'UK');
-    setFatherName(priv.father_name ?? '');
-    setMotherName(priv.mother_name ?? '');
     setIdDocPath(priv.id_document_url ?? '');
     setCouponUsed(priv.coupon_used ?? '');
     setErr(null);
@@ -214,8 +208,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           home_address_city: city,
           home_address_postcode: postcode,
           home_address_country: country,
-          father_name: fatherName,
-          mother_name: motherName,
           id_document_url: idDocPath.trim() || null,
           coupon_used: couponUsed.trim() || null,
         },
@@ -386,15 +378,6 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
             ))}
           </select>
         </div>
-        <div>
-          <label className="label">Father&apos;s name</label>
-          <input value={fatherName} onChange={(e) => setFatherName(e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Mother&apos;s name</label>
-          <input value={motherName} onChange={(e) => setMotherName(e.target.value)} />
-        </div>
-
         <div style={{ gridColumn: '1 / -1' }}>
           <label className="label">Future settlement plans</label>
           <textarea value={settlement} onChange={(e) => setSettlement(e.target.value)} rows={2} maxLength={200} />

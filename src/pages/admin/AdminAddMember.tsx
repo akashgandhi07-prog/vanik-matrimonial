@@ -27,8 +27,6 @@ type FormState = {
   diet: string;
   hobbies: string;
   future_settlement_plans: string;
-  father_name: string;
-  mother_name: string;
   home_address_line1: string;
   city: string;
   postcode: string;
@@ -55,8 +53,6 @@ const INIT: FormState = {
   diet: '',
   hobbies: '',
   future_settlement_plans: '',
-  father_name: '',
-  mother_name: '',
   home_address_line1: '',
   city: '',
   postcode: '',
@@ -249,17 +245,6 @@ export default function AdminAddMember() {
               onChange={(e) => set('future_settlement_plans', e.target.value)}
             />
           </Field>
-
-          <h2 style={{ margin: 0, marginTop: 8 }}>Family</h2>
-
-          <div className="responsive-form-row-2">
-            <Field label="Father's name">
-              <input value={form.father_name} onChange={(e) => set('father_name', e.target.value)} />
-            </Field>
-            <Field label="Mother's name">
-              <input value={form.mother_name} onChange={(e) => set('mother_name', e.target.value)} />
-            </Field>
-          </div>
 
           <h2 style={{ margin: 0, marginTop: 8 }}>Address</h2>
 

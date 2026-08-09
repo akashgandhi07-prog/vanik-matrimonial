@@ -27,8 +27,7 @@ export default function Privacy() {
             Identity and account: name, gender, age derived from date of birth, nationality, origins, email, and mobile.
           </li>
           <li>
-            Household and parental names, address fields you choose to supply, and eligibility and preference fields
-            displayed on profiles.
+            Address fields you choose to supply, and eligibility and preference fields displayed on profiles.
           </li>
           <li>Photos for your profile.</li>
           <li>Temporary uploads of passport or driving licence images for verification.</li>

@@ -20,8 +20,6 @@ type MemberPrivateRow = {
   surname: string | null;
   mobile_phone: string | null;
   email: string | null;
-  father_name: string | null;
-  mother_name: string | null;
 };
 
 Deno.serve(async (req) => {
@@ -111,7 +109,7 @@ Deno.serve(async (req) => {
 
   const { data: privateRows, error: privateErr } = await admin
     .from('member_private')
-    .select('profile_id, surname, mobile_phone, email, father_name, mother_name')
+    .select('profile_id, surname, mobile_phone, email')
     .in('profile_id', candidateIds);
   if (privateErr) {
     return jsonResponse({ error: privateErr.message }, req, 500);
@@ -137,8 +135,6 @@ Deno.serve(async (req) => {
         reference_number: stripHtml(profile?.reference_number ?? '', 20),
         mobile: stripHtml(priv?.mobile_phone ?? '', 40),
         email: stripHtml(priv?.email ?? '', 120),
-        father_name: stripHtml(priv?.father_name ?? '', 120),
-        mother_name: stripHtml(priv?.mother_name ?? '', 120),
       };
     });
   }

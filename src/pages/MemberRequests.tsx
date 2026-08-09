@@ -17,8 +17,6 @@ type ContactDetailRow = {
   full_name: string;
   reference_number: string;
   mobile: string;
-  father_name: string;
-  mother_name: string;
 };
 
 type RequestedProfileRpcRow = {
@@ -52,8 +50,6 @@ type RequestedProfileRpcRow = {
   full_name: string | null;
   mobile: string | null;
   email: string | null;
-  father_name: string | null;
-  mother_name: string | null;
 };
 
 function telHref(phone: string): string {
@@ -183,8 +179,6 @@ export default function MemberRequests() {
               full_name: row.full_name ?? row.first_name,
               reference_number: row.reference_number ?? '',
               mobile: row.mobile ?? '',
-              father_name: row.father_name ?? '',
-              mother_name: row.mother_name ?? '',
             };
             if (!byRequest[row.request_id]) byRequest[row.request_id] = [];
             byRequest[row.request_id].push(contact);
@@ -728,11 +722,7 @@ export default function MemberRequests() {
                       const details = contacts.find((row) => row.profile_id === id);
                       const displayName = details?.full_name || (c ? c.first_name : `Member ${id.slice(0, 8)}...`);
                       const wa = details?.mobile ? whatsappUrlFromPhone(details.mobile) : null;
-                      const hasContactDetails = !!(
-                        details?.mobile ||
-                        details?.father_name ||
-                        details?.mother_name
-                      );
+                      const hasContactDetails = !!details?.mobile;
                       const noLongerListed = !!candidateProfile && !isProfileListedOnRegister(candidateProfile);
                       const openProfile = candidateProfile
                         ? () =>

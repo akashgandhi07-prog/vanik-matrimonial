@@ -274,8 +274,6 @@ const EXPORT_MEMBERS_CSV_COLUMNS = [
   'home_address_city',
   'home_address_postcode',
   'home_address_country',
-  'father_name',
-  'mother_name',
   'status',
   'photo_status',
   'hidden_reason',
@@ -312,8 +310,6 @@ const EXPORT_NEEDS_MEMBER_PRIVATE = new Set<string>([
   'home_address_city',
   'home_address_postcode',
   'home_address_country',
-  'father_name',
-  'mother_name',
   'coupon_used',
   'id_document_uploaded',
   'private_record_created_at',
@@ -334,8 +330,6 @@ type PrivExportRow = {
   home_address_city: string | null;
   home_address_postcode: string | null;
   home_address_country: string | null;
-  father_name: string | null;
-  mother_name: string | null;
   coupon_used: string | null;
   id_document_url: string | null;
   created_at: string | null;
@@ -382,8 +376,6 @@ function buildMemberExportValueMap(
     home_address_city: priv?.home_address_city ?? '',
     home_address_postcode: priv?.home_address_postcode ?? '',
     home_address_country: priv?.home_address_country ?? '',
-    father_name: priv?.father_name ?? '',
-    mother_name: priv?.mother_name ?? '',
     status: p.status ?? '',
     photo_status: p.photo_status ?? '',
     hidden_reason: p.hidden_reason ?? '',
@@ -602,7 +594,7 @@ Deno.serve(async (req) => {
         const { data: priv, error: mErr } = await admin
           .from('member_private')
           .select(
-            'profile_id, surname, date_of_birth, email, mobile_phone, home_address_line1, home_address_city, home_address_postcode, home_address_country, father_name, mother_name, coupon_used, id_document_url, created_at, contact_request_weekly_bonus, contact_request_monthly_bonus, id_document_deleted_at'
+            'profile_id, surname, date_of_birth, email, mobile_phone, home_address_line1, home_address_city, home_address_postcode, home_address_country, coupon_used, id_document_url, created_at, contact_request_weekly_bonus, contact_request_monthly_bonus, id_document_deleted_at'
           )
           .in('profile_id', chunk);
         if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
@@ -2117,12 +2109,6 @@ Deno.serve(async (req) => {
       }
       if (privIn.home_address_country !== undefined) {
         privatePatch.home_address_country = stripHtml(String(privIn.home_address_country), 80);
-      }
-      if (privIn.father_name !== undefined) {
-        privatePatch.father_name = stripHtml(String(privIn.father_name), 120);
-      }
-      if (privIn.mother_name !== undefined) {
-        privatePatch.mother_name = stripHtml(String(privIn.mother_name), 120);
       }
       if (privIn.id_document_url !== undefined) {
         privatePatch.id_document_url =

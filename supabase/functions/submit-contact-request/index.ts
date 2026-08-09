@@ -310,8 +310,6 @@ Deno.serve(async (req) => {
         reference_number: stripHtml(p.reference_number ?? '', 20),
         mobile: stripHtml(String(m.mobile_phone ?? ''), 40),
         email: stripHtml(String(m.email ?? ''), 120),
-        father_name: stripHtml(String(m.father_name ?? ''), 120),
-        mother_name: stripHtml(String(m.mother_name ?? ''), 120),
       });
     }
 
@@ -345,8 +343,6 @@ Deno.serve(async (req) => {
             `<div style="margin:14px 0;padding:12px 14px;border:1px solid #e8e1d6;border-radius:10px;">
               <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong></p>
               ${c.mobile ? `<p style="margin:0;"><strong>Mobile:</strong> ${escapeHtml(c.mobile)}</p>` : ''}
-              ${c.father_name ? `<p style="margin:4px 0 0;font-size:13px;">Father: ${escapeHtml(c.father_name)}</p>` : ''}
-              ${c.mother_name ? `<p style="margin:4px 0 0;font-size:13px;">Mother: ${escapeHtml(c.mother_name)}</p>` : ''}
             </div>`
         )
         .join('');

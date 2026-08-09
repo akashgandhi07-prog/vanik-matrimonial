@@ -50,8 +50,6 @@ type FormState = {
   place_of_birth: string;
   town_country_of_origin: string;
   religion: string;
-  father_name: string;
-  mother_name: string;
   future_settlement_plans: string;
   education: string;
   job_title: string;
@@ -88,8 +86,6 @@ const defaultState: FormState = {
   place_of_birth: '',
   town_country_of_origin: '',
   religion: '',
-  father_name: '',
-  mother_name: '',
   future_settlement_plans: '',
   education: '',
   job_title: '',
@@ -159,8 +155,6 @@ function validateStep2(form: FormState): Record<string, string> {
   if (!isValidPlaceField(form.town_country_of_origin, 200))
     e.town_country_of_origin = 'Enter town and country of family origin.';
   if (!form.religion) e.religion = 'Please select a religion.';
-  if (!isValidPersonName(form.father_name)) e.father_name = "Enter your father's name.";
-  if (!isValidPersonName(form.mother_name)) e.mother_name = "Enter your mother's name.";
   if (form.future_settlement_plans.trim().length > 200)
     e.future_settlement_plans = 'Maximum 200 characters for this field.';
   return e;
@@ -199,8 +193,6 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   place_of_birth: 'reg-pob',
   town_country_of_origin: 'reg-origin',
   religion: 'reg-religion',
-  father_name: 'reg-father',
-  mother_name: 'reg-mother',
   future_settlement_plans: 'reg-settlement',
   education: 'reg-education',
   job_title: 'reg-job',
@@ -403,8 +395,6 @@ export default function Register() {
         place_of_birth: p.place_of_birth ?? '',
         town_country_of_origin: p.town_country_of_origin ?? '',
         religion: p.religion ?? '',
-        father_name: m.father_name ?? '',
-        mother_name: m.mother_name ?? '',
         future_settlement_plans: p.future_settlement_plans ?? '',
         education: p.education ?? '',
         job_title: p.job_title ?? '',
@@ -691,8 +681,6 @@ export default function Register() {
         place_of_birth: titleCaseIfAllCaps(sanitizeText(form.place_of_birth, 200)),
         town_country_of_origin: titleCaseIfAllCaps(sanitizeText(form.town_country_of_origin, 200)),
         religion: form.religion,
-        father_name: titleCaseIfAllCaps(sanitizeText(form.father_name, 120)),
-        mother_name: titleCaseIfAllCaps(sanitizeText(form.mother_name, 120)),
         future_settlement_plans: sentenceCaseIfAllCaps(sanitizeText(form.future_settlement_plans, 200)),
         education: titleCaseIfAllCaps(sanitizeText(form.education, 500)),
         job_title: titleCaseIfAllCaps(sanitizeText(form.job_title, 200)),
@@ -1544,42 +1532,6 @@ export default function Register() {
                   ))}
                 </select>
                 {fieldErrors.religion && <p className="field-error">{fieldErrors.religion}</p>}
-              </div>
-              <div>
-                <label className="label" htmlFor="reg-father">
-                  Father&apos;s name <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="reg-father"
-                  type="text"
-                  name="father-name"
-                  autoComplete="additional-name"
-                  value={form.father_name}
-                  onChange={(e) => {
-                    update({ father_name: e.target.value });
-                    clearFieldError('father_name');
-                  }}
-                  aria-invalid={fieldErrors.father_name ? true : undefined}
-                />
-                {fieldErrors.father_name && <p className="field-error">{fieldErrors.father_name}</p>}
-              </div>
-              <div>
-                <label className="label" htmlFor="reg-mother">
-                  Mother&apos;s name <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="reg-mother"
-                  type="text"
-                  name="mother-name"
-                  autoComplete="off"
-                  value={form.mother_name}
-                  onChange={(e) => {
-                    update({ mother_name: e.target.value });
-                    clearFieldError('mother_name');
-                  }}
-                  aria-invalid={fieldErrors.mother_name ? true : undefined}
-                />
-                {fieldErrors.mother_name && <p className="field-error">{fieldErrors.mother_name}</p>}
               </div>
               <div>
                 <label className="label" htmlFor="reg-settlement">

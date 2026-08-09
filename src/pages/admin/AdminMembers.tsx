@@ -121,8 +121,6 @@ const MEMBER_EXPORT_COLUMN_OPTS = [
   { id: 'home_address_city', label: 'City' },
   { id: 'home_address_postcode', label: 'Postcode' },
   { id: 'home_address_country', label: 'Country' },
-  { id: 'father_name', label: "Father's name" },
-  { id: 'mother_name', label: "Mother's name" },
   { id: 'status', label: 'Status' },
   { id: 'photo_status', label: 'Photo status' },
   { id: 'hidden_reason', label: 'Off register (reason)' },

@@ -67,8 +67,6 @@ BOYS_COLS = {
     "town_country_of_origin": "AQ",
     "place_of_birth": "AR",
     "dob": "AV",
-    "father": "AW",
-    "mother": "AX",
     "show": "AZ",
 }
 
@@ -641,8 +639,6 @@ def process_sheet(
             "email": email,
             "mobile_phone": mobile,
             "home_address_line1": home_line1,
-            "father_name": str_clean(cell(ws, row, cols["father"])),
-            "mother_name": str_clean(cell(ws, row, cols["mother"])),
             "id_document_url": None,
         }
 

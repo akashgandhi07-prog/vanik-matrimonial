@@ -286,8 +286,6 @@ Deno.serve(async (req) => {
     home_address_city: stripHtml(String(body.home_address_city ?? ''), 100),
     home_address_postcode: stripHtml(String(body.home_address_postcode ?? ''), 20),
     home_address_country: stripHtml(String(body.home_address_country ?? 'UK'), 80),
-    father_name: stripHtml(String(body.father_name ?? ''), 120),
-    mother_name: stripHtml(String(body.mother_name ?? ''), 120),
     id_document_url: idPath,
     coupon_used: couponValid ? couponRaw : null,
     referred_by_code: referralValid,

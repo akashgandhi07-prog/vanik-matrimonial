@@ -50,8 +50,6 @@ export type MemberPrivateRow = {
   surname: string;
   email: string;
   mobile_phone: string;
-  father_name: string | null;
-  mother_name: string | null;
   date_of_birth: string;
   /** Admin-granted extra distinct-candidate slots for the rolling 7-day window (default caps: 3 + bonus). */
   contact_request_weekly_bonus?: number | null;

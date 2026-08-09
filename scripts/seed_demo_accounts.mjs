@@ -306,8 +306,6 @@ async function seedOne(spec) {
     home_address_city: 'London',
     home_address_postcode: `SW1A 1${idx}A`,
     home_address_country: 'UK',
-    father_name: `Mr ${surname}`,
-    mother_name: `Mrs ${surname}`,
     id_document_url: null,
   });
   if (mpErr) {
