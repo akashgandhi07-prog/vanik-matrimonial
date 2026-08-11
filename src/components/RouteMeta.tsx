@@ -5,7 +5,7 @@ const SITE_ORIGIN = 'https://matrimonial.vanikcouncil.uk';
 const SITE_NAME = 'Vanik Matrimonial Register';
 
 const DEFAULT_DESCRIPTION =
-  'A private, not-for-profit matrimonial introduction service for Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years. Membership £10 a year.';
+  'A private, not-for-profit matrimonial introduction service for Gujarati Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years. Membership £10 a year.';
 
 type PageMeta = {
   title: string;
@@ -16,7 +16,7 @@ type PageMeta = {
 
 const PAGE_META: Record<string, PageMeta> = {
   '/': {
-    title: 'Vanik Matrimonial Register - Hindu & Jain Introductions UK',
+    title: 'Vanik Matrimonial Register - Gujarati Hindu & Jain Introductions UK',
     description: DEFAULT_DESCRIPTION,
     indexable: true,
   },
@@ -29,7 +29,7 @@ const PAGE_META: Record<string, PageMeta> = {
   '/demo': {
     title: `Browse Profiles - ${SITE_NAME}`,
     description:
-      'Preview verified matrimonial profiles from Hindu and Jain families before you register. Full profiles and introductions are available to approved members.',
+      'Preview verified matrimonial profiles from Gujarati Hindu and Jain families before you register. Full profiles and introductions are available to approved members.',
     indexable: true,
   },
   '/privacy': {

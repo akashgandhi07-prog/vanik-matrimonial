@@ -37,8 +37,9 @@ export default function Landing() {
             <h1 className="landing-title">Vanik Matrimonial Register</h1>
             <p className="landing-lead">
               Looking for a life partner who shares your values? Meet genuine, verified
-              Hindu and Jain singles through a private register trusted by our community
-              for over 40 years - no endless swiping, no strangers, no time-wasters.
+              Gujarati Hindu and Jain singles through a private register trusted by our
+              community for over 40 years - no endless swiping, no strangers, no
+              time-wasters.
             </p>
             <div className="landing-actions landing-actions--primary">
               <Link to="/register" className="btn btn-primary landing-cta-register">
@@ -130,9 +131,9 @@ export default function Landing() {
             <details className="landing-faq-item">
               <summary>Who can join the Vanik Matrimonial Register?</summary>
               <p>
-                Membership is open to adults aged 18 and over from Hindu and Jain
-                families. The register is run by Vanik Council volunteers in the UK and
-                has helped families find respectful introductions for over 40 years.
+                Membership is open to adults aged 18 and over from Gujarati Hindu and
+                Jain families. The register is run by Vanik Council volunteers in the UK
+                and has helped families find respectful introductions for over 40 years.
               </p>
             </details>
             <details className="landing-faq-item">
