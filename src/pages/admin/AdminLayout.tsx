@@ -131,6 +131,9 @@ export default function AdminLayout() {
             <NavLink to="/admin/requests" className={navCls}>
               Requests
             </NavLink>
+            <NavLink to="/admin/sharing" className={navCls}>
+              Sharing preview
+            </NavLink>
             <NavLink to="/admin/feedback" className={navCls}>
               Feedback
             </NavLink>
@@ -196,6 +199,9 @@ export default function AdminLayout() {
         </NavLink>
         <NavLink to="/admin/requests" className={navCls}>
           Requests
+        </NavLink>
+        <NavLink to="/admin/sharing" className={navCls}>
+          Sharing preview
         </NavLink>
         <NavLink to="/admin/feedback" className={navCls}>
           Feedback

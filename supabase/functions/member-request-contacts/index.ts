@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
-import { stripHtml } from '../_shared/sanitize.ts';
+import { buildContactDetail, type ContactDetail } from '../_shared/introduction.ts';
 
 type RequestRow = {
   id: string;
@@ -120,23 +120,14 @@ Deno.serve(async (req) => {
     (privateRows ?? []).map((m) => [m.profile_id as string, m as MemberPrivateRow])
   );
 
-  const contactsByRequest: Record<string, Array<Record<string, string>>> = {};
+  // Shared builder: keep in sync-by-construction with submit-contact-request
+  // and the admin sharing preview (_shared/introduction.ts).
+  const contactsByRequest: Record<string, ContactDetail[]> = {};
   for (const row of rows) {
-    contactsByRequest[row.id] = (row.candidate_ids ?? []).map((candidateId) => {
-      const profile = profileById.get(candidateId);
-      const priv = privateById.get(candidateId);
-      const firstName = stripHtml(profile?.first_name ?? 'Member', 80);
-      const surname = stripHtml(priv?.surname ?? '', 80);
-      const fullName = `${firstName}${surname ? ` ${surname}` : ''}`;
-      return {
-        profile_id: candidateId,
-        first_name: firstName,
-        full_name: fullName,
-        reference_number: stripHtml(profile?.reference_number ?? '', 20),
-        mobile: stripHtml(priv?.mobile_phone ?? '', 40),
-        email: stripHtml(priv?.email ?? '', 120),
-      };
-    });
+    contactsByRequest[row.id] = (row.candidate_ids ?? []).map((candidateId) => ({
+      ...buildContactDetail(profileById.get(candidateId), privateById.get(candidateId)),
+      profile_id: candidateId,
+    }));
   }
 
   return jsonResponse({ contacts_by_request: contactsByRequest }, req);

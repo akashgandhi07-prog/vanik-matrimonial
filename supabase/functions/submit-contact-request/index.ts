@@ -4,10 +4,7 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient, runAfterResponse } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+import { buildCandidatesHtml, buildContactDetail, type ContactDetail } from '../_shared/introduction.ts';
 
 /** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -297,21 +294,15 @@ Deno.serve(async (req) => {
 
     const requestId = insertRow.request_id;
 
-    const contactPayload: Array<Record<string, string>> = [];
-
-    for (const cid of ids) {
-      const p = byId.get(cid)!;
-      const m = privateById.get(cid)!;
-      const fullName = `${stripHtml(p.first_name, 80)} ${stripHtml(String(m.surname ?? ''), 80)}`;
-      contactPayload.push({
-        profile_id: cid,
-        first_name: stripHtml(p.first_name, 80),
-        full_name: fullName,
-        reference_number: stripHtml(p.reference_number ?? '', 20),
-        mobile: stripHtml(String(m.mobile_phone ?? ''), 40),
-        email: stripHtml(String(m.email ?? ''), 120),
-      });
-    }
+    // Shared builder: keep in sync-by-construction with member-request-contacts
+    // and the admin sharing preview (_shared/introduction.ts).
+    const contactPayload: ContactDetail[] = ids.map((cid) =>
+      buildContactDetail(byId.get(cid)!, privateById.get(cid)! as {
+        surname?: string | null;
+        mobile_phone?: string | null;
+        email?: string | null;
+      })
+    );
 
     const warnings: string[] = [];
     const { error: profileUpdateErr } = await admin
@@ -337,15 +328,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const requesterName = `${stripHtml(requester.first_name, 80)} ${stripHtml(String(reqPriv?.surname ?? ''), 80)}`.trim();
 
-      const candidatesHtml = contactPayload
-        .map(
-          (c) =>
-            `<div style="margin:14px 0;padding:12px 14px;border:1px solid #e8e1d6;border-radius:10px;">
-              <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong></p>
-              ${c.mobile ? `<p style="margin:0;"><strong>Mobile:</strong> ${escapeHtml(c.mobile)}</p>` : ''}
-            </div>`
-        )
-        .join('');
+      const candidatesHtml = buildCandidatesHtml(contactPayload);
 
       const requesterEmail = stripHtml(String(reqPriv?.email ?? ''), 200);
       const requesterProfileId = requester.id;

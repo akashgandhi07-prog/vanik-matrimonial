@@ -3,6 +3,7 @@ import { letterHtml } from './resend.ts';
 import { sendTransactionalMail } from './transactional-mail.ts';
 import { publicSiteBaseUrl } from './site-url.ts';
 import { stripHtml } from './sanitize.ts';
+import { contactDetailsEmailContent, introductionReceivedEmailContent } from './introduction.ts';
 
 export type EmailType =
   | 'account_archived'
@@ -173,15 +174,13 @@ export async function dispatchEmail(
       break;
     }
     case 'contact_details': {
-      const listHtml = String(extraData.candidates_html ?? '');
-      const memberEmail = stripHtml(String(extraData.requester_email ?? ''), 120);
-      subject = 'Your requested candidate details';
-      inner = `<p>Dear ${stripHtml(String(extraData.requester_first_name ?? ''), 60)},</p>
-        <p>Please find below the contact details you requested. We ask that you use this information respectfully and in line with our community values.</p>
-        ${listHtml}
-        <p style="margin-top:20px;">A copy of these details has been sent to <strong>${memberEmail}</strong>.</p>
-        <p>We would be grateful for brief feedback in due course so we can keep the register helpful for everyone.</p>
-        <p>Warm regards,<br/>The register team</p>`;
+      // Template lives in _shared/introduction.ts so the admin sharing preview
+      // renders the exact same email members receive.
+      ({ subject, inner } = contactDetailsEmailContent({
+        requesterFirstName: String(extraData.requester_first_name ?? ''),
+        requesterEmail: String(extraData.requester_email ?? ''),
+        candidatesHtml: String(extraData.candidates_html ?? ''),
+      }));
       break;
     }
     case 'candidate_notification': {
@@ -376,15 +375,13 @@ export async function dispatchEmail(
       const { profile } = await fetchProfile(recipientProfileId!);
       if (!profile) return { ok: false, error: 'Profile not found' };
       const ex = extraData as Record<string, unknown>;
-      const reqName = stripHtml(String(ex.requester_name ?? ''), 120);
-      const reqAge = stripHtml(String(ex.requester_age ?? ''), 8);
-      subject = `${reqName} has requested your details - Vanik Matrimonial Register`;
-      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p><strong>${escapeHtmlEmail(reqName)}</strong>${reqAge ? `, age ${escapeHtmlEmail(reqAge)},` : ''} has requested your details through the register. They have received your contact details and may be in touch.</p>
-        <p>Sign in to see their full profile, photos, and contact details under <strong>My requests &gt; Requested your details</strong>, so you can get in touch from your side too.</p>
-        <p><a href="${publicSiteBaseUrl()}/login" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">View their full profile</a></p>
-        <p>If you have any concerns about this introduction, contact us at <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
-        <p>With good wishes,<br/>The register team</p>`;
+      // Template lives in _shared/introduction.ts so the admin sharing preview
+      // renders the exact same email members receive.
+      ({ subject, inner } = introductionReceivedEmailContent({
+        recipientFirstName: String(profile.first_name ?? ''),
+        requesterName: String(ex.requester_name ?? ''),
+        requesterAge: String(ex.requester_age ?? ''),
+      }));
       break;
     }
     case 'website_feedback_submission': {

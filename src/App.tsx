@@ -18,6 +18,7 @@ import AdminPayments from './pages/admin/AdminPayments';
 import AdminRequests from './pages/admin/AdminRequests';
 import AdminScheduledJobs from './pages/admin/AdminScheduledJobs';
 import AdminSettings from './pages/admin/AdminSettings';
+import AdminSharingPreview from './pages/admin/AdminSharingPreview';
 import DemoBrowse from './pages/DemoBrowse';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
@@ -99,6 +100,7 @@ export default function App() {
               <Route path="members" element={<AdminMembers />} />
               <Route path="members/:id" element={<AdminMemberDetail />} />
               <Route path="requests" element={<AdminRequests />} />
+              <Route path="sharing" element={<AdminSharingPreview />} />
               <Route path="feedback" element={<AdminFeedback />} />
               <Route path="analytics" element={<AdminAnalytics />} />
               <Route path="add-member" element={<AdminAddMember />} />
