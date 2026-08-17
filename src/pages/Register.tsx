@@ -20,6 +20,10 @@ import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { friendlyUploadError } from '../lib/uploadError';
 
 const LS_KEY = 'vmr_registration_v1';
+/** Auth user the saved draft belongs to. The draft holds one person's answers and
+ *  storage paths namespaced by their auth user id, so it must never be handed to
+ *  the next account that signs in on this device. */
+const LS_OWNER_KEY = 'vmr_registration_owner_v1';
 /** Recommend-a-friend code captured from a ?ref= link. Stored separately from the
  *  form draft because the friend typically arrives, creates an account, verifies
  *  their email (possibly on another device/day) and only then fills in the form. */
@@ -109,6 +113,27 @@ function loadState(): FormState {
   } catch {
     return { ...defaultState };
   }
+}
+
+/**
+ * Uploads are stored under `<auth user id>/` (proof of identity) and
+ * `<gender>/<auth user id>/` (photos), and submit-registration rejects any path
+ * that does not match the submitting account. A restored draft can therefore
+ * carry paths this account may not use - after a second attempt under a new
+ * email, or when the applicant changed their gender after uploading photos - and
+ * the form would happily show them as "Uploaded" while every submit fails.
+ * Report those as needing a fresh upload.
+ */
+function uploadOwnershipErrors(form: FormState, authUserId: string): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (form.id_document_path && !form.id_document_path.startsWith(`${authUserId}/`)) {
+    e.id_document_path = 'Please upload your proof of identity again.';
+  }
+  const photoPrefix = `${form.gender}/${authUserId}/`;
+  if (form.photo_paths.some((p) => !p.startsWith(photoPrefix))) {
+    e.photo_path = 'Please upload your photo again.';
+  }
+  return e;
 }
 
 function validateStep1(form: FormState, age: number | null): Record<string, string> {
@@ -316,6 +341,47 @@ export default function Register() {
     if (!sessionReady || !session?.user || !isAdmin) return;
     navigate('/admin', { replace: true });
   }, [sessionReady, session?.user, isAdmin, navigate]);
+
+  // The draft is restored from this device, not from the account. When a different
+  // account signs in - a shared laptop, or someone starting over under a new email -
+  // the old draft's uploaded-file paths belong to the previous user, so every submit
+  // is rejected while the form still shows the files as uploaded. Start that person
+  // from a clean form instead. An unowned draft (written before this key existed, or
+  // before the account was created) is adopted by the account that finds it.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    // An admin only passes through /register on the way to /admin - never let that
+    // visit clear a draft the applicant on this device is still working on.
+    if (!uid || isAdmin) return;
+    let owner: string | null = null;
+    try {
+      owner = localStorage.getItem(LS_OWNER_KEY);
+    } catch {
+      return;
+    }
+    if (owner === uid) return;
+    if (owner) {
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch {
+        /* storage unavailable: the in-memory reset below still applies */
+      }
+      // The recommend-a-friend code identifies the referrer, not the person who
+      // typed this draft, so it survives - it came from the link this visitor
+      // followed, and the prefill effect has already run and will not run again.
+      setForm((f) => ({ ...defaultState, referral_code: f.referral_code }));
+      setPhotoPreviews((old) => {
+        old.forEach((url) => URL.revokeObjectURL(url));
+        return [];
+      });
+      setFieldErrors({});
+    }
+    try {
+      localStorage.setItem(LS_OWNER_KEY, uid);
+    } catch {
+      /* ignore */
+    }
+  }, [session?.user?.id, isAdmin]);
 
   useEffect(() => {
     if (!verified || !userId) return;
@@ -648,13 +714,77 @@ export default function Register() {
     }
   }
 
+  /**
+   * Show validation errors on the step that owns the fields, moving there first if
+   * needed. Errors are set in the next frame because changing step clears field
+   * errors of its own accord.
+   */
+  function showStepErrors(step: 1 | 2 | 3, errors: Record<string, string>) {
+    if (form.step !== step) update({ step });
+    requestAnimationFrame(() => {
+      setFieldErrors(errors);
+      focusFirstFieldError(errors);
+    });
+  }
+
+  /**
+   * Forget upload paths this account cannot submit and walk the applicant back to
+   * the step that needs the file. Everything they typed is kept. Errors are set
+   * after the step change, which clears field errors of its own accord.
+   */
+  function askForFreshUploads(errors: Record<string, string>) {
+    const patch: Partial<FormState> = {};
+    if (errors.photo_path) {
+      patch.photo_path = '';
+      patch.photo_paths = [];
+      patch.photo_compress_note = '';
+      patch.step = 3;
+      setPhotoPreviews((old) => {
+        old.forEach((url) => URL.revokeObjectURL(url));
+        return [];
+      });
+    }
+    if (errors.id_document_path) {
+      patch.id_document_path = '';
+      patch.id_file_name = '';
+      patch.step = 1;
+    }
+    update(patch);
+    setActionNotice({
+      type: 'err',
+      text: 'We could not use the files saved on this device, so please upload them again. Everything else you filled in has been kept.',
+    });
+    requestAnimationFrame(() => {
+      setFieldErrors(errors);
+      focusFirstFieldError(errors);
+    });
+  }
+
   async function submitAll(e: React.FormEvent) {
     e.preventDefault();
     if (!session?.user?.email) return;
+    const staleUploads = uploadOwnershipErrors(form, session.user.id);
+    if (Object.keys(staleUploads).length) {
+      askForFreshUploads(staleUploads);
+      return;
+    }
+    // Check every step, not just the one being submitted. A restored draft resumes
+    // at the step it was saved on, so an earlier step can hold an answer that was
+    // never validated - it was optional, or absent, when the draft was written. The
+    // server rejects those, and a rejection the form cannot explain is a dead end.
+    const e1 = validateStep1(form, age);
+    if (Object.keys(e1).length) {
+      showStepErrors(1, e1);
+      return;
+    }
+    const e2 = validateStep2(form);
+    if (Object.keys(e2).length) {
+      showStepErrors(2, e2);
+      return;
+    }
     const e3 = validateStep3(form);
     if (Object.keys(e3).length) {
-      setFieldErrors(e3);
-      focusFirstFieldError(e3);
+      showStepErrors(3, e3);
       return;
     }
     setFieldErrors({});
@@ -696,6 +826,7 @@ export default function Register() {
       await invokeFunction('submit-registration', payload);
       sessionStorage.setItem('vmr_pending_email', session.user.email);
       localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LS_OWNER_KEY);
       localStorage.removeItem(REFERRAL_LS_KEY);
       window.location.href = '/registration-pending';
     } catch (err) {
@@ -711,6 +842,16 @@ export default function Register() {
         // status page rather than letting them retry a submission that can never succeed.
         if (raw.includes('already exists')) {
           window.location.href = '/registration-pending';
+          return;
+        }
+        // The server checks that every uploaded file exists and belongs to this
+        // account. Retrying cannot fix a file that is missing or not ours, so ask
+        // for it again rather than leaving the applicant on a dead-end error.
+        if (raw.includes('upload not found') || raw.includes('upload path is invalid') || raw.includes('files required')) {
+          askForFreshUploads({
+            id_document_path: 'Please upload your proof of identity again.',
+            photo_path: 'Please upload your photo again.',
+          });
           return;
         }
         setActionNotice({
