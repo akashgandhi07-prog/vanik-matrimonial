@@ -66,7 +66,6 @@ type FormState = {
   consent_age: boolean;
   consent_privacy: boolean;
   id_file_name: string;
-  photo_compress_note: string;
 };
 
 const defaultState: FormState = {
@@ -102,7 +101,6 @@ const defaultState: FormState = {
   consent_age: false,
   consent_privacy: false,
   id_file_name: '',
-  photo_compress_note: '',
 };
 
 function loadState(): FormState {
@@ -475,7 +473,6 @@ export default function Register() {
         photo_path: '',
         photo_paths: [],
         id_file_name: '',
-        photo_compress_note: '',
         consent_contact: false,
         consent_age: false,
         consent_privacy: false,
@@ -687,8 +684,6 @@ export default function Register() {
         maxWidthOrHeight: 800,
         useWebWorker: true,
       });
-      const note = `${(file.size / (1024 * 1024)).toFixed(1)}MB → ${(compressed.size / 1024).toFixed(0)}KB`;
-      update({ photo_compress_note: note });
       const ext = compressed.type === 'image/png' ? 'png' : 'jpg';
       const path = `${form.gender}/${session.user.id}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
       const { error } = await supabase.storage.from('profile-photos').upload(path, compressed, {
@@ -737,7 +732,6 @@ export default function Register() {
     if (errors.photo_path) {
       patch.photo_path = '';
       patch.photo_paths = [];
-      patch.photo_compress_note = '';
       patch.step = 3;
       setPhotoPreviews((old) => {
         old.forEach((url) => URL.revokeObjectURL(url));
@@ -1862,9 +1856,9 @@ export default function Register() {
                     Compressing and uploading your photo…
                   </p>
                 )}
-                {form.photo_compress_note && (
-                  <p className="field-hint" style={{ marginBottom: 0 }}>
-                    {form.photo_compress_note}
+                {form.photo_paths.length > 0 && !photoUploading && (
+                  <p style={{ color: 'var(--color-success)', marginBottom: 0, fontSize: 14 }}>
+                    ✓ {form.photo_paths.length === 1 ? 'Photo uploaded' : `${form.photo_paths.length} photos uploaded`}
                   </p>
                 )}
                 {photoPreviews.length > 0 && (
