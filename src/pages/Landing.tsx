@@ -160,7 +160,7 @@ export default function Landing() {
               <summary>How long does it take to be approved?</summary>
               <p>
                 Every application is reviewed by the volunteer team, including proof of
-                identity, within 10 working days. Once approved you can browse verified
+                identity, within 2 working days. Once approved you can browse verified
                 profiles and request introductions from your dashboard.
               </p>
             </details>

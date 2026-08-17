@@ -107,8 +107,8 @@ export async function dispatchEmail(
       inner = `<p>Dear ${first},</p>
         <p>${
           resubmitted
-            ? 'Thank you - we have received your <strong>updated</strong> application and will review it again within 10 working days.'
-            : 'We have received your application to the Vanik Matrimonial Register and will review it within 10 working days.'
+            ? 'Thank you - we have received your <strong>updated</strong> application and will review it again within 2 working days.'
+            : 'We have received your application to the Vanik Matrimonial Register and will review it within 2 working days.'
         }</p>
         <p>If you have any questions, simply reply to this email.</p>`;
       break;
@@ -308,7 +308,7 @@ export async function dispatchEmail(
       subject = 'Reminder: your application is awaiting review';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>This is a friendly reminder that your application to the Vanik Matrimonial Register is still <strong>awaiting review</strong>.</p>
-        <p>We aim to review applications within 10 working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
+        <p>We aim to review applications within 2 working days. If you need to add information or upload clearer documents, please sign in: <a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;
       break;
@@ -364,7 +364,7 @@ export async function dispatchEmail(
           <li>Sign in and open your application: <a href="${registerUrl}">${registerUrl}</a></li>
           <li>Update any missing or incorrect details</li>
           <li>Upload a clear photo and proof of identity if requested</li>
-          <li>Submit again - the volunteer team reviews within 10 working days</li>
+          <li>Submit again - the volunteer team reviews within 2 working days</li>
         </ul>
         <p><a href="${registerUrl}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Finish my application</a></p>
         <p>If you no longer wish to join, you can simply ignore this email. Questions? Just reply.</p>

@@ -23,7 +23,7 @@ const PAGE_META: Record<string, PageMeta> = {
   '/register': {
     title: `Register - ${SITE_NAME}`,
     description:
-      'Join the Vanik Matrimonial Register for £10 a year. Applications are verified by Vanik Council volunteers within 10 working days.',
+      'Join the Vanik Matrimonial Register for £10 a year. Applications are verified by Vanik Council volunteers within 2 working days.',
     indexable: true,
   },
   '/demo': {

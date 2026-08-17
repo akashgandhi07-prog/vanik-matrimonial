@@ -114,7 +114,7 @@ export default function MemberReferrals() {
                 style={{ padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.08)', fontSize: 14 }}
               >
                 <strong>Application in progress</strong> - someone registered with your code on{' '}
-                {fmtDate(r.registered_at)}. Applications are reviewed within 10 working days; your reward is
+                {fmtDate(r.registered_at)}. Applications are reviewed within 2 working days; your reward is
                 added automatically if they are accepted.
               </li>
             ))}
