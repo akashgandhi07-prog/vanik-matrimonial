@@ -50,7 +50,7 @@ export async function fetchMyProfileStatusLite(userId: string): Promise<ProfileS
   }
 
   try {
-    const boot = (await invokeFunction('member-bootstrap', {})) as {
+    const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
       profile?: {
         status?: string;
         reference_number?: string | null;

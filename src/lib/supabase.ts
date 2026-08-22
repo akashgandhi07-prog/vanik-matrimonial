@@ -127,18 +127,64 @@ function responseMessage(res: Response, text: string, json: unknown): string {
   );
 }
 
+/**
+ * Supabase's functions gateway occasionally answers 502/503/504 without ever booting the worker
+ * (seen in production on 2026-08-22 for demo-browse-profiles and member-bootstrap). Nothing ran, so
+ * a read-only call can safely be retried. Only callers that declare themselves idempotent get this -
+ * re-sending an action double-ran admin approvals on 2026-08-02.
+ */
+const GATEWAY_RETRY_DELAYS_MS = [600, 1500];
+
+function isGatewayStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Call-site option: the function only reads, so it is safe to re-send after a gateway failure. */
+export type EdgeCallOptions = { idempotent?: boolean };
+
 async function fetchFunctionEndpoint(
   path: string,
   options: {
     method?: 'GET' | 'POST';
     body?: object;
     token: string;
+    /** Retry on 502/503/504 - read-only endpoints only. */
+    idempotent?: boolean;
     /** Member-safe wording for connection failures; never include config or URLs here. */
     networkErrorMessage?: string;
   }
 ) {
   const { anon } = requireEnv();
   const invokeUrl = functionsHttpUrl(path);
+  for (let attempt = 0; ; attempt++) {
+    const result = await fetchFunctionEndpointOnce(invokeUrl, anon, options);
+    if (
+      options.idempotent &&
+      isGatewayStatus(result.res.status) &&
+      attempt < GATEWAY_RETRY_DELAYS_MS.length
+    ) {
+      console.warn(`${path}: gateway ${result.res.status}, retrying (${attempt + 1})`);
+      await sleep(GATEWAY_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    return result;
+  }
+}
+
+async function fetchFunctionEndpointOnce(
+  invokeUrl: string,
+  anon: string,
+  options: {
+    method?: 'GET' | 'POST';
+    body?: object;
+    token: string;
+    networkErrorMessage?: string;
+  }
+) {
   const res = await fetch(invokeUrl, {
     method: options.method ?? 'POST',
     headers: {
@@ -184,12 +230,14 @@ function jwtHint401(msg: string): boolean {
 async function invokeFunctionDirectFetch(
   name: string,
   body: object | undefined,
-  token: string
+  token: string,
+  opts?: EdgeCallOptions
 ): Promise<Record<string, unknown>> {
   const { res, text, json } = await fetchFunctionEndpoint(`/${encodeURIComponent(name)}`, {
     method: 'POST',
     body: body ?? {},
     token,
+    idempotent: opts?.idempotent,
   });
   if (!res.ok) {
     throw edgeHttpErrorFromPayload(json, responseMessage(res, text, json));
@@ -205,7 +253,7 @@ async function invokeFunctionDirectFetch(
  * direct `fetch` when the relay fails or returns no JSON body (fixes production/Vercel + some browsers).
  * Retries once after `refreshSession()` on 401.
  */
-export async function invokeFunction(name: string, body?: object) {
+export async function invokeFunction(name: string, body?: object, opts?: EdgeCallOptions) {
   if (!url || !anon) {
     throw new EdgeCallError(
       'The site is not configured correctly. Please contact matrimonial@vanikcouncil.uk.',
@@ -224,7 +272,7 @@ export async function invokeFunction(name: string, body?: object) {
       const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
       if (!tokenNow) throw new Error('Not authenticated - please log in again.');
       try {
-        return await invokeFunctionDirectFetch(name, body, tokenNow);
+        return await invokeFunctionDirectFetch(name, body, tokenNow, opts);
       } catch (e) {
         lastRelay = e;
         const msg = e instanceof Error ? e.message : String(e);
@@ -238,7 +286,16 @@ export async function invokeFunction(name: string, body?: object) {
     throw lastRelay instanceof Error ? lastRelay : new Error(String(lastRelay));
   }
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let refreshedOn401 = false;
+  let gatewayRetries = 0;
+  const retryGateway = async (why: string): Promise<boolean> => {
+    if (!opts?.idempotent || gatewayRetries >= GATEWAY_RETRY_DELAYS_MS.length) return false;
+    console.warn(`invokeFunction(${name}): ${why}, retrying (${gatewayRetries + 1})`);
+    await sleep(GATEWAY_RETRY_DELAYS_MS[gatewayRetries++]);
+    return true;
+  };
+
+  for (;;) {
     const tokenNow = (await supabase.auth.getSession()).data.session?.access_token;
     if (!tokenNow) {
       throw new Error('Not authenticated - please log in again.');
@@ -260,7 +317,7 @@ export async function invokeFunction(name: string, body?: object) {
       // The request never got a response (blocked/offline) - a direct fetch
       // retry is the long-standing workaround for relay-blocking extensions.
       try {
-        return await invokeFunctionDirectFetch(name, body, tokenNow);
+        return await invokeFunctionDirectFetch(name, body, tokenNow, opts);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new EdgeCallError(
@@ -274,7 +331,9 @@ export async function invokeFunction(name: string, body?: object) {
       // The request reached Supabase and the worker failed mid-flight. The
       // function may have already done its work - re-POSTing would execute the
       // action twice (this double-ran admin approvals in production on
-      // 2026-08-02), so surface the error instead.
+      // 2026-08-02), so surface the error instead - unless the caller declared
+      // the function read-only, in which case a re-send is harmless.
+      if (await retryGateway(`relay error: ${error.message}`)) continue;
       throw new EdgeCallError(
         'The server had a temporary problem. Refresh the page to check whether your action was applied before trying again.',
         `relay error from ${name}: ${error.message}`
@@ -283,12 +342,14 @@ export async function invokeFunction(name: string, body?: object) {
 
     if (error instanceof FunctionsHttpError) {
       const res = error.context as Response;
-      if (res.status === 401 && attempt === 0) {
+      if (res.status === 401 && !refreshedOn401) {
+        refreshedOn401 = true;
         const { data: refreshed } = await supabase.auth.refreshSession();
         if (refreshed.session?.access_token) {
           continue;
         }
       }
+      if (isGatewayStatus(res.status) && (await retryGateway(`gateway ${res.status}`))) continue;
       const text = await res.text();
       const json = parseMaybeJson(text);
       if (res.status === 402) {
@@ -309,8 +370,6 @@ export async function invokeFunction(name: string, body?: object) {
 
     throw new Error(error instanceof Error ? error.message : 'Edge Function error');
   }
-
-  throw new Error('Unauthorized - please sign in again.');
 }
 
 /** Edge Function callable without a user session (uses anon key). */
@@ -346,7 +405,8 @@ export async function fetchPublicFunction(pathAndQuery: string) {
 export async function postFunctionOptionalAuth(
   name: string,
   body: object,
-  accessToken: string | null
+  accessToken: string | null,
+  opts?: EdgeCallOptions
 ) {
   const { anon } = requireEnv();
   const token = accessToken ?? anon;
@@ -354,6 +414,7 @@ export async function postFunctionOptionalAuth(
     method: 'POST',
     body,
     token,
+    idempotent: opts?.idempotent,
   });
 
   if (!res.ok) {

@@ -37,7 +37,7 @@ export default function VerifyEmailSuccess() {
         if (row?.status) status = row.status as string;
         else {
           try {
-            const boot = (await invokeFunction('member-bootstrap', {})) as {
+            const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
               profile?: { status?: string } | null;
             };
             const st = boot.profile?.status;

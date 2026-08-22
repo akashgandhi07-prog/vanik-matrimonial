@@ -187,7 +187,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           "admin" | "profile" | "none" | "error"
         > => {
           try {
-            const boot = (await invokeFunction("member-bootstrap", {})) as {
+            const boot = (await invokeFunction("member-bootstrap", {}, { idempotent: true })) as {
               profile?: ProfileRow | null;
               member_private?: MemberPrivateRow | null;
               is_admin?: boolean;
@@ -279,7 +279,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
             .maybeSingle();
           if (!m) {
             try {
-              const boot = (await invokeFunction("member-bootstrap", {})) as {
+              const boot = (await invokeFunction("member-bootstrap", {}, { idempotent: true })) as {
                 profile?: { id?: string } | null;
                 member_private?: MemberPrivateRow | null;
               };

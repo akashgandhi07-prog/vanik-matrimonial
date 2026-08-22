@@ -414,6 +414,28 @@ button.public-nav-link--button:hover {
   background: #f0ebe1;
 }
 
+/* Narrow nav (hamburger): keep the logo and Menu button on one row. Without this the
+   header wraps and the button drops onto a second line under the wordmark. */
+@media (max-width: 720px) {
+  .public-header-inner {
+    flex-wrap: nowrap;
+  }
+
+  .public-logo {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.05rem;
+  }
+
+  .public-logo > span:last-child {
+    min-width: 0;
+  }
+
+  .public-nav-menu-btn {
+    flex: none;
+  }
+}
+
 @media (max-width: 380px) {
   .public-nav {
     width: 100%;

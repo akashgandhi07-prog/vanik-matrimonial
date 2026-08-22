@@ -24,7 +24,7 @@ export default function MemberReferrals() {
     let cancelled = false;
     void (async () => {
       try {
-        const boot = (await invokeFunction('member-bootstrap', {})) as {
+        const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
           referral_info?: ReferralInfo | null;
         };
         if (!cancelled) setInfo(boot.referral_info ?? null);

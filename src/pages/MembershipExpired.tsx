@@ -34,7 +34,7 @@ export default function MembershipExpired() {
         .maybeSingle()).data as ProfileLite | null) ?? null;
     if (!p) {
       try {
-        const boot = (await invokeFunction('member-bootstrap', {})) as { profile?: ProfileLite | null };
+        const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as { profile?: ProfileLite | null };
         if (boot.profile) p = boot.profile;
       } catch {
         /* ignore */

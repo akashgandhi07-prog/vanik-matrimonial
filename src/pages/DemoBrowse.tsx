@@ -118,7 +118,7 @@ export default function DemoBrowse() {
     setError(null);
     try {
       const token = await getAccessToken();
-      const res = (await postFunctionOptionalAuth('demo-browse-profiles', {}, token)) as {
+      const res = (await postFunctionOptionalAuth('demo-browse-profiles', {}, token, { idempotent: true })) as {
         profiles?: Array<
           Omit<DemoProfile, 'id' | 'reference_number' | 'first_name'> & {
             demo_id: string;

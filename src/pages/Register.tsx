@@ -408,7 +408,7 @@ export default function Register() {
       if (p?.status) status = p.status as string;
       else {
         try {
-          const boot = (await invokeFunction('member-bootstrap', {})) as {
+          const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
             profile?: { status?: string } | null;
           };
           const st = boot.profile?.status;

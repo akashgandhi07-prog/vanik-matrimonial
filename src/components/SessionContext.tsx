@@ -60,7 +60,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     setIsAdmin(false);
     try {
-      const boot = (await invokeFunction('member-bootstrap', {})) as {
+      const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
         profile?: { first_name?: string | null } | null;
         is_admin?: boolean;
       };
