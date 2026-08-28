@@ -401,6 +401,25 @@ textarea:focus {
   color: #fff;
 }
 
+/* Signed-in identity, not navigation: deliberately plain so it is never mistaken
+   for a link (a link-styled "Hi, <name>" that did nothing confused members). */
+.public-nav-greeting {
+  /* inline-block, not inline-flex: as a flex container the whitespace between
+     "Signed in as" and the <strong> name collapses and the words run together. */
+  display: inline-block;
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.public-nav-greeting strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 button.public-nav-link--button {
   margin: 0;
   border: none;
@@ -2498,8 +2517,57 @@ textarea:focus-visible {
   }
 }
 
+/* Process explainer shared by Browse and My requests (see IntroductionSteps). */
+.intro-steps {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  padding: 0 14px;
+  margin-bottom: 12px;
+}
+
+.intro-steps-summary {
+  cursor: pointer;
+  padding: 11px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  list-style-position: inside;
+}
+
+.intro-steps-summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px rgba(123, 46, 59, 0.35);
+  border-radius: 6px;
+}
+
+.intro-steps-list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.intro-steps-list li {
+  margin-bottom: 7px;
+}
+
+.intro-steps-list strong {
+  color: var(--color-text);
+}
+
+.intro-steps-limits {
+  margin: 0 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
 .member-request-tray {
-  --member-tray-height: 132px;
+  --member-tray-height: 168px;
   position: fixed;
   left: 0;
   right: 0;
@@ -2517,6 +2585,15 @@ textarea:focus-visible {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-primary);
+}
+
+/* Always visible above the submit button: members could otherwise submit without
+   ever opening the review panel, so they never learned the other side is emailed. */
+.member-tray-notice {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
 }
 
 .member-tray-collapsed-row {
@@ -3560,8 +3637,13 @@ textarea:focus-visible {
   justify-content: center;
 }
 
-.public-nav-drawer-greeting {
-  cursor: default;
+.public-nav-drawer-links .public-nav-greeting {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: normal;
+  padding: 2px 14px 10px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 4px;
 }
 
 @media (min-width: 721px) {

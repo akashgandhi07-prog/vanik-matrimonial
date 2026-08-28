@@ -14,7 +14,9 @@ import {
   effectiveMonthlyCap,
   effectiveWeeklyCap,
   hasOutstandingFeedbackBlock,
+  maxCandidatesPerSubmit,
 } from '../member/requestQuota';
+import { IntroductionSteps } from '../member/IntroductionSteps';
 import {
   cmToFeetInches,
   formatHeightForFilter,
@@ -674,6 +676,15 @@ export default function MemberBrowse() {
         </div>
       )}
 
+      <IntroductionSteps
+        weeklyCap={weeklyCap}
+        monthlyCap={monthlyCap}
+        // Live tray capacity while there is some, so the step matches the button;
+        // the full batch size once quota is spent, to avoid "add up to 0 people".
+        batchSize={trayMax > 0 ? trayMax : maxCandidatesPerSubmit(weeklyCap, monthlyCap)}
+        defaultOpen={requests.length === 0}
+      />
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
         <div
           style={{
@@ -898,6 +909,10 @@ export default function MemberBrowse() {
           <p className="member-tray-hint">
             {tray.length === 1 ? '1 person selected' : `${tray.length} people selected`} - not requested yet
           </p>
+          <p className="member-tray-notice">
+            On submit we email {tray.length === 1 ? 'them' : 'each of them'} straight away to say you asked, and share
+            your name, profile and contact details. You get {tray.length === 1 ? 'theirs' : 'their details'} too.
+          </p>
           <div className="member-tray-collapsed-row">
             <button
               type="button"
@@ -944,8 +959,9 @@ export default function MemberBrowse() {
               })}
             </div>
             <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-              A request is a two-way introduction: your name, photo, profile and contact details will be shared
-              with the people you request, and you will receive theirs.
+              A request is a two-way introduction. Everyone you request is emailed as soon as you submit, telling
+              them you asked and sharing your name, photo, profile and contact details. Their details are emailed to
+              you and listed under My requests. Nobody has to accept first - the introduction happens straight away.
             </p>
             <button
               type="button"

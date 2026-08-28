@@ -4,7 +4,14 @@ import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
-import { computeMonthlyWindow, computeWeeklyWindow, effectiveMonthlyCap, effectiveWeeklyCap } from '../member/requestQuota';
+import {
+  computeMonthlyWindow,
+  computeWeeklyWindow,
+  effectiveMonthlyCap,
+  effectiveWeeklyCap,
+  maxCandidatesPerSubmit,
+} from '../member/requestQuota';
+import { IntroductionSteps } from '../member/IntroductionSteps';
 import { newErrorCode, reportError } from '../lib/errorLog';
 import { isProfileListedOnRegister } from '../lib/memberStatus';
 import { invokeFunction, supabase } from '../lib/supabase';
@@ -307,6 +314,11 @@ export default function MemberRequests() {
   const weeklyWindow = useMemo(() => computeWeeklyWindow(requests, weeklyCap), [requests, weeklyCap]);
 
   const monthlyWindow = useMemo(() => computeMonthlyWindow(requests, monthlyCap), [requests, monthlyCap]);
+  /** Server-aligned batch size, so bonus allowances are described correctly. */
+  const batchSize = useMemo(
+    () => maxCandidatesPerSubmit(weeklyCap, monthlyCap),
+    [weeklyCap, monthlyCap]
+  );
 
   if (!profile) return null;
 
@@ -547,7 +559,9 @@ export default function MemberRequests() {
               textAlign: 'left',
             }}
           >
-            <strong>Request sent.</strong> If your list does not appear in a few seconds, refresh the page.
+            <strong>Request sent.</strong> Everyone you requested has been emailed to let them know you asked, and
+            given your name, profile and contact details. If your list does not appear in a few seconds, refresh the
+            page.
             <button
               type="button"
               className="btn btn-secondary"
@@ -560,8 +574,8 @@ export default function MemberRequests() {
         )}
         <p style={{ margin: 0, fontWeight: 500 }}>No requests yet</p>
         <p style={{ margin: '8px 0 0', fontSize: 14 }}>
-          Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit, up to 3 at a time,
-          within your 7-day and monthly limits shown there.
+          Go to <Link to="/dashboard/browse">Browse</Link>, add people to your tray, then submit, up to{' '}
+          {batchSize} at a time, within your 7-day and monthly limits shown there.
         </p>
       </div>
       </div>
@@ -585,7 +599,9 @@ export default function MemberRequests() {
             fontSize: 14,
           }}
         >
-          <strong>Request sent.</strong> Contact details for your chosen profiles are listed below.
+          <strong>Request sent.</strong> Contact details for your chosen profiles are listed below. Everyone you
+          requested has also been emailed to let them know you asked, and given your name, profile and contact
+          details, so either side can make the first move.
           <button
             type="button"
             className="btn btn-secondary"
@@ -597,9 +613,10 @@ export default function MemberRequests() {
         </div>
       )}
       <h3 style={{ marginTop: 0 }}>Contact requests</h3>
-      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginTop: 0 }}>
+      <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
         Phone numbers and other details you were approved for appear here so you can follow up directly.
       </p>
+      <IntroductionSteps weeklyCap={weeklyCap} monthlyCap={monthlyCap} batchSize={batchSize} showLimits={false} />
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <strong>Limits:</strong> up to <strong>{weeklyCap}</strong> new {weeklyCap === 1 ? 'person' : 'people'} per rolling 7 days, and{' '}
         <strong>{monthlyCap}</strong> distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (UTC). Outstanding

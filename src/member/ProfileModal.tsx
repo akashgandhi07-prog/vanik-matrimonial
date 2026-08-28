@@ -303,6 +303,12 @@ export function ProfileModal({
                 )
               ) : null}
             </div>
+            {allowRequestAction && !blocked && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                A request is a two-way introduction. When you submit, this member is emailed straight away to say you
+                asked, and given your name, profile and contact details. You get theirs at the same time.
+              </p>
+            )}
             {!allowRequestAction && showRequestFromBrowseHint && (
               <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
                 To request contact details, open this profile from Browse and add it to your request tray.

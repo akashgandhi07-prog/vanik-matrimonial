@@ -61,7 +61,6 @@ export function SiteHeader() {
     </>
   ) : (
     <>
-      <span className="public-nav-link public-nav-drawer-greeting">Hi, {hi}</span>
       {isAdmin ? (
         <Link to="/admin" className="public-nav-link" onClick={() => setMenuOpen(false)}>
           Admin
@@ -76,6 +75,15 @@ export function SiteHeader() {
       </button>
     </>
   );
+
+  // Identity, rendered ahead of the nav links so the menu opens with "who am I"
+  // rather than a name that looks like a link but goes nowhere.
+  const greeting =
+    ready && user ? (
+      <span className="public-nav-greeting">
+        Signed in as <strong>{hi}</strong>
+      </span>
+    ) : null;
 
   const feedbackLink = (
     <Link to="/app-feedback" className="public-nav-link" onClick={() => setMenuOpen(false)}>
@@ -145,6 +153,7 @@ export function SiteHeader() {
                         </button>
                       </div>
                       <div className="public-nav-drawer-links">
+                        {greeting}
                         {feedbackLink}
                         {navLinks}
                       </div>
@@ -156,6 +165,7 @@ export function SiteHeader() {
           </>
         ) : (
           <nav className="public-nav" aria-label="Main">
+            {greeting}
             {feedbackLink}
             {navLinks}
           </nav>
