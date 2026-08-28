@@ -5,6 +5,7 @@ import { dispatchEmail, getAdminClient, runAfterResponse } from '../_shared/disp
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { buildCandidatesHtml, buildContactDetail, type ContactDetail } from '../_shared/introduction.ts';
+import { CONTACT_REQUEST_MAX_PER_SUBMIT } from '../_shared/contact-request-limits.ts';
 
 /** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,8 +85,15 @@ Deno.serve(async (req) => {
     if (ids.length === 0) {
       return jsonErr(req, 400, 'candidates_required', 'candidates required');
     }
-    if (ids.length > 3) {
-      return jsonErr(req, 400, 'max_candidates_per_request', 'You can request up to 3 candidates at a time.');
+    // Outer bound only. The per-member limit (base cap plus any admin bonus) is
+    // enforced by create_contact_request_atomic, atomically with the insert.
+    if (ids.length > CONTACT_REQUEST_MAX_PER_SUBMIT) {
+      return jsonErr(
+        req,
+        400,
+        'max_candidates_per_request',
+        `You can request up to ${CONTACT_REQUEST_MAX_PER_SUBMIT} candidates at a time.`
+      );
     }
 
     const admin = getAdminClient();

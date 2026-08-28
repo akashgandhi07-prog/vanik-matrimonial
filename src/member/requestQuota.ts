@@ -6,7 +6,11 @@ export const FEEDBACK_STALE_MS = 21 * 86400000;
 /** Base caps before admin-applied bonuses (see `member_private.contact_request_*_bonus`). */
 export const CONTACT_REQUEST_WEEKLY_BASE = 3;
 export const CONTACT_REQUEST_MONTHLY_BASE = 6;
-/** Matches server `LEAST(10, weekly_cap, monthly_cap)` for one submission. */
+/**
+ * Outer bound of the server's `LEAST(10, weekly_limit, monthly_limit)` per
+ * submission. Mirrored in supabase/functions/_shared/contact-request-limits.ts;
+ * `maxCandidatesPerSubmit` below applies the per-member part.
+ */
 export const CONTACT_REQUEST_MAX_PER_SUBMIT = 10;
 
 export function effectiveWeeklyCap(weeklyBonus = 0): number {
