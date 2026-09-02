@@ -51,6 +51,30 @@ const ACTION_LABELS: Record<string, string> = {
   membership_extended: 'Membership extended (free months)',
 };
 
+/** Per-candidate introduction history from `get_member_detail`, newest first. */
+type IntroductionFeedback = {
+  /** True when something is overdue, i.e. submit-contact-request is refusing new requests. */
+  blocking: boolean;
+  outstanding_count: number;
+  overdue_count: number;
+  entries: {
+    request_id: string;
+    candidate_id: string;
+    first_name: string | null;
+    reference_number: string | null;
+    requested_at: string;
+    due_at: string;
+    feedback_at: string | null;
+    overdue: boolean;
+  }[];
+};
+
+/** Whole days since `iso`, floored; negative values mean it is still in the future. */
+function daysSince(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : Math.floor((Date.now() - t) / 86400000);
+}
+
 function fmtDateTime(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
@@ -181,6 +205,7 @@ export default function AdminMemberDetail() {
     week_reset_at: string | null;
     month_reset_at: string;
   } | null>(null);
+  const [introFeedback, setIntroFeedback] = useState<IntroductionFeedback | null>(null);
   const [quotaBonusWeek, setQuotaBonusWeek] = useState(0);
   const [quotaBonusMonth, setQuotaBonusMonth] = useState(0);
   const [quotaSaving, setQuotaSaving] = useState(false);
@@ -254,6 +279,7 @@ export default function AdminMemberDetail() {
             week_reset_at: string | null;
             month_reset_at: string;
           };
+          introduction_feedback?: IntroductionFeedback;
           pause_feedback?: { reason: string; note: string | null; created_at: string }[];
           payments?: typeof payments;
         };
@@ -279,6 +305,7 @@ export default function AdminMemberDetail() {
         setInternalNoteDraft(res.admin_note?.body ?? '');
         setRecentEmails(res.recent_emails ?? []);
         setContactQuota(res.contact_request_quota ?? null);
+        setIntroFeedback(res.introduction_feedback ?? null);
         setPauseReasons(res.pause_feedback ?? []);
         setPayments(res.payments ?? []);
         setQuotaBonusWeek(
@@ -295,6 +322,7 @@ export default function AdminMemberDetail() {
         setPhotoUrls([]);
         setPhotoGallery([]);
         setContactQuota(null);
+        setIntroFeedback(null);
       }
     })();
     return () => {
@@ -617,7 +645,8 @@ export default function AdminMemberDetail() {
           <p className="field-hint" style={{ marginTop: 0, maxWidth: 640, lineHeight: 1.5 }}>
             Members normally get <strong>3</strong> distinct introductions per rolling <strong>7 days</strong> and{' '}
             <strong>6</strong> per <strong>calendar month</strong> (UTC). If someone used a slot on a poor match, add extra
-            slots here. Changes apply immediately.
+            slots here. Changes apply immediately. Separately, any introduction older than <strong>21 days</strong>{' '}
+            without feedback blocks new requests no matter how many slots are free - see below.
           </p>
           {contactQuota ? (
             <div style={{ marginBottom: 14, fontSize: 14, lineHeight: 1.55 }}>
@@ -643,6 +672,108 @@ export default function AdminMemberDetail() {
             <p className="field-hint" style={{ color: 'var(--color-warning)' }}>
               Usage summary unavailable. Deploy the latest migration and admin function, then reload.
             </p>
+          )}
+
+          {introFeedback && (
+            <div style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  border: `1px solid ${introFeedback.blocking ? 'rgba(217,119,6,0.35)' : 'var(--color-border)'}`,
+                  background: introFeedback.blocking ? 'rgba(217,119,6,0.08)' : 'var(--color-surface)',
+                  color: introFeedback.blocking ? 'var(--color-warning)' : 'var(--color-text-secondary)',
+                }}
+              >
+                {introFeedback.blocking ? (
+                  <>
+                    <strong>Blocked by outstanding feedback.</strong> {introFeedback.overdue_count}{' '}
+                    {introFeedback.overdue_count === 1 ? 'introduction is' : 'introductions are'} more than 21 days old
+                    with no feedback written, so every new request is refused until the member fills them in under My
+                    requests. Extra slots will not lift this - only the feedback will.
+                  </>
+                ) : introFeedback.outstanding_count > 0 ? (
+                  <>
+                    <strong>Not blocked.</strong> {introFeedback.outstanding_count}{' '}
+                    {introFeedback.outstanding_count === 1 ? 'introduction is' : 'introductions are'} still awaiting
+                    feedback but within the 21-day window. Requests are refused once the oldest passes its due date.
+                  </>
+                ) : (
+                  <>
+                    <strong>Not blocked.</strong> Feedback is complete for every introduction.
+                  </>
+                )}
+              </div>
+
+              {introFeedback.entries.length > 0 && (
+                <details style={{ marginTop: 10 }} open={introFeedback.blocking}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>
+                    Introductions requested ({introFeedback.entries.length})
+                  </summary>
+                  <div className="table-scroll" style={{ marginTop: 8 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
+                          <th style={{ padding: 6 }}>Requested</th>
+                          <th style={{ padding: 6 }}>Person</th>
+                          <th style={{ padding: 6 }}>Feedback</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {introFeedback.entries.map((e) => (
+                          <tr
+                            key={`${e.request_id}:${e.candidate_id}`}
+                            style={{
+                              borderBottom: '1px solid var(--color-border)',
+                              background: e.overdue ? 'rgba(217,119,6,0.06)' : undefined,
+                            }}
+                          >
+                            <td style={{ padding: 6, whiteSpace: 'nowrap' }}>
+                              {fmtDate(e.requested_at)}
+                              <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                {daysSince(e.requested_at)} days ago
+                              </span>
+                            </td>
+                            <td style={{ padding: 6 }}>
+                              <Link to={`/admin/members/${e.candidate_id}`}>{e.first_name || 'Unknown'}</Link>
+                              {e.reference_number ? (
+                                <span style={{ color: 'var(--color-text-secondary)' }}> · {e.reference_number}</span>
+                              ) : null}
+                            </td>
+                            <td style={{ padding: 6 }}>
+                              {e.feedback_at ? (
+                                <>
+                                  <span className="badge badge-success">Given</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                    {fmtDate(e.feedback_at)}
+                                  </span>
+                                </>
+                              ) : e.overdue ? (
+                                <>
+                                  <span className="badge badge-warning">Overdue - blocking</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                    Was due {fmtDate(e.due_at)}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="badge badge-muted">Not given</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                    Due {fmtDate(e.due_at)}
+                                  </span>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              )}
+            </div>
           )}
           <div
             style={{

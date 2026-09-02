@@ -139,6 +139,87 @@ function contactQuotaFromRequests(
   };
 }
 
+/**
+ * Mirrors the 21-day feedback rule enforced by submit-contact-request. Kept in
+ * step with hasOutstandingFeedbackBlock in src/member/requestQuota.ts.
+ */
+const FEEDBACK_STALE_MS = 21 * 86400000;
+/** Newest introductions only - the admin panel shows a history, not an archive. */
+const INTRODUCTION_FEEDBACK_MAX_REQUESTS = 60;
+
+type IntroductionRequestRow = { id: string; created_at: string; candidate_ids: string[] | null };
+
+type IntroductionFeedbackEntry = {
+  request_id: string;
+  candidate_id: string;
+  first_name: string | null;
+  reference_number: string | null;
+  requested_at: string;
+  /** When the 21-day grace period ends for this introduction. */
+  due_at: string;
+  /** Null while no feedback has been written for this candidate. */
+  feedback_at: string | null;
+  /** Missing feedback past the grace period: this entry is blocking new requests. */
+  overdue: boolean;
+};
+
+type IntroductionFeedbackSnapshot = {
+  /** True when at least one entry is overdue, i.e. new requests are refused. */
+  blocking: boolean;
+  outstanding_count: number;
+  overdue_count: number;
+  /** Newest first. */
+  entries: IntroductionFeedbackEntry[];
+};
+
+function introductionFeedbackFromRows(
+  requestRows: IntroductionRequestRow[],
+  feedbackRows: { request_id: string; candidate_id: string; submitted_at: string | null }[],
+  candidateRows: { id: string; first_name: string | null; reference_number: string | null }[]
+): IntroductionFeedbackSnapshot {
+  const now = Date.now();
+  const feedbackAt = new Map<string, string | null>();
+  for (const f of feedbackRows) {
+    feedbackAt.set(`${f.request_id}:${f.candidate_id}`, f.submitted_at ?? null);
+  }
+  const byId = new Map(candidateRows.map((c) => [c.id, c]));
+
+  const entries: IntroductionFeedbackEntry[] = [];
+  let outstanding = 0;
+  let overdueCount = 0;
+  for (const r of requestRows) {
+    const requestedMs = new Date(r.created_at).getTime();
+    if (Number.isNaN(requestedMs)) continue;
+    const dueMs = requestedMs + FEEDBACK_STALE_MS;
+    for (const cid of r.candidate_ids ?? []) {
+      if (!cid) continue;
+      const key = `${r.id}:${cid}`;
+      const given = feedbackAt.has(key);
+      const overdue = !given && now >= dueMs;
+      if (!given) outstanding += 1;
+      if (overdue) overdueCount += 1;
+      const c = byId.get(cid);
+      entries.push({
+        request_id: r.id,
+        candidate_id: cid,
+        first_name: c?.first_name ?? null,
+        reference_number: c?.reference_number ?? null,
+        requested_at: r.created_at,
+        due_at: new Date(dueMs).toISOString(),
+        feedback_at: given ? (feedbackAt.get(key) ?? null) : null,
+        overdue,
+      });
+    }
+  }
+  entries.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime());
+  return {
+    blocking: overdueCount > 0,
+    outstanding_count: outstanding,
+    overdue_count: overdueCount,
+    entries,
+  };
+}
+
 function csvEscapeCell(v: unknown): string {
   if (v === null || v === undefined) return '';
   const s = String(v);
@@ -2393,7 +2474,7 @@ Deno.serve(async (req) => {
 
     const { data: reqRows, error: rqErr } = await admin
       .from('requests')
-      .select('created_at, candidate_ids')
+      .select('id, created_at, candidate_ids')
       .eq('requester_id', profileId)
       .order('created_at', { ascending: false })
       .limit(800);
@@ -2413,6 +2494,45 @@ Deno.serve(async (req) => {
       (reqRows ?? []) as { created_at: string; candidate_ids: string[] | null }[],
       Number(mpQuota.contact_request_weekly_bonus ?? 0),
       Number(mpQuota.contact_request_monthly_bonus ?? 0)
+    );
+
+    // Who they asked for, when, and whether they wrote the feedback afterwards.
+    // submit-contact-request refuses new requests while any introduction older
+    // than 21 days is missing feedback, and that block never shows up in the
+    // quota counters above - so admins were left guessing why a member with
+    // free slots could not submit.
+    const introRequests = ((reqRows ?? []) as IntroductionRequestRow[]).slice(
+      0,
+      INTRODUCTION_FEEDBACK_MAX_REQUESTS
+    );
+    let feedbackRows: { request_id: string; candidate_id: string; submitted_at: string | null }[] = [];
+    let candidateNames: { id: string; first_name: string | null; reference_number: string | null }[] = [];
+    if (introRequests.length > 0) {
+      const { data: fbRows } = await admin
+        .from('feedback')
+        .select('request_id, candidate_id, submitted_at')
+        .eq('requester_id', profileId)
+        // Only feedback this member WROTE counts, matching the submit rule;
+        // feedback written about them must not clear their obligation.
+        .eq('direction', 'requester_on_candidate')
+        .in('request_id', introRequests.map((r) => r.id));
+      feedbackRows = (fbRows ?? []) as typeof feedbackRows;
+
+      const candidateIds = [
+        ...new Set(introRequests.flatMap((r) => (r.candidate_ids ?? []).filter(Boolean))),
+      ];
+      if (candidateIds.length > 0) {
+        const { data: nameRows } = await admin
+          .from('profiles')
+          .select('id, first_name, reference_number')
+          .in('id', candidateIds);
+        candidateNames = (nameRows ?? []) as typeof candidateNames;
+      }
+    }
+    const introduction_feedback = introductionFeedbackFromRows(
+      introRequests,
+      feedbackRows,
+      candidateNames
     );
 
     // Stripe payments for the refund strip on the member page. Registration
@@ -2440,6 +2560,7 @@ Deno.serve(async (req) => {
       admin_note: noteRow ?? { body: '', updated_at: null, updated_by: null },
       recent_emails: recentEmails ?? [],
       contact_request_quota,
+      introduction_feedback,
       pause_feedback: pauseRows ?? [],
       payments,
     }, req);

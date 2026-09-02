@@ -119,20 +119,53 @@ export function computeTrayCapacity(
 }
 
 /**
- * Same rule as submit-contact-request: requests older than 21 days need feedback * for every candidate before new requests are allowed.
+ * Same rule as submit-contact-request: requests older than 21 days need feedback
+ * for every candidate before new requests are allowed.
  */
 export function hasOutstandingFeedbackBlock(
   requests: RequestSummary[],
   feedbackKeys: Set<string>,
   nowMs = Date.now()
 ): boolean {
+  return outstandingFeedbackItems(requests, feedbackKeys, nowMs).some((item) => item.blocking);
+}
+
+export type OutstandingFeedbackItem = {
+  requestId: string;
+  /** ISO timestamp the introduction was requested. */
+  createdAt: string;
+  /** Candidates from that request with no feedback written yet. */
+  candidateIds: string[];
+  /** ISO timestamp the 21-day grace period runs out. */
+  dueAt: string;
+  /** True once the grace period has passed, i.e. this request now blocks new ones. */
+  blocking: boolean;
+};
+
+/**
+ * Every introduction still missing feedback, oldest first, with the date its
+ * 21-day grace period ends. `blocking` marks the ones the server already
+ * refuses new requests over; the rest are a warning of what is coming.
+ */
+export function outstandingFeedbackItems(
+  requests: RequestSummary[],
+  feedbackKeys: Set<string>,
+  nowMs = Date.now()
+): OutstandingFeedbackItem[] {
+  const items: OutstandingFeedbackItem[] = [];
   for (const r of requests) {
     const requestMs = new Date(r.created_at).getTime();
-    if (Number.isNaN(requestMs) || nowMs - requestMs < FEEDBACK_STALE_MS) continue;
+    if (Number.isNaN(requestMs)) continue;
     const candidateIds = Array.isArray(r.candidate_ids) ? r.candidate_ids : [];
-    for (const cid of candidateIds) {
-      if (!feedbackKeys.has(`${r.id}:${cid}`)) return true;
-    }
+    const missing = candidateIds.filter((cid) => !feedbackKeys.has(`${r.id}:${cid}`));
+    if (missing.length === 0) continue;
+    items.push({
+      requestId: r.id,
+      createdAt: r.created_at,
+      candidateIds: missing,
+      dueAt: new Date(requestMs + FEEDBACK_STALE_MS).toISOString(),
+      blocking: nowMs - requestMs >= FEEDBACK_STALE_MS,
+    });
   }
-  return false;
+  return items.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }

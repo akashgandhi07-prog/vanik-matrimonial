@@ -194,10 +194,16 @@ export async function dispatchEmail(
       break;
     }
     case 'feedback_reminder_21': {
-      subject = 'Feedback reminder';
+      // This lands on the same day the 21-day rule starts refusing new
+      // requests, so it has to say so. It used to read as a polite nudge and
+      // members were left wondering why the register had stopped letting them
+      // ask for anyone.
+      subject = 'Feedback needed before your next request - Vanik Matrimonial Register';
       inner = `<p>Dear ${stripHtml(String(extraData.first_name ?? ''),60)},</p>
-        <p>It has been 21 days since you requested candidate details. We would be grateful for a few moments of your time to share brief feedback.</p>
+        <p>You asked for these candidate details more than 21 days ago and we have not had your feedback yet, so <strong>new contact requests are paused on your account until it is in</strong>.</p>
+        <p>Please use the link for each person below. It takes a minute, it goes only to the register team, and it is never shown to the person you were introduced to.</p>
         <p>${String(extraData.links_html ?? '')}</p>
+        <p>As soon as the last form is submitted your requests unlock again, straight away. You can also find these forms under My requests when you are signed in.</p>
         <p>Thank you for helping us maintain a trusted service.</p>`;
       break;
     }

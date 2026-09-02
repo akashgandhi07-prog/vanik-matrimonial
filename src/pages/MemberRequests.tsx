@@ -10,6 +10,7 @@ import {
   effectiveMonthlyCap,
   effectiveWeeklyCap,
   maxCandidatesPerSubmit,
+  outstandingFeedbackItems,
 } from '../member/requestQuota';
 import { IntroductionSteps } from '../member/IntroductionSteps';
 import { newErrorCode, reportError } from '../lib/errorLog';
@@ -319,6 +320,24 @@ export default function MemberRequests() {
     () => maxCandidatesPerSubmit(weeklyCap, monthlyCap),
     [weeklyCap, monthlyCap]
   );
+  /** Introductions still missing feedback; the overdue ones block new requests. */
+  const feedbackOutstanding = useMemo(
+    () => outstandingFeedbackItems(requests, feedbackKeys),
+    [requests, feedbackKeys]
+  );
+  const feedbackOverdue = useMemo(
+    () => feedbackOutstanding.filter((item) => item.blocking),
+    [feedbackOutstanding]
+  );
+  /** Due date per request, for the badges in the Feedback column. */
+  const feedbackDueByRequest = useMemo(
+    () => new Map(feedbackOutstanding.map((item) => [item.requestId, item])),
+    [feedbackOutstanding]
+  );
+  const nameForCandidate = (requestId: string, candidateId: string) =>
+    (contactsByRequest[requestId] ?? []).find((row) => row.profile_id === candidateId)?.first_name ||
+    candidates.find((c) => c.id === candidateId)?.first_name ||
+    'this person';
 
   if (!profile) return null;
 
@@ -616,6 +635,61 @@ export default function MemberRequests() {
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
         Phone numbers and other details you were approved for appear here so you can follow up directly.
       </p>
+      {feedbackOverdue.length > 0 ? (
+        <div
+          role="status"
+          style={{
+            marginBottom: 14,
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid rgba(217,119,6,0.35)',
+            background: 'rgba(217,119,6,0.08)',
+            color: 'var(--color-warning)',
+            fontSize: 14,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>New requests are on hold until you give feedback.</strong> These introductions are more than 21 days
+          old and still need your admin-only feedback. It is seen by the register team only, never by the person you
+          were introduced to.
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {feedbackOverdue.map((item) =>
+              item.candidateIds.map((cid) => (
+                <li key={`${item.requestId}:${cid}`} style={{ marginBottom: 4 }}>
+                  {nameForCandidate(item.requestId, cid)}, requested{' '}
+                  {new Date(item.createdAt).toLocaleDateString('en-GB')}{' '}
+                  <Link
+                    to={`/feedback/${item.requestId}/${cid}`}
+                    className="btn btn-secondary"
+                    style={{ padding: '2px 8px', fontSize: 12 }}
+                  >
+                    Give feedback
+                  </Link>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : feedbackOutstanding.length > 0 ? (
+        <p
+          style={{
+            marginBottom: 14,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--color-border)',
+            fontSize: 13,
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Feedback still to come.</strong> You have{' '}
+          {feedbackOutstanding.reduce((n, item) => n + item.candidateIds.length, 0)} introduction
+          {feedbackOutstanding.reduce((n, item) => n + item.candidateIds.length, 0) === 1 ? '' : 's'} awaiting your
+          admin-only feedback. The earliest is due by{' '}
+          {new Date(feedbackOutstanding[0].dueAt).toLocaleDateString('en-GB')}; after that, new requests are paused
+          until it is filled in.
+        </p>
+      ) : null}
       <IntroductionSteps weeklyCap={weeklyCap} monthlyCap={monthlyCap} batchSize={batchSize} showLimits={false} />
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <strong>Limits:</strong> up to <strong>{weeklyCap}</strong> new {weeklyCap === 1 ? 'person' : 'people'} per rolling 7 days, and{' '}
@@ -887,8 +961,9 @@ export default function MemberRequests() {
                           </li>
                         );
                       }
+                      const outstanding = feedbackDueByRequest.get(r.id);
                       return (
-                        <li key={key} style={{ marginBottom: 4 }}>
+                        <li key={key} style={{ marginBottom: 6 }}>
                           {name}:{' '}
                           <Link
                             to={`/feedback/${r.id}/${cid}`}
@@ -898,6 +973,17 @@ export default function MemberRequests() {
                           >
                             Give admin-only feedback
                           </Link>
+                          {outstanding && (
+                            <span style={{ display: 'block', marginTop: 3, fontSize: 12 }}>
+                              {outstanding.blocking ? (
+                                <span className="badge badge-warning">Overdue - blocking new requests</span>
+                              ) : (
+                                <span style={{ color: 'var(--color-text-secondary)' }}>
+                                  Due by {new Date(outstanding.dueAt).toLocaleDateString('en-GB')}
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </li>
                       );
                     })}
