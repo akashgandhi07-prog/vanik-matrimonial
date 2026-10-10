@@ -3,6 +3,7 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
+import { hasMembershipAccess } from '../_shared/membership.ts';
 
 /** Nudge members who have not signed in for this long. */
 const INACTIVE_DAYS = 14;
@@ -75,8 +76,7 @@ Deno.serve(async (req) => {
       (p) =>
         p.status === 'active' &&
         p.hidden_reason == null &&
-        !!p.membership_expires_at &&
-        new Date(p.membership_expires_at) > new Date()
+        hasMembershipAccess(p.membership_expires_at)
     );
 
     // Requests are used twice: to skip candidates the member already asked

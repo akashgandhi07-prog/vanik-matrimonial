@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { PublicLayout } from '../components/Layout';
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
-import { profileNeedsMembershipExpiredRoute } from '../lib/memberStatus';
+import {
+  earlyRenewalBonusAvailable,
+  hasMembershipAccess,
+  isInMembershipGrace,
+  membershipGraceEndsAt,
+  profileNeedsMembershipExpiredRoute,
+} from '../lib/memberStatus';
 
 type ProfileLite = {
   reference_number: string | null;
@@ -12,7 +18,17 @@ type ProfileLite = {
 
 export default function MembershipExpired() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Where this visit came from, captured before the Stripe return handler rewrites the URL.
+  const [visitSource] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.has('checkout')) return null;
+    const src = params.get('src');
+    if (src === 'email' || src === 'banner') return src;
+    return location.pathname === '/membership-expired' ? 'expired' : 'direct';
+  });
+  const visitLogged = useRef(false);
   const [profile, setProfile] = useState<ProfileLite | null>(null);
   const [loading, setLoading] = useState(true);
   const [payBusy, setPayBusy] = useState(false);
@@ -47,6 +63,15 @@ export default function MembershipExpired() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!profile || !visitSource || visitLogged.current) return;
+    visitLogged.current = true;
+    // Best-effort analytics for the renewal funnel; never blocks the page.
+    void supabase.rpc('log_renewal_page_visit', { p_source: visitSource }).then(({ error }) => {
+      if (error) console.warn('log_renewal_page_visit', error.message);
+    });
+  }, [profile, visitSource]);
 
   useEffect(() => {
     void (async () => {
@@ -137,13 +162,14 @@ export default function MembershipExpired() {
     };
   }, [searchParams, setSearchParams, load, navigate]);
 
-  const dateLabel = profile?.membership_expires_at
-    ? new Date(profile.membership_expires_at).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
+  const longDate = (d: Date) =>
+    d.toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateLabel = profile?.membership_expires_at ? longDate(new Date(profile.membership_expires_at)) : '-';
+  const graceEndLabel = profile?.membership_expires_at
+    ? longDate(membershipGraceEndsAt(profile.membership_expires_at))
     : '-';
+  const inGrace = profile != null && profile.status === 'active' && isInMembershipGrace(profile.membership_expires_at);
+  const bonus = profile != null && profile.status === 'active' && earlyRenewalBonusAvailable(profile.membership_expires_at);
 
   const isRenewable =
     profile != null &&
@@ -153,11 +179,9 @@ export default function MembershipExpired() {
 
   const isArchivedRenewal = profile != null && profile.status === 'closed';
 
+  // Still has access: either before the end date or inside the grace period.
   const isEarlyRenewal =
-    profile != null &&
-    profile.status === 'active' &&
-    profile.membership_expires_at != null &&
-    new Date(profile.membership_expires_at) > new Date();
+    profile != null && profile.status === 'active' && hasMembershipAccess(profile.membership_expires_at);
 
   async function startCheckout() {
     setPayBusy(true);
@@ -201,7 +225,11 @@ export default function MembershipExpired() {
             <p style={{ color: 'var(--color-text-secondary)' }}>
               Sign in with the account you used to register, then you can renew your membership.
             </p>
-            <Link to="/login" className="btn btn-primary" style={{ marginTop: 16, display: 'inline-flex' }}>
+            <Link
+              to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`}
+              className="btn btn-primary"
+              style={{ marginTop: 16, display: 'inline-flex' }}
+            >
               Sign in
             </Link>
           </div>
@@ -241,7 +269,13 @@ export default function MembershipExpired() {
           <h1>
             {isEarlyRenewal ? 'Renew membership' : isArchivedRenewal ? 'Account archived' : 'Membership expired'}
           </h1>
-          {isEarlyRenewal ? (
+          {inGrace ? (
+            <p>
+              Your membership ended on <strong>{dateLabel}</strong>. We have kept your profile visible until{' '}
+              <strong>{graceEndLabel}</strong>. Renew now to stay on the register; your new year runs from{' '}
+              {dateLabel}.
+            </p>
+          ) : isEarlyRenewal ? (
             <p>
               Your membership is valid until <strong>{dateLabel}</strong>. You can pay now to add another year
               from that date.
@@ -254,6 +288,19 @@ export default function MembershipExpired() {
           ) : (
             <p>
               Your membership expired on <strong>{dateLabel}</strong>.
+            </p>
+          )}
+          {bonus && (
+            <p
+              className="card"
+              style={{
+                padding: '10px 14px',
+                background: 'rgba(4,120,87,0.08)',
+                border: '1px solid rgba(4,120,87,0.25)',
+              }}
+            >
+              <strong>Early renewal offer:</strong> pay by the end of {dateLabel} and we will add an extra month
+              free, so you get 13 months for £10.
             </p>
           )}
           <p style={{ color: 'var(--color-text-secondary)' }}>

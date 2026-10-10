@@ -1,6 +1,6 @@
 // Some members fill in free-text fields entirely in capitals (e.g. "LONDON",
 // "BRITISH"). These helpers re-case a value only when it contains no lowercase
-// letters at all — deliberate mixed case is always left untouched.
+// letters at all; deliberate mixed case is always left untouched.
 
 const KEEP_UPPER = new Set(['UK', 'GB', 'US', 'USA', 'UAE', 'EU', 'NHS', 'IT', 'HR']);
 

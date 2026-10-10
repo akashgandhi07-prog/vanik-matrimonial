@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { checkoutRedirectBase } from '../_shared/site-url.ts';
+import { londonDaysBetween } from '../_shared/membership.ts';
 
 type Purpose = 'registration' | 'renewal';
 
@@ -63,6 +64,7 @@ Deno.serve(async (req) => {
   const uid = userData.user.id;
 
   let profileId: string | null = null;
+  let renewalProfile: { status: string; membership_expires_at: string | null } | null = null;
 
   if (purpose === 'registration') {
     const { data: existing } = await admin.from('profiles').select('id').eq('auth_user_id', uid).maybeSingle();
@@ -72,7 +74,7 @@ Deno.serve(async (req) => {
   } else {
     const { data: prof, error: pe } = await admin
       .from('profiles')
-      .select('id, status')
+      .select('id, status, membership_expires_at')
       .eq('auth_user_id', uid)
       .maybeSingle();
     if (pe || !prof) {
@@ -87,6 +89,7 @@ Deno.serve(async (req) => {
       }, req, 400);
     }
     profileId = prof.id as string;
+    renewalProfile = { status: st, membership_expires_at: (prof.membership_expires_at as string | null) ?? null };
   }
 
   const successPath =
@@ -139,6 +142,19 @@ Deno.serve(async (req) => {
   const id = json.id as string | undefined;
   if (!url || !id) {
     return jsonResponse({ error: 'Invalid Stripe response' }, req, 502);
+  }
+
+  if (profileId && renewalProfile) {
+    // Renewal funnel: Stripe only tells us about completed payments, so record the start here.
+    const { error: evErr } = await admin.from('renewal_funnel_events').insert({
+      profile_id: profileId,
+      event: 'checkout_started',
+      profile_status: renewalProfile.status,
+      days_to_expiry: renewalProfile.membership_expires_at
+        ? londonDaysBetween(new Date(), new Date(renewalProfile.membership_expires_at))
+        : null,
+    });
+    if (evErr) console.warn('renewal_funnel_events insert', evErr.message);
   }
 
   return jsonResponse({ url, session_id: id }, req);

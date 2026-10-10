@@ -4,6 +4,7 @@ import { sendTransactionalMail } from './transactional-mail.ts';
 import { publicSiteBaseUrl } from './site-url.ts';
 import { stripHtml } from './sanitize.ts';
 import { contactDetailsEmailContent, introductionReceivedEmailContent } from './introduction.ts';
+import { formatLondonDate, graceEndsAt, londonDaysBetween } from './membership.ts';
 
 export type EmailType =
   | 'account_archived'
@@ -96,7 +97,7 @@ export async function dispatchEmail(
       subject = 'Your account has been archived';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Your profile has been archived and is no longer visible on the register. This may follow a long period without renewal, or a request to close your account.</p>
-        <p>To return, sign in and renew online if card payments are enabled: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
+        <p>To return, sign in and renew online if card payments are enabled: <a href="${publicSiteBaseUrl()}/renew-membership?src=email">${publicSiteBaseUrl()}/renew-membership</a></p>
         <p>Or contact <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>`;
       break;
     }
@@ -216,31 +217,63 @@ export async function dispatchEmail(
       break;
     }
     case 'renewal_reminder': {
-      const n = Number(extraData.days ?? 30);
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      const exp = profile.membership_expires_at
-        ? new Date(profile.membership_expires_at).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })
-        : '';
-      subject = `Your membership expires in ${n} days`;
+      if (!profile.membership_expires_at) return { ok: false, error: 'No expiry date' };
+      const expAt = new Date(profile.membership_expires_at);
+      const days = Number(extraData.days ?? londonDaysBetween(new Date(), expAt));
+      const trialMonths = extraData.trial_months == null ? null : Number(extraData.trial_months);
+      const requesters = Number(extraData.requesters ?? 0);
+      const exp = formatLondonDate(expAt);
+      const expShort = formatLondonDate(expAt, false);
+      const hiddenOn = formatLondonDate(graceEndsAt(expAt));
+      const renewUrl = `${publicSiteBaseUrl()}/renew-membership?src=email`;
+      const period = trialMonths != null ? `free ${trialMonths} months` : 'membership';
+      const Period = trialMonths != null ? `Your free ${trialMonths} months` : 'Your membership';
+
+      if (days > 0) subject = `${Period} ends on ${expShort}`;
+      else if (days === 0) subject = `${Period} ends today`;
+      else subject = `Your profile will be hidden on ${formatLondonDate(graceEndsAt(expAt), false)}`;
+
+      const intro =
+        days > 0
+          ? `<p>${Period} on the Vanik Matrimonial Register ends on <strong>${exp}</strong>.</p>`
+          : days === 0
+            ? `<p>${Period} on the Vanik Matrimonial Register ends <strong>today</strong>.</p>`
+            : `<p>Your ${period} ended on ${exp}. We have kept your profile visible until <strong>${hiddenOn}</strong> so you do not miss anyone, but after that other members will no longer be able to find you.</p>`;
+      const interest =
+        requesters > 0
+          ? `<p><strong>${requesters} ${requesters === 1 ? 'member has' : 'members have'} requested your details</strong> since you joined. Keep your profile visible so new members can find you too.</p>`
+          : '<p>Keep your profile visible so new members joining the register can find you.</p>';
+      const offer =
+        days >= 0
+          ? `<p>Stay on the register for <strong>£10 a year</strong>. Renew by ${days === 0 ? '<strong>the end of today</strong>' : `<strong>${expShort}</strong>`} and we will add <strong>an extra month free</strong>, so you get 13 months for £10.</p>`
+          : '<p>Renew for <strong>£10 a year</strong> to stay on the register.</p>';
+      const after =
+        days >= 0
+          ? `<p>If you do not renew, your profile stays visible for 14 more days and is then hidden on ${hiddenOn}. You can come back any time.</p>`
+          : '';
+
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your membership expires on <strong>${exp}</strong>. The annual fee is £10.</p>
-        <p>You can renew online here: <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
-        <p>Alternatively, email us: <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>`;
+        ${intro}
+        ${interest}
+        ${offer}
+        <p><a href="${renewUrl}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Renew now</a></p>
+        ${after}
+        <p>Questions? Simply reply to this email or write to <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
+        <p>With good wishes,<br/>The register team</p>`;
       break;
     }
     case 'membership_expired': {
       const { profile, member } = await fetchProfile(recipientProfileId!);
       if (!profile || !member) return { ok: false, error: 'Profile not found' };
-      subject = 'Your membership has expired';
+      subject = 'Your profile is now hidden from the register';
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
-        <p>Your membership has now expired and your profile is hidden from the register.</p>
-        <p>To renew online (£10/year): <a href="${publicSiteBaseUrl()}/renew-membership">${publicSiteBaseUrl()}/renew-membership</a></p>
-        <p>Or email us: <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>`;
+        <p>Your membership has ended and your profile is now hidden from other members.</p>
+        <p>You can come back any time. Renew for £10 a year and your profile goes straight back on the register:</p>
+        <p><a href="${publicSiteBaseUrl()}/renew-membership?src=email" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Renew now</a></p>
+        <p>Or email us: <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a></p>
+        <p>With good wishes,<br/>The register team</p>`;
       break;
     }
     case 'admin_daily_digest': {
@@ -284,7 +317,7 @@ export async function dispatchEmail(
       inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
         <p>Our admin team has removed one of the photos on your Vanik Matrimonial Register profile because it did not meet our photo guidelines.</p>
         ${reason ? `<p><strong>Reason:</strong> ${escapeHtmlEmail(reason)}</p>` : ''}
-        <p>Photos should be a clear, recent picture of your face only &mdash; group photos are not accepted. You are welcome to upload a replacement any time from <strong>My profile</strong> after signing in.</p>
+        <p>Photos should be a clear, recent picture of your face only. Group photos are not accepted. You are welcome to upload a replacement any time from <strong>My profile</strong> after signing in.</p>
         <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>If you have any questions, reply to this email.</p>
         <p>With thanks,<br/>The register team</p>`;

@@ -6,6 +6,7 @@ import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts'
 import { stripHtml } from '../_shared/sanitize.ts';
 import { buildCandidatesHtml, buildContactDetail, type ContactDetail } from '../_shared/introduction.ts';
 import { CONTACT_REQUEST_MAX_PER_SUBMIT } from '../_shared/contact-request-limits.ts';
+import { hasMembershipAccess } from '../_shared/membership.ts';
 
 /** Match PostgreSQL / RFC textual uuid (any version nibble). Stricter RFC variant-only regex rejected v6-v8 and some valid DB ids. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -109,11 +110,7 @@ Deno.serve(async (req) => {
       return jsonErr(req, 404, 'profile_not_found', 'Profile not found');
     }
 
-    if (
-      requester.status !== 'active' ||
-      !requester.membership_expires_at ||
-      new Date(requester.membership_expires_at) <= new Date()
-    ) {
+    if (requester.status !== 'active' || !hasMembershipAccess(requester.membership_expires_at)) {
       return jsonErr(req, 403, 'membership_not_active', 'Membership not active');
     }
 
@@ -206,7 +203,7 @@ Deno.serve(async (req) => {
       if (p.hidden_reason != null) {
         return jsonErr(req, 400, 'invalid_candidate', 'This profile is not listed on the register.');
       }
-      if (!p.membership_expires_at || new Date(p.membership_expires_at) <= now) {
+      if (!hasMembershipAccess(p.membership_expires_at, now)) {
         return jsonErr(req, 400, 'invalid_candidate', 'This member’s membership is not active.');
       }
     }
