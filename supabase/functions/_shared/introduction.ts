@@ -1,5 +1,6 @@
 import { stripHtml } from './sanitize.ts';
 import { publicSiteBaseUrl } from './site-url.ts';
+import { normalizeLinkedInUrl } from './linkedin.ts';
 
 /**
  * Single source of truth for what an introduction shares between two members.
@@ -18,6 +19,8 @@ export type ContactDetail = {
   reference_number: string;
   mobile: string;
   email: string;
+  /** Optional, normalised https://www.linkedin.com/in/<handle>; '' when not given. */
+  linkedin_url: string;
 };
 
 export function escapeHtml(s: string): string {
@@ -27,7 +30,9 @@ export function escapeHtml(s: string): string {
 /** The contact fields one member receives about the other once a request is made. */
 export function buildContactDetail(
   profile: { id: string; first_name?: string | null; reference_number?: string | null } | undefined,
-  priv: { surname?: string | null; mobile_phone?: string | null; email?: string | null } | undefined
+  priv:
+    | { surname?: string | null; mobile_phone?: string | null; email?: string | null; linkedin_url?: string | null }
+    | undefined
 ): ContactDetail {
   const firstName = stripHtml(profile?.first_name ?? 'Member', 80);
   const surname = stripHtml(String(priv?.surname ?? ''), 80);
@@ -38,7 +43,14 @@ export function buildContactDetail(
     reference_number: stripHtml(String(profile?.reference_number ?? ''), 20),
     mobile: stripHtml(String(priv?.mobile_phone ?? ''), 40),
     email: stripHtml(String(priv?.email ?? ''), 120),
+    linkedin_url: safeLinkedInUrl(priv?.linkedin_url),
   };
+}
+
+/** Only ever emit a link that is still a normalised LinkedIn profile URL. */
+function safeLinkedInUrl(raw: string | null | undefined): string {
+  const url = normalizeLinkedInUrl(String(raw ?? ''));
+  return url ?? '';
 }
 
 /** Candidate blocks inside the "contact details" email sent to the requester. */
@@ -49,6 +61,7 @@ export function buildCandidatesHtml(contacts: ContactDetail[]): string {
         `<div style="margin:14px 0;padding:12px 14px;border:1px solid #e8e1d6;border-radius:10px;">
           <p style="margin:0 0 6px;"><strong>${escapeHtml(c.full_name)}</strong></p>
           ${c.mobile ? `<p style="margin:0;"><strong>Mobile:</strong> ${escapeHtml(c.mobile)}</p>` : ''}
+          ${c.linkedin_url ? `<p style="margin:4px 0 0;"><strong>LinkedIn:</strong> <a href="${escapeHtml(c.linkedin_url)}" style="color:#7b2e3b;">${escapeHtml(c.linkedin_url.replace(/^https:\/\/www\./, ''))}</a></p>` : ''}
         </div>`
     )
     .join('');

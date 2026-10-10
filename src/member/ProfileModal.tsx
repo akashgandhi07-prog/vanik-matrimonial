@@ -4,11 +4,13 @@ import { ProfileThumb, useProfilePhotoDisplayUrls } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
 import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import type { ProfileRow } from './memberContext';
+import { linkedInDisplay } from '../lib/linkedin';
 
 type Props = {
   candidate: ProfileRow;
   contactDetails?: {
     mobile?: string | null;
+    linkedin_url?: string | null;
   };
   /** When true the modal is opened before contact details are shared (browse/saved). No photo is shown; title is anonymous. */
   anonymous?: boolean;
@@ -261,16 +263,26 @@ export function ProfileModal({
             <Row label="Diet" value={c.diet} />
             <Row label="Height" value={heightDisplay} />
             <Row label="Education" value={titleCaseIfAllCaps(c.education)} />
-            <Row label="Settlement plans" value={sentenceCaseIfAllCaps(c.future_settlement_plans)} />
+            <Row label="Plans to settle" value={sentenceCaseIfAllCaps(c.future_settlement_plans)} />
             {/* Contact details - only shown when the user has already received them (My Requests view) */}
             {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
+            {contactDetails?.linkedin_url && (
+              <div className="profile-modal-kv">
+                <span className="profile-modal-kv-label">LinkedIn</span>
+                <span className="profile-modal-kv-value">
+                  <a href={contactDetails.linkedin_url} target="_blank" rel="noopener noreferrer">
+                    {linkedInDisplay(contactDetails.linkedin_url)}
+                  </a>
+                </span>
+              </div>
+            )}
 
             {c.hobbies && (
               <div style={{ padding: '8px 0' }}>
-                <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                <p style={{ margin: '0 0 4px', fontSize: 14, color: 'var(--color-text-secondary)' }}>
                   Hobbies &amp; interests
                 </p>
-                <p style={{ margin: 0, fontSize: 14 }}>{sentenceCaseIfAllCaps(c.hobbies)}</p>
+                <p style={{ margin: 0, fontSize: 16 }}>{sentenceCaseIfAllCaps(c.hobbies)}</p>
               </div>
             )}
 

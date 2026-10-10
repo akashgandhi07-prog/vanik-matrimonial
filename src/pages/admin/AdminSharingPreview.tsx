@@ -31,6 +31,7 @@ const CONTACT_LABELS: Record<string, string> = {
   reference_number: 'Reference number',
   mobile: 'Mobile number',
   email: 'Email address',
+  linkedin_url: 'LinkedIn profile (if given)',
 };
 
 function ContactTable({ contact }: { contact: SharedContact }) {
@@ -300,7 +301,11 @@ export default function AdminSharingPreview() {
           {openModal === 'candidate_full' && (
             <ProfileModal
               candidate={data.candidate.profile}
-              contactDetails={data.candidate.shared_contact.mobile ? { mobile: data.candidate.shared_contact.mobile } : undefined}
+              contactDetails={
+                data.candidate.shared_contact.mobile
+                  ? { mobile: data.candidate.shared_contact.mobile, linkedin_url: data.candidate.shared_contact.linkedin_url }
+                  : undefined
+              }
               inTray={false}
               trayFull={false}
               blocked={false}
@@ -315,7 +320,11 @@ export default function AdminSharingPreview() {
           {openModal === 'requester_full' && (
             <ProfileModal
               candidate={data.requester.profile}
-              contactDetails={data.requester.shared_contact.mobile ? { mobile: data.requester.shared_contact.mobile } : undefined}
+              contactDetails={
+                data.requester.shared_contact.mobile
+                  ? { mobile: data.requester.shared_contact.mobile, linkedin_url: data.requester.shared_contact.linkedin_url }
+                  : undefined
+              }
               inTray={false}
               trayFull={false}
               blocked={false}

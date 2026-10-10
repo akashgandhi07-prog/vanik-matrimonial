@@ -524,6 +524,7 @@ export default function AdminMemberDetail() {
               [
                 ['Email', priv.email],
                 ['Mobile', priv.mobile_phone],
+                ['LinkedIn', priv.linkedin_url ?? null],
                 ['Gender', profile.gender],
                 ['Seeking', profile.seeking_gender ?? null],
                 ['Age', profile.age != null ? String(profile.age) : null],

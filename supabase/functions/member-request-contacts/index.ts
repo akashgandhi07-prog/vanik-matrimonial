@@ -20,6 +20,7 @@ type MemberPrivateRow = {
   profile_id: string;
   surname: string | null;
   mobile_phone: string | null;
+  linkedin_url: string | null;
   email: string | null;
 };
 
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
 
   const { data: privateRows, error: privateErr } = await admin
     .from('member_private')
-    .select('profile_id, surname, mobile_phone, email')
+    .select('profile_id, surname, mobile_phone, email, linkedin_url')
     .in('profile_id', candidateIds);
   if (privateErr) {
     return jsonResponse({ error: privateErr.message }, req, 500);

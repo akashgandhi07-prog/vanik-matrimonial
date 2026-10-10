@@ -306,6 +306,7 @@ Deno.serve(async (req) => {
         surname?: string | null;
         mobile_phone?: string | null;
         email?: string | null;
+        linkedin_url?: string | null;
       })
     );
 
@@ -328,7 +329,7 @@ Deno.serve(async (req) => {
     if (isTransactionalMailConfigured()) {
       const { data: reqPriv } = await admin
         .from('member_private')
-        .select('surname, mobile_phone, email')
+        .select('surname, mobile_phone, email, linkedin_url')
         .eq('profile_id', requester.id)
         .maybeSingle();
       const requesterName = `${stripHtml(requester.first_name, 80)} ${stripHtml(String(reqPriv?.surname ?? ''), 80)}`.trim();

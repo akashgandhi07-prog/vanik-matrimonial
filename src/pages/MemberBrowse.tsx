@@ -853,6 +853,7 @@ export default function MemberBrowse() {
                   location={c.place_of_birth}
                   religion={c.religion}
                   nationality={c.nationality}
+                  settlement={c.future_settlement_plans}
                   onOpen={() => setSelectedProfile(c)}
                   note={note}
                   actions={

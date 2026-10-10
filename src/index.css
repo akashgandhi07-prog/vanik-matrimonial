@@ -2097,22 +2097,30 @@ textarea:focus-visible {
 
 .profile-card-fact {
   display: grid;
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 104px 1fr;
   gap: 10px;
   align-items: baseline;
 }
 
 .profile-card-fact dt {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 
 .profile-card-fact dd {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 15px;
   color: var(--color-text);
   overflow-wrap: anywhere;
+}
+
+/* Free-text facts (settlement plans) can run to 200 chars; the full text is in the profile view. */
+.profile-card-fact-long {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .profile-card-actions {
@@ -2130,7 +2138,7 @@ textarea:focus-visible {
 
 .profile-card-note {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--color-text-secondary);
 }
@@ -3147,13 +3155,13 @@ textarea:focus-visible {
 
 .profile-modal-kv-label {
   min-width: 140px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .profile-modal-kv-value {
-  font-size: 14px;
+  font-size: 16px;
   min-width: 0;
   word-break: break-word;
 }

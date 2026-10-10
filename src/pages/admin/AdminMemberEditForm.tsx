@@ -39,6 +39,7 @@ export type MemberPrivateFull = {
   surname: string;
   email: string;
   mobile_phone: string;
+  linkedin_url?: string | null;
   date_of_birth: string;
   home_address_line1: string | null;
   home_address_city: string | null;
@@ -116,6 +117,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
   const [dob, setDob] = useState(priv.date_of_birth?.slice(0, 10) ?? '');
   const [email, setEmail] = useState(priv.email);
   const [mobile, setMobile] = useState(priv.mobile_phone);
+  const [linkedin, setLinkedin] = useState(priv.linkedin_url ?? '');
   const [addr1, setAddr1] = useState(priv.home_address_line1 ?? '');
   const [city, setCity] = useState(priv.home_address_city ?? '');
   const [postcode, setPostcode] = useState(priv.home_address_postcode ?? '');
@@ -150,6 +152,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
     setDob(priv.date_of_birth?.slice(0, 10) ?? '');
     setEmail(priv.email);
     setMobile(priv.mobile_phone);
+    setLinkedin(priv.linkedin_url ?? '');
     setAddr1(priv.home_address_line1 ?? '');
     setCity(priv.home_address_city ?? '');
     setPostcode(priv.home_address_postcode ?? '');
@@ -204,6 +207,7 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
           date_of_birth: dob,
           email,
           mobile_phone: mobile,
+          linkedin_url: linkedin,
           home_address_line1: addr1,
           home_address_city: city,
           home_address_postcode: postcode,
@@ -336,6 +340,15 @@ export function AdminMemberEditForm({ profile, priv, onSaved, onCancel }: Props)
         <div>
           <label className="label">Mobile</label>
           <input value={mobile} onChange={(e) => setMobile(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">LinkedIn (optional)</label>
+          <input
+            value={linkedin}
+            onChange={(e) => setLinkedin(e.target.value)}
+            placeholder="linkedin.com/in/..."
+            autoComplete="off"
+          />
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>

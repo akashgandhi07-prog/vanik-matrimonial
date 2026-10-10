@@ -18,6 +18,7 @@ import {
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
 import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { friendlyUploadError } from '../lib/uploadError';
+import { normalizeLinkedInUrl } from '../lib/linkedin';
 
 const LS_KEY = 'vmr_registration_v1';
 /** Auth user the saved draft belongs to. The draft holds one person's answers and
@@ -39,6 +40,7 @@ type FormState = {
   date_of_birth: string;
   mobile_phone: string;
   consent_mobile_own: boolean;
+  linkedin_url: string;
   home_address_line1: string;
   home_address_city: string;
   home_address_postcode: string;
@@ -74,6 +76,7 @@ const defaultState: FormState = {
   date_of_birth: '',
   mobile_phone: '',
   consent_mobile_own: false,
+  linkedin_url: '',
   home_address_line1: '',
   home_address_city: '',
   home_address_postcode: '',
@@ -153,6 +156,9 @@ function validateStep1(form: FormState, age: number | null): Record<string, stri
   if (!form.consent_mobile_own) {
     e.consent_mobile_own = "Please confirm the mobile number is the candidate's own, not a parent's or relative's.";
   }
+  if (normalizeLinkedInUrl(form.linkedin_url) === null) {
+    e.linkedin_url = 'Enter your LinkedIn profile link, e.g. linkedin.com/in/your-name, or leave it blank.';
+  }
   if (!form.home_address_line1.trim()) e.home_address_line1 = 'Address line 1 is required.';
   else if (form.home_address_line1.trim().length < 3)
     e.home_address_line1 = 'Please enter a fuller address line.';
@@ -205,6 +211,7 @@ const FIRST_INVALID_FIELD_IDS: Record<string, string> = {
   date_of_birth: 'reg-dob',
   mobile_phone: 'reg-tel',
   consent_mobile_own: 'reg-tel-own',
+  linkedin_url: 'reg-linkedin',
   home_address_line1: 'reg-addr1',
   home_address_city: 'reg-city',
   home_address_postcode: 'reg-postcode',
@@ -449,6 +456,7 @@ export default function Register() {
         gender: p.gender === 'Female' ? 'Female' : 'Male',
         date_of_birth: m.date_of_birth ?? '',
         mobile_phone: m.mobile_phone ?? '',
+        linkedin_url: m.linkedin_url ?? '',
         home_address_line1: m.home_address_line1 ?? '',
         home_address_city: m.home_address_city ?? '',
         home_address_postcode: m.home_address_postcode ?? '',
@@ -789,6 +797,7 @@ export default function Register() {
         seeking_gender: form.gender === 'Female' ? 'Male' : 'Female',
         date_of_birth: form.date_of_birth,
         mobile_phone: sanitizeText(form.mobile_phone, 40),
+        linkedin_url: normalizeLinkedInUrl(form.linkedin_url) ?? '',
         home_address_line1: titleCaseIfAllCaps(sanitizeText(form.home_address_line1, 200)),
         home_address_city: titleCaseIfAllCaps(sanitizeText(form.home_address_city, 100)),
         home_address_postcode: sanitizeText(form.home_address_postcode, 20),
@@ -1283,6 +1292,29 @@ export default function Register() {
                 {fieldErrors.consent_mobile_own && (
                   <p className="field-error">{fieldErrors.consent_mobile_own}</p>
                 )}
+              </div>
+              <div>
+                <label className="label" htmlFor="reg-linkedin">
+                  LinkedIn profile <span className="badge badge-muted">optional</span>
+                </label>
+                <p className="field-hint" style={{ marginTop: 0 }}>
+                  Only shared with members you are introduced to, alongside your mobile number. Never shown while
+                  browsing.
+                </p>
+                <input
+                  id="reg-linkedin"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="e.g. linkedin.com/in/your-name"
+                  value={form.linkedin_url}
+                  onChange={(e) => {
+                    update({ linkedin_url: e.target.value });
+                    clearFieldError('linkedin_url');
+                  }}
+                  aria-invalid={fieldErrors.linkedin_url ? true : undefined}
+                />
+                {fieldErrors.linkedin_url && <p className="field-error">{fieldErrors.linkedin_url}</p>}
               </div>
 
               <fieldset className="register-fieldset">
@@ -1820,7 +1852,7 @@ export default function Register() {
               </div>
               <div>
                 <label className="label" htmlFor="reg-photo">
-                  Profile photos (up to 3) <span aria-hidden="true">*</span>
+                  Profile photos (up to 3, we recommend all 3) <span aria-hidden="true">*</span>
                 </label>
                 <p id="reg-photo-hint" className="field-hint">
                   Your first photo is your <strong>main photo</strong>: use a clear, recent picture where{' '}
@@ -1859,6 +1891,15 @@ export default function Register() {
                 {form.photo_paths.length > 0 && !photoUploading && (
                   <p style={{ color: 'var(--color-success)', marginBottom: 0, fontSize: 14 }}>
                     ✓ {form.photo_paths.length === 1 ? 'Photo uploaded' : `${form.photo_paths.length} photos uploaded`}
+                  </p>
+                )}
+                {form.photo_paths.length > 0 && form.photo_paths.length < 3 && !photoUploading && (
+                  <p className="field-hint" style={{ marginBottom: 0 }}>
+                    <strong>
+                      Add {form.photo_paths.length === 2 ? 'one more' : 'two more'} if you can.
+                    </strong>{' '}
+                    Your photos are the first thing someone looks at once they have your details, and three clear photos
+                    give them a much better sense of who you are.
                   </p>
                 )}
                 {photoPreviews.length > 0 && (

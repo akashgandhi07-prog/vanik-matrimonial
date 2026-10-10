@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed:demo": "node scripts/seed_demo_accounts.mjs"
+    "seed:demo": "node scripts/seed_demo_accounts.mjs",
+    "check:grants": "node scripts/check-migration-grants.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

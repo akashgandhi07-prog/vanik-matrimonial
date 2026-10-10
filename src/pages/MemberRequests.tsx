@@ -25,6 +25,7 @@ type ContactDetailRow = {
   full_name: string;
   reference_number: string;
   mobile: string;
+  linkedin_url: string;
 };
 
 type RequestedProfileRpcRow = {
@@ -58,6 +59,7 @@ type RequestedProfileRpcRow = {
   full_name: string | null;
   mobile: string | null;
   email: string | null;
+  linkedin_url: string | null;
 };
 
 function telHref(phone: string): string {
@@ -152,6 +154,7 @@ export default function MemberRequests() {
     profile: ProfileRow;
     contactDetails?: {
       mobile?: string | null;
+      linkedin_url?: string | null;
     };
   } | null>(null);
   const [fromBrowseFlash, setFromBrowseFlash] = useState(false);
@@ -187,6 +190,7 @@ export default function MemberRequests() {
               full_name: row.full_name ?? row.first_name,
               reference_number: row.reference_number ?? '',
               mobile: row.mobile ?? '',
+              linkedin_url: row.linkedin_url ?? '',
             };
             if (!byRequest[row.request_id]) byRequest[row.request_id] = [];
             byRequest[row.request_id].push(contact);
@@ -298,7 +302,7 @@ export default function MemberRequests() {
 
     setSelectedProfile({
       profile: prof,
-      contactDetails: details?.mobile ? { mobile: details.mobile } : undefined,
+      contactDetails: details?.mobile ? { mobile: details.mobile, linkedin_url: details.linkedin_url } : undefined,
     });
 
     navigate('/dashboard/requests', { replace: true, state: {} });
@@ -394,7 +398,7 @@ export default function MemberRequests() {
                 const openProfile = () =>
                   setSelectedProfile({
                     profile: r,
-                    contactDetails: r.mobile ? { mobile: r.mobile } : undefined,
+                    contactDetails: r.mobile ? { mobile: r.mobile, linkedin_url: r.linkedin_url } : undefined,
                   });
                 return (
                   <div
@@ -475,6 +479,17 @@ export default function MemberRequests() {
                             style={{ padding: '4px 10px', fontSize: 12 }}
                           >
                             WhatsApp
+                          </a>
+                        ) : null}
+                        {r.linkedin_url ? (
+                          <a
+                            className="btn btn-secondary"
+                            href={r.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
+                          >
+                            LinkedIn
                           </a>
                         ) : null}
                         <button
@@ -822,6 +837,7 @@ export default function MemberRequests() {
                               contactDetails: details
                                 ? {
                                     mobile: details.mobile,
+                                    linkedin_url: details.linkedin_url,
                                   }
                                 : undefined,
                             })
@@ -909,6 +925,17 @@ export default function MemberRequests() {
                                       style={{ padding: '4px 10px', fontSize: 12 }}
                                     >
                                       WhatsApp
+                                    </a>
+                                  ) : null}
+                                  {details.linkedin_url ? (
+                                    <a
+                                      className="btn btn-secondary"
+                                      href={details.linkedin_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{ padding: '4px 10px', fontSize: 12 }}
+                                    >
+                                      LinkedIn
                                     </a>
                                   ) : null}
                                   {openProfile ? (

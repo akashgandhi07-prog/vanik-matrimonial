@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
 
   const { data: privRows, error: mErr } = await admin
     .from('member_private')
-    .select('profile_id, surname, mobile_phone, email')
+    .select('profile_id, surname, mobile_phone, email, linkedin_url')
     .in('profile_id', [requesterId, candidateId]);
   if (mErr) return jsonResponse({ error: mErr.message }, req, 500);
 

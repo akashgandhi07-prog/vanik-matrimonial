@@ -1,0 +1,9 @@
+[
+  "20260413000004_phase2_automation.sql",
+  "20260413000005_stripe_checkout_sessions.sql",
+  "20260414120200_cron_job_runs.sql",
+  "20260430113324_profile_photos.sql",
+  "20260511100000_website_feedback.sql",
+  "20260804120000_pause_feedback.sql",
+  "20260805160000_member_archived_requests.sql"
+]

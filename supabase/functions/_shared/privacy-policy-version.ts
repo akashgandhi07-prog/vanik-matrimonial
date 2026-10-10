@@ -1,5 +1,5 @@
 /** SYNC: same default as `src/lib/privacyPolicyVersion.ts` (“Last updated” on /privacy). */
-export const DEFAULT_PRIVACY_POLICY_VERSION_ID = '2026-05-11';
+export const DEFAULT_PRIVACY_POLICY_VERSION_ID = '2026-10-10';
 
 /** Optional Edge secret `PRIVACY_POLICY_VERSION` overrides stored consent version without redeploy. */
 export function resolvedPrivacyPolicyVersionId(): string {

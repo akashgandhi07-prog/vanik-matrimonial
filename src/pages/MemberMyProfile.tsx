@@ -10,6 +10,7 @@ import { isValidPlaceField } from '../lib/registerValidation';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { userFacingAuthError } from '../lib/auth';
 import { friendlyUploadError } from '../lib/uploadError';
+import { normalizeLinkedInUrl } from '../lib/linkedin';
 import { useNavigate } from 'react-router-dom';
 const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
@@ -27,7 +28,7 @@ type ProfilePhoto = {
   signed_url: string | null;
 };
 
-function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
+function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
   const navigate = useNavigate();
   const [education, setEducation] = useState(p.education ?? '');
   const [jobTitle, setJobTitle] = useState(p.job_title ?? '');
@@ -37,6 +38,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
   const [town, setTown] = useState(p.town_country_of_origin ?? '');
   const [height, setHeight] = useState<number | ''>(p.height_cm ?? '');
   const [diet, setDiet] = useState(p.diet ?? 'Veg');
+  const [linkedin, setLinkedin] = useState(privateRow.linkedin_url ?? '');
   const [pwNew, setPwNew] = useState('');
   const [pwConf, setPwConf] = useState('');
   const [pwStatus, setPwStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -121,9 +123,12 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
       town !== (p.town_country_of_origin ?? '') ||
       height !== initialHeight ||
       diet !== (p.diet ?? 'Veg') ||
-      seeking !== (p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female'))
+      seeking !== (p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female')) ||
+      linkedin !== (privateRow.linkedin_url ?? '')
     );
   }, [
+    linkedin,
+    privateRow.linkedin_url,
     education,
     jobTitle,
     hobbies,
@@ -175,6 +180,10 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
     if (!['Male', 'Female', 'Both'].includes(seeking)) {
       nextErrors.seeking = 'Please choose who you want to browse.';
     }
+    const linkedinNormalized = normalizeLinkedInUrl(linkedin);
+    if (linkedinNormalized === null) {
+      nextErrors.linkedin = 'Enter your LinkedIn profile link, e.g. linkedin.com/in/your-name, or leave it blank.';
+    }
     setFieldErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       setSaveStatus('error');
@@ -197,7 +206,16 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         seeking_gender: seeking,
       })
       .eq('id', p.id);
-    if (error) {
+    // LinkedIn lives on member_private, which members cannot update directly.
+    const linkedinError =
+      !error && linkedinNormalized !== (privateRow.linkedin_url ?? '')
+        ? (await supabase.rpc('set_my_linkedin_url', { p_url: linkedinNormalized ?? '' })).error
+        : null;
+    if (linkedinError) {
+      console.error('linkedin save:', linkedinError.message, linkedinError.code);
+      setSaveStatus('error');
+      setSaveError('Your profile was saved, but the LinkedIn link could not be. Please try again.');
+    } else if (error) {
       console.error('profile save:', error.message, error.code);
       setSaveStatus('error');
       setSaveError(
@@ -372,6 +390,25 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 12px', lineHeight: 1.5 }}>
           Manage pictures here. The large preview above updates when you change which photo is main.
         </p>
+        {photos.length < 3 && (
+          <div
+            style={{
+              background: 'var(--color-accent-soft)',
+              border: '1px solid rgba(199, 148, 51, 0.3)',
+              borderRadius: 10,
+              padding: '10px 12px',
+              margin: '0 0 12px',
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>
+              You have {photos.length} of 3 photos. Add {3 - photos.length === 1 ? 'one more' : `${3 - photos.length} more`}.
+            </strong>{' '}
+            When someone receives your details, your photos are the first thing they look at. Three clear photos give
+            them a much better sense of who you are and make it easier for them to get in touch.
+          </div>
+        )}
         <ul
           style={{
             fontSize: 13,
@@ -391,7 +428,7 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
           </li>
           <li style={{ marginBottom: 0 }}>
             <strong>Change order or the main image.</strong> Drag rows to reorder the gallery. Use <strong>Set main</strong>{' '}
-            so the right picture is the one others see in browse and as the first image in your profile. Pick a main
+            so the right picture is the first one people see once they have your details. Pick a main
             photo where <strong>your face is clearly visible</strong>, not a distant or full-length shot.
           </li>
         </ul>
@@ -723,6 +760,27 @@ function MemberMyProfileForm({ profile: p, loadAll }: FormProps) {
             </label>
             <input id="mp-job" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
             {fieldErrors.jobTitle && <p className="field-error">{fieldErrors.jobTitle}</p>}
+          </div>
+          <div>
+            <label className="label" htmlFor="mp-linkedin">
+              LinkedIn profile <span className="badge badge-muted">optional</span>
+            </label>
+            <p className="field-hint" style={{ marginTop: 0 }}>
+              Only shared with members you are introduced to, alongside your mobile number. Never shown while browsing.
+            </p>
+            <input
+              id="mp-linkedin"
+              type="url"
+              inputMode="url"
+              placeholder="e.g. linkedin.com/in/your-name"
+              value={linkedin}
+              onChange={(e) => setLinkedin(e.target.value)}
+              onBlur={() => {
+                const n = normalizeLinkedInUrl(linkedin);
+                if (n) setLinkedin(n);
+              }}
+            />
+            {fieldErrors.linkedin && <p className="field-error">{fieldErrors.linkedin}</p>}
           </div>
           <div>
             <label className="label" htmlFor="mp-hobbies">

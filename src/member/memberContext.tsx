@@ -51,6 +51,8 @@ export type MemberPrivateRow = {
   email: string;
   mobile_phone: string;
   date_of_birth: string;
+  /** Optional; shared only with members they are introduced to. */
+  linkedin_url?: string | null;
   /** Admin-granted extra distinct-candidate slots for the rolling 7-day window (default caps: 3 + bonus). */
   contact_request_weekly_bonus?: number | null;
   /** Admin-granted extra distinct-candidate slots for the UTC calendar month (default caps: 6 + bonus). */
@@ -65,6 +67,7 @@ export type RequesterOfMeRow = ProfileRow & {
   requested_at: string;
   full_name: string | null;
   mobile: string | null;
+  linkedin_url: string | null;
 };
 
 type MemberCtx = {

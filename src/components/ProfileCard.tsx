@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { titleCaseIfAllCaps } from '../lib/displayCase';
+import { sentenceCaseIfAllCaps, titleCaseIfAllCaps } from '../lib/displayCase';
 
-type Fact = { label: string; value: ReactNode };
+type Fact = { label: string; value: ReactNode; long?: boolean };
 
 export type ProfileCardProps = {
   age?: number | null;
@@ -12,6 +12,8 @@ export type ProfileCardProps = {
   location?: string | null;
   religion?: string | null;
   nationality?: string | null;
+  /** Free-text "Future settlement plans" (e.g. "Want to stay in London"). */
+  settlement?: string | null;
   /** Click handler for the whole card (e.g. open detail). */
   onOpen?: () => void;
   /** Action buttons rendered at the foot of the card. */
@@ -29,6 +31,7 @@ export default function ProfileCard({
   location,
   religion,
   nationality,
+  settlement,
   onOpen,
   actions,
   note,
@@ -40,6 +43,9 @@ export default function ProfileCard({
   if (location) facts.push({ label: 'Location', value: titleCaseIfAllCaps(location) });
   if (religion) facts.push({ label: 'Religion', value: religion });
   if (nationality) facts.push({ label: 'Nationality', value: titleCaseIfAllCaps(nationality) });
+  if (settlement?.trim()) {
+    facts.push({ label: 'Plans to settle', value: sentenceCaseIfAllCaps(settlement.trim()), long: true });
+  }
 
   const clickable = typeof onOpen === 'function';
 
@@ -85,7 +91,7 @@ export default function ProfileCard({
           {facts.map((f) => (
             <div className="profile-card-fact" key={f.label}>
               <dt>{f.label}</dt>
-              <dd>{f.value}</dd>
+              <dd className={f.long ? 'profile-card-fact-long' : undefined}>{f.value}</dd>
             </div>
           ))}
         </dl>

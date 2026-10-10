@@ -25,6 +25,8 @@ export default function Privacy() {
         <ul>
           <li>
             Identity and account: name, gender, age derived from date of birth, nationality, origins, email, and mobile.
+            If you choose to add one, your LinkedIn profile link, which is shared only with members you are introduced to,
+            alongside your mobile number.
           </li>
           <li>
             Address fields you choose to supply, and eligibility and preference fields displayed on profiles.

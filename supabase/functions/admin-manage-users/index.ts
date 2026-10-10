@@ -11,6 +11,7 @@ import {
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { replacePrimaryGalleryPhoto } from '../_shared/profile-photos.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 
 type QueryErrorLike = {
   message?: string | null;
@@ -2178,6 +2179,13 @@ Deno.serve(async (req) => {
       if (privIn.email !== undefined) privatePatch.email = stripHtml(String(privIn.email), 120);
       if (privIn.mobile_phone !== undefined) {
         privatePatch.mobile_phone = stripHtml(String(privIn.mobile_phone), 40);
+      }
+      if (privIn.linkedin_url !== undefined) {
+        const linkedin = normalizeLinkedInUrl(String(privIn.linkedin_url ?? ''));
+        if (linkedin === null) {
+          return jsonResponse({ error: 'linkedin_url must be a linkedin.com/in/ profile link' }, req, 400);
+        }
+        privatePatch.linkedin_url = linkedin || null;
       }
       if (privIn.home_address_line1 !== undefined) {
         privatePatch.home_address_line1 = stripHtml(String(privIn.home_address_line1), 200);

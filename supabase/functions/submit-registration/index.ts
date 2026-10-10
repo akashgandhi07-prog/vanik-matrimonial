@@ -7,6 +7,7 @@ import { isTransactionalMailConfigured, sendTransactionalMail } from '../_shared
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { resolvedPrivacyPolicyVersionId } from '../_shared/privacy-policy-version.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
+import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 import { hashRegistrationSubmitIp } from '../_shared/registration-consent-ip-hash.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
 
@@ -283,6 +284,7 @@ Deno.serve(async (req) => {
     date_of_birth: dob,
     email,
     mobile_phone: mobile,
+    linkedin_url: normalizeLinkedInUrl(String(body.linkedin_url ?? '')) || null,
     home_address_line1: stripHtml(String(body.home_address_line1 ?? ''), 200),
     home_address_city: stripHtml(String(body.home_address_city ?? ''), 100),
     home_address_postcode: stripHtml(String(body.home_address_postcode ?? ''), 20),
