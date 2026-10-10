@@ -2,10 +2,15 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'https://esm.sh/stripe@16.12.0?target=deno';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
+import {
+  EARLY_RENEWAL_BONUS_MONTHS,
+  graceEndsAt,
+  qualifiesForEarlyRenewalBonus,
+} from '../_shared/membership.ts';
 
-function addOneYear(from: Date): Date {
+function addMonths(from: Date, months: number): Date {
   const d = new Date(from);
-  d.setFullYear(d.getFullYear() + 1);
+  d.setMonth(d.getMonth() + months);
   return d;
 }
 
@@ -167,8 +172,14 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const curExp = prof.membership_expires_at ? new Date(prof.membership_expires_at as string) : null;
-    const start = curExp && curExp > now ? curExp : now;
-    const newExp = addOneYear(start);
+    // Renewing during the grace period continues from the old expiry date: the grace
+    // days are a courtesy, not extra paid time. After grace, the new year starts today.
+    const start = curExp && graceEndsAt(curExp) > now ? curExp : now;
+    // Judge "early" by when checkout was opened, so finishing payment just after
+    // midnight on the last day still earns the bonus month the reminder promised.
+    const openedAt = session.created ? new Date(session.created * 1000) : now;
+    const bonusMonths = qualifiesForEarlyRenewalBonus(curExp, openedAt) ? EARLY_RENEWAL_BONUS_MONTHS : 0;
+    const newExp = addMonths(start, 12 + bonusMonths);
 
     const { error: upErr } = await admin
       .from('profiles')
@@ -192,7 +203,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: upErr.message }, req, 500);
     }
 
-    return jsonResponse({ received: true, renewed: true }, req);
+    return jsonResponse({ received: true, renewed: true, bonus_months: bonusMonths }, req);
   }
 
   return jsonResponse({ received: true, skipped: 'unknown_purpose' }, req);

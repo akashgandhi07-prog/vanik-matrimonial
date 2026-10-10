@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { buildContactDetail, type ContactDetail } from '../_shared/introduction.ts';
+import { hasMembershipAccess } from '../_shared/membership.ts';
 
 type RequestRow = {
   id: string;
@@ -67,11 +68,7 @@ Deno.serve(async (req) => {
   if (requesterErr || !requester) {
     return jsonResponse({ error: 'Profile not found' }, req, 400);
   }
-  if (
-    requester.status !== 'active' ||
-    !requester.membership_expires_at ||
-    new Date(requester.membership_expires_at) <= new Date()
-  ) {
+  if (requester.status !== 'active' || !hasMembershipAccess(requester.membership_expires_at)) {
     return jsonResponse({ error: 'Membership not active' }, req, 403);
   }
 

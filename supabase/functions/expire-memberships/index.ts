@@ -3,6 +3,7 @@ import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
+import { membershipAccessCutoffIso } from '../_shared/membership.ts';
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -23,13 +24,14 @@ Deno.serve(async (req) => {
 
   try {
     const mailOk = isTransactionalMailConfigured();
-    const now = new Date().toISOString();
+    // Members keep access through the grace period; only expire once it is over.
+    const cutoff = membershipAccessCutoffIso();
 
     const { data: rows, error } = await admin
       .from('profiles')
       .select('id')
       .eq('status', 'active')
-      .lt('membership_expires_at', now);
+      .lt('membership_expires_at', cutoff);
 
     if (error) {
       if (runId) {

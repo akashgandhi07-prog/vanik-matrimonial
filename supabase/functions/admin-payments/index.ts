@@ -3,8 +3,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
+import { membershipAccessCutoffIso } from '../_shared/membership.ts';
 
 const LIST_LIMIT = 300;
+/** How far back the renewal funnel looks. */
+const FUNNEL_DAYS = 90;
 
 type SessionRow = {
   checkout_session_id: string;
@@ -120,6 +123,76 @@ Deno.serve(async (req) => {
     });
 
     return jsonResponse({ payments, limit: LIST_LIMIT }, req);
+  }
+
+  if (body.action === 'renewal_funnel') {
+    // Everyone who has been in the renewal process in the last 90 days: reminded,
+    // visited the renewal page, started checkout or paid. A renewed member's expiry
+    // moves a year out, so the cohort is built from events, not from expiry dates.
+    const since = new Date(Date.now() - FUNNEL_DAYS * 864e5).toISOString();
+    const [reminders, events, paid] = await Promise.all([
+      admin
+        .from('email_log')
+        .select('recipient_profile_id')
+        .eq('email_type', 'renewal_reminder')
+        .gte('sent_at', since)
+        .not('recipient_profile_id', 'is', null)
+        .limit(5000),
+      admin
+        .from('renewal_funnel_events')
+        .select('profile_id, event, source')
+        .gte('created_at', since)
+        .limit(5000),
+      admin
+        .from('stripe_checkout_sessions')
+        .select('profile_id')
+        .eq('purpose', 'renewal')
+        .eq('payment_status', 'paid')
+        .gte('created_at', since)
+        .limit(5000),
+    ]);
+    const err = reminders.error ?? events.error ?? paid.error;
+    if (err) return jsonResponse({ error: err.message }, req, 500);
+
+    const reminded = new Set((reminders.data ?? []).map((r) => r.recipient_profile_id as string));
+    const visited = new Set<string>();
+    const started = new Set<string>();
+    const visitedBySource: Record<string, Set<string>> = {};
+    for (const e of events.data ?? []) {
+      const pid = e.profile_id as string;
+      if (e.event === 'page_view') {
+        visited.add(pid);
+        const src = (e.source as string | null) ?? 'direct';
+        (visitedBySource[src] ??= new Set()).add(pid);
+      } else if (e.event === 'checkout_started') {
+        started.add(pid);
+      }
+    }
+    const renewed = new Set((paid.data ?? []).map((r) => r.profile_id as string).filter(Boolean));
+
+    const now = new Date();
+    const { data: upcoming, error: upErr } = await admin
+      .from('profiles')
+      .select('membership_expires_at')
+      .eq('status', 'active')
+      .gt('membership_expires_at', membershipAccessCutoffIso(now))
+      .lte('membership_expires_at', new Date(now.getTime() + 30 * 864e5).toISOString());
+    if (upErr) return jsonResponse({ error: upErr.message }, req, 500);
+    const inGrace = (upcoming ?? []).filter((p) => new Date(p.membership_expires_at as string) <= now).length;
+
+    return jsonResponse(
+      {
+        days: FUNNEL_DAYS,
+        reminded: reminded.size,
+        visited: visited.size,
+        visited_by_source: Object.fromEntries(Object.entries(visitedBySource).map(([k, v]) => [k, v.size])),
+        checkout_started: started.size,
+        renewed: renewed.size,
+        due_next_30_days: (upcoming ?? []).length - inGrace,
+        in_grace: inGrace,
+      },
+      req
+    );
   }
 
   if (body.action === 'refund') {

@@ -449,7 +449,7 @@ export default function AdminAnalytics() {
           <div className="card" style={{ marginBottom: 24 }}>
             <h2 style={{ marginTop: 0 }}>Active members never requested</h2>
             <p className="field-hint" style={{ marginTop: -6 }}>
-              Active, listed members who have not appeared in any contact request yet — worth a look at their
+              Active, listed members who have not appeared in any contact request yet. Worth a look at their
               profiles or photos. {stats.requests.zero_requested_total} in total
               {stats.requests.zero_requested_total > stats.requests.zero_requested.length
                 ? `, showing the ${stats.requests.zero_requested.length} longest-listed`

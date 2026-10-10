@@ -23,15 +23,92 @@ type PaymentRow = {
   member_email: string | null;
 };
 
+type RenewalFunnel = {
+  days: number;
+  reminded: number;
+  visited: number;
+  visited_by_source: Record<string, number>;
+  checkout_started: number;
+  renewed: number;
+  due_next_30_days: number;
+  in_grace: number;
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  email: 'email link',
+  banner: 'member-area banner',
+  expired: 'after access ended',
+  direct: 'other',
+};
+
+/** Reminded, visited the renewal page, started checkout, paid: where renewals drop off. */
+function RenewalFunnelCard() {
+  const [funnel, setFunnel] = useState<RenewalFunnel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    invokeFunction('admin-payments', { action: 'renewal_funnel' })
+      .then((r) => {
+        if (!cancelled) setFunnel(r as RenewalFunnel);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load renewal funnel');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <p role="alert" style={{ color: 'var(--color-danger)' }}>
+        {error}
+      </p>
+    );
+  }
+  if (!funnel) return null;
+
+  const steps: [string, number][] = [
+    ['Sent a renewal reminder', funnel.reminded],
+    ['Opened the renewal page', funnel.visited],
+    ['Started Stripe checkout', funnel.checkout_started],
+    ['Paid to renew', funnel.renewed],
+  ];
+  const sources = Object.entries(funnel.visited_by_source)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${n} via ${SOURCE_LABELS[k] ?? k}`)
+    .join(', ');
+
+  return (
+    <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+      <h3 style={{ marginTop: 0, marginBottom: 4 }}>Renewal funnel</h3>
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6b7280' }}>
+        Members in the last {funnel.days} days. {funnel.due_next_30_days} due in the next 30 days,{' '}
+        {funnel.in_grace} in their 14-day grace period now.
+      </p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {steps.map(([label, n]) => (
+          <div key={label} style={{ minWidth: 150 }}>
+            <div style={{ fontSize: 13, color: '#6b7280' }}>{label}</div>
+            <strong style={{ fontSize: 20 }}>{n}</strong>
+          </div>
+        ))}
+      </div>
+      {sources && <p style={{ margin: '10px 0 0', fontSize: 13, color: '#6b7280' }}>Page opened: {sources}.</p>}
+    </div>
+  );
+}
+
 function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function fmtAmount(pence: number | null, currency: string | null): string {
-  if (pence == null) return '—';
+  if (pence == null) return '-';
   try {
     return new Intl.NumberFormat('en-GB', {
       style: 'currency',
@@ -204,6 +281,8 @@ export default function AdminPayments() {
         Every Stripe payment, newest first. Refunds are issued straight to Stripe; pausing, cancelling or adding
         free months uses the same actions as the member page.
       </p>
+
+      <RenewalFunnelCard />
 
       {loadError && (
         <div role="alert" style={{ color: 'var(--color-danger)', marginBottom: 12 }}>

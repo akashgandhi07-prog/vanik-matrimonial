@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { MemberAuthGate, MemberDataProvider, useMemberArea } from '../member/memberContext';
 import { supabase } from '../lib/supabase';
-
-function daysBetween(a: Date, b: Date) {
-  return Math.ceil((b.getTime() - a.getTime()) / 86400000);
-}
+import {
+  earlyRenewalBonusAvailable,
+  isInMembershipGrace,
+  londonDaysUntil,
+  membershipGraceEndsAt,
+} from '../lib/memberStatus';
 
 /** Recommend-a-friend band: personal code, copy link, and a link to the Referrals tab. */
 function ReferralBanner() {
@@ -89,15 +91,27 @@ function MemberLayoutBody() {
   if (!profile) return null;
 
   const exp = profile.membership_expires_at ? new Date(profile.membership_expires_at) : null;
-  const daysToExp = exp ? daysBetween(new Date(), exp) : null;
-  const showAmber = daysToExp != null && daysToExp <= 30 && daysToExp > 7;
-  const showRed = daysToExp != null && daysToExp <= 7 && daysToExp >= 0;
-  const expiryClose = daysToExp != null && daysToExp <= 14 && daysToExp >= 0;
-  const expDateLabel = exp
-    ? exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-    : '';
+  // UK calendar days, matching the reminder emails ("ends today", "ends in 3 days").
+  const daysToExp = exp ? londonDaysUntil(exp) : null;
+  const inGrace = isInMembershipGrace(profile.membership_expires_at);
+  const bonus = earlyRenewalBonusAvailable(profile.membership_expires_at);
+  const showAmber = !inGrace && daysToExp != null && daysToExp <= 30 && daysToExp > 7;
+  const showRed = !inGrace && daysToExp != null && daysToExp <= 7 && daysToExp >= 0;
+  const expiryClose = !inGrace && daysToExp != null && daysToExp <= 14 && daysToExp >= 0;
+  const longDate = (d: Date) =>
+    d.toLocaleDateString('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'long', year: 'numeric' });
+  const expDateLabel = exp ? longDate(exp) : '';
+  const graceEndLabel = exp ? longDate(membershipGraceEndsAt(exp)) : '';
   const daysLeftLabel =
     daysToExp == null ? '' : daysToExp <= 0 ? 'today' : daysToExp === 1 ? 'in 1 day' : `in ${daysToExp} days`;
+  const renewLink = '/renew-membership?src=banner';
+  const bonusText = bonus ? (
+    <>
+      {' '}
+      Renew by <strong>{daysToExp === 0 ? 'the end of today' : expDateLabel}</strong> and get{' '}
+      <strong>an extra month free</strong> (13 months for £10).
+    </>
+  ) : null;
 
   const navCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'btn btn-primary' : 'btn btn-secondary';
@@ -182,9 +196,13 @@ function MemberLayoutBody() {
             </span>
             {exp && (
               <div className="member-dashboard-header-sub">
-                {expiryClose ? (
+                {inGrace ? (
                   <strong style={{ color: 'var(--color-danger)' }}>
-                    Membership expires {daysLeftLabel} — {expDateLabel}
+                    Membership ended {expDateLabel}. Profile visible until {graceEndLabel}
+                  </strong>
+                ) : expiryClose ? (
+                  <strong style={{ color: 'var(--color-danger)' }}>
+                    Membership expires {daysLeftLabel} ({expDateLabel})
                   </strong>
                 ) : (
                   <span>
@@ -215,9 +233,9 @@ function MemberLayoutBody() {
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--amber">
             <span>
               Your membership expires on <strong>{expDateLabel}</strong> ({daysLeftLabel}). To keep using
-              Vanik Council and stay visible to other members, renew for £10/year.
+              Vanik Council and stay visible to other members, renew for £10/year.{bonusText}
             </span>
-            <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
+            <NavLink to={renewLink} className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew for £10
             </NavLink>
           </div>
@@ -242,11 +260,23 @@ function MemberLayoutBody() {
         {showRed && (
           <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--urgent">
             <span>
-              Your membership expires <strong>{daysLeftLabel}</strong>, on <strong>{expDateLabel}</strong>. After
-              this date your profile will be hidden from other members. Renew for £10/year to keep your access.
+              Your membership expires <strong>{daysLeftLabel}</strong>, on <strong>{expDateLabel}</strong>. Renew
+              for £10/year to stay visible to other members.{bonusText}
             </span>
-            <NavLink to="/renew-membership" className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
+            <NavLink to={renewLink} className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
               Renew for £10
+            </NavLink>
+          </div>
+        )}
+        {inGrace && (
+          <div className="layout-max member-dashboard-renew-banner renew-banner renew-banner--urgent">
+            <span>
+              Your membership ended on <strong>{expDateLabel}</strong>. We have kept your profile visible until{' '}
+              <strong>{graceEndLabel}</strong>. After that, other members will no longer be able to find you.
+              Renew for £10/year to stay on the register.{bonusText}
+            </span>
+            <NavLink to={renewLink} className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }}>
+              Renew now
             </NavLink>
           </div>
         )}
