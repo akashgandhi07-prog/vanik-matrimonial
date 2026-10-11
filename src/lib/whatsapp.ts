@@ -11,3 +11,11 @@ export function whatsappUrlFromPhone(phone: string): string | null {
   }
   return `https://wa.me/${n}`;
 }
+
+/**
+ * Build a https://wa.me/?text=... link that opens WhatsApp with a message ready to send.
+ * Unlike whatsappUrlFromPhone, no recipient is set: the sender picks who to forward it to.
+ */
+export function whatsappShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}

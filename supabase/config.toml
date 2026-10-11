@@ -43,6 +43,9 @@ verify_jwt = false
 [functions.validate-coupon]
 verify_jwt = false
 
+[functions.record-referral-event]
+verify_jwt = false
+
 [functions.submit-registration]
 verify_jwt = false
 
