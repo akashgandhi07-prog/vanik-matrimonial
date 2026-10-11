@@ -1539,7 +1539,7 @@ Deno.serve(async (req) => {
     const in60Iso = new Date(nowMs + 60 * 864e5).toISOString();
 
     // Tables are small (hundreds of rows), so aggregate compact selects in TypeScript.
-    const [profilesRes, requestsRes, referralsRes] = await Promise.all([
+    const [profilesRes, requestsRes, referralsRes, referralEventsRes, memberPrivateRes] = await Promise.all([
       fetchAllTableRows(
         admin,
         'profiles',
@@ -1553,11 +1553,15 @@ Deno.serve(async (req) => {
         'referrer_profile_id, referred_profile_id, code_used, referrer_months, referred_months, rewarded_at, created_at',
         'created_at'
       ),
+      fetchAllTableRows(admin, 'referral_events', 'referrer_profile_id, event', 'created_at'),
+      fetchAllTableRows(admin, 'member_private', 'profile_id, referral_code, referred_by_code', 'profile_id'),
     ]);
     for (const [label, res] of [
       ['profiles', profilesRes],
       ['requests', requestsRes],
       ['referrals', referralsRes],
+      ['referral_events', referralEventsRes],
+      ['member_private', memberPrivateRes],
     ] as const) {
       if (res.error) return jsonResponse({ error: `${label}: ${res.error}` }, req, 500);
     }
@@ -1740,6 +1744,56 @@ Deno.serve(async (req) => {
       listed_since: p.created_at,
     }));
 
+    // ---- Inactivity nudges: did the member sign in after the email? ----
+    // last_sign_in_at only keeps the latest sign-in, so "signed in after" means
+    // their most recent sign-in is later than the nudge. A correlation, not proof
+    // the email caused it: members who were already returning are counted too.
+    const nudgeLogRes = await admin
+      .from('email_log')
+      .select('recipient_profile_id, sent_at')
+      .eq('email_type', 'inactivity_nudge')
+      .eq('status', 'delivered')
+      .not('recipient_profile_id', 'is', null)
+      .limit(20000);
+    const nudgeLog = (nudgeLogRes.data ?? []) as { recipient_profile_id: string; sent_at: string }[];
+    const nudgeProfilesRes = await fetchAllTableRows(admin, 'profiles', 'id, auth_user_id', 'id');
+    const authIdByProfile = new Map<string, string>();
+    for (const p of (nudgeProfilesRes.rows ?? []) as { id: string; auth_user_id: string | null }[]) {
+      if (p.auth_user_id) authIdByProfile.set(p.id, p.auth_user_id);
+    }
+    const lastSignInAt = new Map<string, number>();
+    for (let page = 1; ; page++) {
+      const { data, error: auErr } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+      if (auErr) break;
+      const batch = data?.users ?? [];
+      for (const u of batch) {
+        const t = (u as { last_sign_in_at?: string | null }).last_sign_in_at;
+        if (t) lastSignInAt.set(u.id, Date.parse(t));
+      }
+      if (batch.length < 1000) break;
+    }
+    let nudgesSent = 0;
+    let nudgesSignedIn = 0;
+    const nudgedMembers = new Set<string>();
+    const signedInMembers = new Set<string>();
+    for (const n of nudgeLog) {
+      nudgesSent += 1;
+      nudgedMembers.add(n.recipient_profile_id);
+      const authId = authIdByProfile.get(n.recipient_profile_id);
+      const last = authId ? lastSignInAt.get(authId) : undefined;
+      if (last !== undefined && last >= Date.parse(n.sent_at)) {
+        nudgesSignedIn += 1;
+        signedInMembers.add(n.recipient_profile_id);
+      }
+    }
+    const nudgeStats = {
+      sent: nudgesSent,
+      signed_in_after: nudgesSignedIn,
+      members_nudged: nudgedMembers.size,
+      members_signed_in_after: signedInMembers.size,
+      rate_pct: nudgesSent > 0 ? Math.round((nudgesSignedIn / nudgesSent) * 1000) / 10 : 0,
+    };
+
     // ---- Referral scheme ----
     const referralAgg = new Map<string, { count: number; rewarded: number; months: number }>();
     let referralMonthsAwarded = 0;
@@ -1754,16 +1808,65 @@ Deno.serve(async (req) => {
       agg.months += r.referrer_months ?? 0;
       referralAgg.set(r.referrer_profile_id, agg);
     }
-    const topReferrers = [...referralAgg.entries()]
-      .sort((a, b) => b[1].count - a[1].count || (labelById.get(a[0]) ?? '').localeCompare(labelById.get(b[0]) ?? ''))
-      .slice(0, 10)
-      .map(([profileId, agg]) => ({
-        profile_id: profileId,
-        label: labelById.get(profileId) ?? 'Unknown (removed member)',
-        referrals: agg.count,
-        rewarded: agg.rewarded,
-        months_earned: agg.months,
-      }));
+    // Funnel per referrer: shares and invite-link opens (referral_events), sign-ups
+    // (member_private.referred_by_code, any status) and acceptances (referrals).
+    const eventAgg = new Map<string, { opens: number; shares: number }>();
+    let funnelOpens = 0;
+    let funnelShares = 0;
+    for (const e of referralEventsRes.rows as { referrer_profile_id: string; event: string }[]) {
+      const agg = eventAgg.get(e.referrer_profile_id) ?? { opens: 0, shares: 0 };
+      if (e.event === 'open') {
+        agg.opens += 1;
+        funnelOpens += 1;
+      } else if (e.event === 'share') {
+        agg.shares += 1;
+        funnelShares += 1;
+      }
+      eventAgg.set(e.referrer_profile_id, agg);
+    }
+    const memberPrivRows = memberPrivateRes.rows as {
+      profile_id: string;
+      referral_code: string | null;
+      referred_by_code: string | null;
+    }[];
+    const referrerIdByCode = new Map<string, string>();
+    for (const m of memberPrivRows) {
+      if (m.referral_code) referrerIdByCode.set(m.referral_code.toUpperCase(), m.profile_id);
+    }
+    const signupAgg = new Map<string, number>();
+    let funnelSignups = 0;
+    for (const m of memberPrivRows) {
+      if (!m.referred_by_code) continue;
+      const refId = referrerIdByCode.get(m.referred_by_code.toUpperCase());
+      if (!refId) continue;
+      signupAgg.set(refId, (signupAgg.get(refId) ?? 0) + 1);
+      funnelSignups += 1;
+    }
+    const referrerIds = new Set<string>([...eventAgg.keys(), ...signupAgg.keys(), ...referralAgg.keys()]);
+    const topReferrers = [...referrerIds]
+      .map((profileId) => {
+        const acc = referralAgg.get(profileId) ?? { count: 0, rewarded: 0, months: 0 };
+        const ev = eventAgg.get(profileId) ?? { opens: 0, shares: 0 };
+        return {
+          profile_id: profileId,
+          label: labelById.get(profileId) ?? 'Unknown (removed member)',
+          shares: ev.shares,
+          opens: ev.opens,
+          signups: signupAgg.get(profileId) ?? 0,
+          accepted: acc.count,
+          rewarded: acc.rewarded,
+          months_earned: acc.months,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.accepted - a.accepted ||
+          b.signups - a.signups ||
+          b.opens - a.opens ||
+          b.shares - a.shares ||
+          a.label.localeCompare(b.label)
+      )
+      .slice(0, 25);
 
     return jsonResponse(
       {
@@ -1776,6 +1879,7 @@ Deno.serve(async (req) => {
           ageBands,
           ageUnknown,
         },
+        nudges: nudgeStats,
         pauses: {
           total: pauseFeedbackTotal,
           byReason: pauseReasonCounts,
@@ -1795,6 +1899,12 @@ Deno.serve(async (req) => {
           total: referralRows.length,
           rewarded: referralRewarded,
           months_awarded: referralMonthsAwarded,
+          funnel: {
+            shares: funnelShares,
+            opens: funnelOpens,
+            signups: funnelSignups,
+            accepted: referralRows.length,
+          },
           top_referrers: topReferrers,
         },
         feedback: {

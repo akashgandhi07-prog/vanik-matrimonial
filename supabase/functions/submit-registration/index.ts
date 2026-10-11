@@ -201,6 +201,7 @@ Deno.serve(async (req) => {
   // bonus, never a barrier to signing up.
   const referralRaw = stripHtml(String(body.referral_code ?? ''), 16).trim().toUpperCase();
   let referralValid: string | null = null;
+  let referrerProfileId: string | null = null;
   // Strict format check also keeps ilike wildcards (%/_) out of the lookup.
   if (referralRaw && /^VR-[A-Z2-9]{4,8}$/.test(referralRaw)) {
     const { data: refRow } = await admin
@@ -219,6 +220,7 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (refProf?.status === 'active') {
           referralValid = String(refRow.referral_code);
+          referrerProfileId = refRow.profile_id as string;
         }
       }
     }
@@ -463,6 +465,17 @@ Deno.serve(async (req) => {
           resubmitted: isResubmit,
         },
       });
+
+      // Tell the referrer someone has signed up, without a name-level reveal of
+      // the review outcome: the acceptance email (referral_reward) is the only
+      // follow-up, so a rejection stays silent by design.
+      if (referrerProfileId && !isResubmit) {
+        await dispatchEmail(admin, {
+          type: 'referral_signup',
+          recipientProfileId: referrerProfileId,
+          extra_data: { friend_first_name: firstName },
+        });
+      }
 
       const notify = Deno.env.get('ADMIN_NOTIFY_EMAIL') ?? 'mahesh.gandhi@vanikcouncil.uk';
       const adminSubject = isResubmit ? 'Registration resubmitted (after rejection)' : 'New Vanik Matrimonial registration';

@@ -36,10 +36,11 @@ export default function Landing() {
             <p className="landing-kicker">Vanik Council</p>
             <h1 className="landing-title">Vanik Matrimonial Register</h1>
             <p className="landing-lead">
-              Looking for a life partner who shares your values? Meet genuine, verified
-              Gujarati Hindu and Jain singles through a private register trusted by our
-              community for over 40 years - no endless swiping, no strangers, no
-              time-wasters.
+              A private, verified register for adults aged 18 and over from Gujarati Hindu
+              and Jain families, looking for a life partner who shares their values. Preview
+              profiles for free, register for £10 a year, and request contact only when you
+              are ready - no endless chatting, no time-wasters. Trusted by our community for
+              over 40 years.
             </p>
             <div className="landing-actions landing-actions--primary">
               <Link to="/register" className="btn btn-primary landing-cta-register">
@@ -50,8 +51,8 @@ export default function Landing() {
               </Link>
             </div>
             <p className="landing-cta-note">
-              Approved members get saved profiles, batched contact requests, and a full
-              dashboard. Already a member?{' '}
+              Approved members get saved profiles, up to three introductions at a time, and a
+              full dashboard. Already a member?{' '}
               <Link to="/login" className="landing-cta-signin">Sign in</Link>.
             </p>
           </div>
@@ -71,8 +72,9 @@ export default function Landing() {
               <span className="landing-step-num">1</span>
               <h3>Register &amp; verify</h3>
               <p>
-                Create your profile and upload proof of identity. A real person checks
-                every application, so you only ever meet genuine, verified members.
+                Create your profile and upload proof of identity. A volunteer checks every
+                application, usually within 2 working days, so you only ever meet genuine,
+                verified members. Once approved, you can start browsing straight away.
               </p>
             </li>
             <li className="landing-step">

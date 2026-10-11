@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMemberArea } from '../member/memberContext';
 import { invokeFunction } from '../lib/supabase';
+import { recordReferralEvent, referralInviteMessage, referralWhatsappUrl } from '../lib/referralShare';
 
 type ReferralInfo = {
   code: string | null;
@@ -40,14 +41,12 @@ export default function MemberReferrals() {
   if (!profile) return null;
 
   const code = info?.code ?? null;
-  const shareLink = code ? `${window.location.origin}/register?ref=${encodeURIComponent(code)}` : '';
 
   async function copyLink() {
     if (!code) return;
     try {
-      await navigator.clipboard.writeText(
-        `Join me on the Vanik Matrimonial Register - use my code ${code} when you register and we both get free months: ${shareLink}`
-      );
+      await navigator.clipboard.writeText(referralInviteMessage(code));
+      recordReferralEvent(code, 'share');
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -86,9 +85,21 @@ export default function MemberReferrals() {
             <span style={{ fontSize: 15 }}>
               Your code: <strong style={{ letterSpacing: '0.05em' }}>{code}</strong>
             </span>
-            <button type="button" className="btn btn-primary" style={{ padding: '6px 14px' }} onClick={() => void copyLink()}>
-              {copied ? 'Copied!' : 'Copy invite link for WhatsApp'}
-            </button>
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <a
+                href={referralWhatsappUrl(code)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{ padding: '6px 14px' }}
+                onClick={() => recordReferralEvent(code, 'share')}
+              >
+                Share on WhatsApp
+              </a>
+              <button type="button" className="btn btn-secondary" style={{ padding: '6px 14px' }} onClick={() => void copyLink()}>
+                {copied ? 'Copied!' : 'Copy invite message'}
+              </button>
+            </span>
           </div>
         )}
         {info && info.total_months > 0 && (

@@ -22,6 +22,7 @@ export type EmailType =
   | 'photo_update_rejected'
   | 'photo_removed_by_admin'
   | 'referral_reward'
+  | 'referral_signup'
   | 'admin_pending_reminder'
   | 'account_freeze_reminder'
   | 'introduction_received'
@@ -337,6 +338,18 @@ export async function dispatchEmail(
         <p>Great news - ${friendFirst ? `<strong>${escapeHtmlEmail(friendFirst)}</strong>, who you recommended,` : 'someone you recommended'} has been accepted onto the Vanik Matrimonial Register.</p>
         <p>As a thank you, we have added <strong>${months} months</strong> to your membership${newExpiry ? `, which now runs until <strong>${newExpiry}</strong>` : ''}.</p>
         <p>There is no limit - every friend who is accepted adds another 2 months. Your personal code is in the banner of your member dashboard, ready to share on WhatsApp.</p>
+        <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
+        <p>With thanks,<br/>The register team</p>`;
+      break;
+    }
+    case 'referral_signup': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      const friendFirst = stripHtml(String((extraData as Record<string, unknown>).friend_first_name ?? ''), 60);
+      subject = `${friendFirst || 'A friend'} has signed up with your recommendation code`;
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>Thank you for recommending the Vanik Matrimonial Register. <strong>${friendFirst ? escapeHtmlEmail(friendFirst) : 'Someone'}</strong> has just signed up using your code.</p>
+        <p>Applications are reviewed within 2 working days. If they are accepted, we will add <strong>2 months</strong> to your membership and let you know straight away.</p>
         <p><a href="${publicSiteBaseUrl()}/login">${publicSiteBaseUrl()}/login</a></p>
         <p>With thanks,<br/>The register team</p>`;
       break;

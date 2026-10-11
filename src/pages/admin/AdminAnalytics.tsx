@@ -22,10 +22,15 @@ type ZeroRequestedRow = {
 type TopReferrerRow = {
   profile_id: string;
   label: string;
-  referrals: number;
+  shares: number;
+  opens: number;
+  signups: number;
+  accepted: number;
   rewarded: number;
   months_earned: number;
 };
+
+type ReferralFunnel = { shares: number; opens: number; signups: number; accepted: number };
 
 type AgeBandRow = { band: string; Male: number; Female: number; total: number };
 
@@ -46,6 +51,13 @@ type AnalyticsStats = {
     ageUnknown?: number;
   };
   pauses?: PauseStats;
+  nudges?: {
+    sent: number;
+    signed_in_after: number;
+    members_nudged: number;
+    members_signed_in_after: number;
+    rate_pct: number;
+  };
   expiring: { in30: number; in60: number };
   registrationsByWeek: WeekPoint[];
   requestsByWeek: WeekPoint[];
@@ -60,6 +72,7 @@ type AnalyticsStats = {
     total: number;
     rewarded: number;
     months_awarded: number;
+    funnel: ReferralFunnel;
     top_referrers: TopReferrerRow[];
   };
   feedback: {
@@ -492,22 +505,44 @@ export default function AdminAnalytics() {
             )}
           </div>
 
+          {stats.nudges && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h2 style={{ marginTop: 0 }}>Inactivity nudges</h2>
+              <p style={{ fontSize: 14, margin: '0 0 8px' }}>
+                <strong>{stats.nudges.sent}</strong> nudge emails delivered to{' '}
+                <strong>{stats.nudges.members_nudged}</strong> members ·{' '}
+                <strong>{stats.nudges.signed_in_after}</strong> led to a sign-in afterwards (
+                <strong>{stats.nudges.rate_pct}%</strong>)
+              </p>
+              <p style={{ fontSize: 13, margin: 0, color: 'var(--color-text-secondary)' }}>
+                {stats.nudges.members_signed_in_after} of those members have signed in since being nudged. This counts
+                any later sign-in, so it shows association, not proof the email caused it.
+              </p>
+            </div>
+          )}
           <div className="card" style={{ marginBottom: 24 }}>
             <h2 style={{ marginTop: 0 }}>Referral scheme</h2>
-            <p style={{ fontSize: 14, margin: '0 0 12px' }}>
-              <strong>{stats.referrals.total}</strong> referrals recorded · <strong>{stats.referrals.rewarded}</strong>{' '}
-              rewarded · <strong>{stats.referrals.months_awarded}</strong> free months given out
+            <p style={{ fontSize: 14, margin: '0 0 6px' }}>
+              <strong>{stats.referrals.total}</strong> accepted · <strong>{stats.referrals.rewarded}</strong> rewarded
+              · <strong>{stats.referrals.months_awarded}</strong> free months given out
+            </p>
+            <p style={{ fontSize: 14, margin: '0 0 12px', color: 'var(--color-text-secondary)' }}>
+              Funnel: <strong>{stats.referrals.funnel.shares}</strong> shares → <strong>{stats.referrals.funnel.opens}</strong>{' '}
+              invite opens → <strong>{stats.referrals.funnel.signups}</strong> signed up →{' '}
+              <strong>{stats.referrals.funnel.accepted}</strong> accepted
             </p>
             {stats.referrals.top_referrers.length === 0 ? (
-              <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>No referrals yet.</p>
+              <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>No referral activity yet.</p>
             ) : (
               <div className="table-scroll">
                 <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.12)' }}>
                       <th style={thStyle}>Referrer</th>
-                      <th style={thStyle}>Referrals</th>
-                      <th style={thStyle}>Rewarded</th>
+                      <th style={thStyle}>Shares</th>
+                      <th style={thStyle}>Opens</th>
+                      <th style={thStyle}>Signed up</th>
+                      <th style={thStyle}>Accepted</th>
                       <th style={thStyle}>Months earned</th>
                     </tr>
                   </thead>
@@ -523,8 +558,10 @@ export default function AdminAnalytics() {
                             {r.label}
                           </button>
                         </td>
-                        <td style={tdStyle}>{r.referrals}</td>
-                        <td style={tdStyle}>{r.rewarded}</td>
+                        <td style={tdStyle}>{r.shares}</td>
+                        <td style={tdStyle}>{r.opens}</td>
+                        <td style={tdStyle}>{r.signups}</td>
+                        <td style={tdStyle}>{r.accepted}</td>
                         <td style={tdStyle}>{r.months_earned}</td>
                       </tr>
                     ))}

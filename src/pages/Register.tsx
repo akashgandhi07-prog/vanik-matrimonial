@@ -19,6 +19,7 @@ import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase'
 import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { friendlyUploadError } from '../lib/uploadError';
 import { normalizeLinkedInUrl } from '../lib/linkedin';
+import { recordReferralEvent } from '../lib/referralShare';
 
 const LS_KEY = 'vmr_registration_v1';
 /** Auth user the saved draft belongs to. The draft holds one person's answers and
@@ -506,6 +507,8 @@ export default function Register() {
       const fromUrl = (searchParams.get('ref') ?? '').trim().toUpperCase();
       if (fromUrl && REFERRAL_CODE_RE.test(fromUrl)) {
         localStorage.setItem(REFERRAL_LS_KEY, fromUrl);
+        // Only a fresh invite-link arrival counts as an open, not a stored code.
+        recordReferralEvent(fromUrl, 'open');
       }
       stored = localStorage.getItem(REFERRAL_LS_KEY);
     } catch {

@@ -8,6 +8,7 @@ import {
   londonDaysUntil,
   membershipGraceEndsAt,
 } from '../lib/memberStatus';
+import { recordReferralEvent, referralInviteMessage, referralWhatsappUrl } from '../lib/referralShare';
 
 /** Recommend-a-friend band: personal code, copy link, and a link to the Referrals tab. */
 function ReferralBanner() {
@@ -20,13 +21,11 @@ function ReferralBanner() {
   // The Referrals tab already opens with the full pitch; no need to repeat it above.
   if (!active || !code || location.pathname === '/dashboard/referrals') return null;
 
-  const shareLink = `${window.location.origin}/register?ref=${encodeURIComponent(code)}`;
-
   async function copyLink() {
+    if (!code) return;
     try {
-      await navigator.clipboard.writeText(
-        `Join me on the Vanik Matrimonial Register - use my code ${code} when you register and we both get free months: ${shareLink}`
-      );
+      await navigator.clipboard.writeText(referralInviteMessage(code));
+      recordReferralEvent(code, 'share');
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -59,14 +58,26 @@ function ReferralBanner() {
             see your referrals
           </NavLink>
         </span>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          style={{ padding: '4px 12px', fontSize: 13, flexShrink: 0 }}
-          onClick={() => void copyLink()}
-        >
-          {copied ? 'Copied!' : 'Copy invite link'}
-        </button>
+        <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <a
+            href={referralWhatsappUrl(code)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary"
+            style={{ padding: '4px 12px', fontSize: 13 }}
+            onClick={() => recordReferralEvent(code, 'share')}
+          >
+            Share on WhatsApp
+          </a>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 12px', fontSize: 13 }}
+            onClick={() => void copyLink()}
+          >
+            {copied ? 'Copied!' : 'Copy invite link'}
+          </button>
+        </span>
       </div>
     </div>
   );
