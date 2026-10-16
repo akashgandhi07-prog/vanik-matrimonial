@@ -8,7 +8,8 @@
  * The stripe_checkout_sessions primary key makes the first writer win; everyone
  * else gets 'already_applied'.
  */
-import { getAdminClient } from './dispatch-email.ts';
+import { dispatchEmail, getAdminClient, runAfterResponse } from './dispatch-email.ts';
+import { escapeAlertText, sendOpsAlert } from './ops-alert.ts';
 import {
   EARLY_RENEWAL_BONUS_MONTHS,
   graceEndsAt,
@@ -132,6 +133,11 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
   if (insErr) {
     if (insErr.code === '23505') return { status: 'already_applied' };
     console.error('stripe_checkout_sessions insert renewal', insErr);
+    await sendOpsAlert('A renewal payment could not be recorded', [
+      `Checkout session ${escapeAlertText(session.id)} for profile ${escapeAlertText(profileId)}`,
+      `Error: ${escapeAlertText(insErr.message)}`,
+      'The member has paid but is not renewed. Apply it by hand or re-run reconcile-renewals.',
+    ]);
     return { status: 'error', message: insErr.message };
   }
 
@@ -172,8 +178,23 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
     // Leaving the record in place means the next attempt hits the 23505 idempotency check.
     // The payment record is preserved for manual recovery.
     console.error('profile renewal update failed - payment recorded, membership NOT extended', upErr);
+    await sendOpsAlert('A paid renewal was not applied', [
+      `Checkout session ${escapeAlertText(session.id)} for profile ${escapeAlertText(profileId)}`,
+      `Error: ${escapeAlertText(upErr.message)}`,
+      'The payment is recorded in admin > Payments but the membership end date was not moved. Extend it by hand.',
+    ]);
     return { status: 'error', message: upErr.message };
   }
+
+  // Confirmation to the member; sent after the response so a mail problem never
+  // turns a successful renewal into an error (or a Stripe retry).
+  runAfterResponse('renewal confirmation email', () =>
+    dispatchEmail(admin, {
+      type: 'renewal_confirmed',
+      recipientProfileId: profileId,
+      extraData: { bonus_months: bonusMonths, amount_total: session.amountTotal },
+    }),
+  );
 
   return { status: 'renewed', membership_expires_at: newExp.toISOString(), bonus_months: bonusMonths };
 }

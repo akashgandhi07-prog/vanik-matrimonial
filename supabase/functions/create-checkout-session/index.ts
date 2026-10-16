@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { checkoutRedirectBase } from '../_shared/site-url.ts';
-import { londonDaysBetween } from '../_shared/membership.ts';
+import { formatLondonDate, londonDaysBetween } from '../_shared/membership.ts';
 
 type Purpose = 'registration' | 'renewal';
 
@@ -90,6 +90,27 @@ Deno.serve(async (req) => {
     }
     profileId = prof.id as string;
     renewalProfile = { status: st, membership_expires_at: (prof.membership_expires_at as string | null) ?? null };
+
+    // A member who has just renewed (often while the page was slow to update) must not
+    // be able to pay again: one member paid four times before this check existed.
+    const recentCutoff = new Date(Date.now() - 7 * 864e5).toISOString();
+    const { data: recent } = await admin
+      .from('stripe_checkout_sessions')
+      .select('checkout_session_id')
+      .eq('profile_id', profileId)
+      .eq('purpose', 'renewal')
+      .is('refund_id', null)
+      .gt('renewal_applied_at', recentCutoff)
+      .limit(1);
+    if ((recent ?? []).length > 0) {
+      const until = renewalProfile.membership_expires_at
+        ? ` and now runs until ${formatLondonDate(new Date(renewalProfile.membership_expires_at))}`
+        : '';
+      return jsonResponse({
+        error: `Your membership has already been renewed${until}. There is no need to pay again.`,
+        code: 'ALREADY_RENEWED',
+      }, req, 409);
+    }
   }
 
   const successPath =

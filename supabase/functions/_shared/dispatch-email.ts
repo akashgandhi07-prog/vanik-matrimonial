@@ -16,6 +16,7 @@ export type EmailType =
   | 'feedback_reminder_21'
   | 'feedback_reminder_35'
   | 'renewal_reminder'
+  | 'renewal_confirmed'
   | 'membership_expired'
   | 'admin_daily_digest'
   | 'matched_congratulations'
@@ -261,6 +262,24 @@ export async function dispatchEmail(
         ${offer}
         <p><a href="${renewUrl}" style="display:inline-block;padding:10px 20px;background:#7b2e3b;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:bold;">Renew now</a></p>
         ${after}
+        <p>Questions? Simply reply to this email or write to <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
+        <p>With good wishes,<br/>The register team</p>`;
+      break;
+    }
+    case 'renewal_confirmed': {
+      const { profile, member } = await fetchProfile(recipientProfileId!);
+      if (!profile || !member) return { ok: false, error: 'Profile not found' };
+      if (!profile.membership_expires_at) return { ok: false, error: 'No expiry date' };
+      const until = formatLondonDate(new Date(profile.membership_expires_at));
+      const bonusMonths = Number(extraData.bonus_months ?? 0);
+      const pence = extraData.amount_total == null ? null : Number(extraData.amount_total);
+      const paid = pence != null && Number.isFinite(pence) ? `£${(pence / 100).toFixed(2)}` : null;
+      subject = `Your membership is renewed until ${until}`;
+      inner = `<p>Dear ${stripHtml(profile.first_name, 60)},</p>
+        <p>Thank you for renewing. Your membership of the Vanik Matrimonial Register now runs until <strong>${until}</strong>.</p>
+        ${bonusMonths > 0 ? `<p>This includes <strong>${bonusMonths === 1 ? 'an extra month' : `${bonusMonths} extra months`} free</strong> for renewing early.</p>` : ''}
+        ${paid ? `<p>We have received your payment of ${paid}.</p>` : ''}
+        <p>There is nothing else you need to do. <a href="${publicSiteBaseUrl()}/login">Sign in</a> any time to browse the register.</p>
         <p>Questions? Simply reply to this email or write to <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.</p>
         <p>With good wishes,<br/>The register team</p>`;
       break;

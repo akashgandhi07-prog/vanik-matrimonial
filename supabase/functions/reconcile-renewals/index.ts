@@ -3,6 +3,7 @@ import { jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { applyRenewalPayment, renewalSessionFromStripe, type RenewalSession } from '../_shared/renewal.ts';
+import { escapeAlertText, sendOpsAlert } from '../_shared/ops-alert.ts';
 
 /**
  * Daily safety net for renewals: lists recently completed Checkout Sessions at
@@ -31,6 +32,32 @@ async function listCompletedSessions(secret: string, sinceUnix: number): Promise
     startingAfter = String(data[data.length - 1].id);
   }
   return out;
+}
+
+/** Problems with the live webhook endpoint (missing, disabled, or not listening for what we need). */
+async function webhookEndpointProblems(secret: string): Promise<string[]> {
+  const res = await fetch('https://api.stripe.com/v1/webhook_endpoints?limit=100', {
+    headers: { Authorization: `Bearer ${secret}` },
+  });
+  const json = (await res.json()) as {
+    data?: { id: string; url: string; status: string; enabled_events: string[] }[];
+    error?: { message?: string };
+  };
+  if (!res.ok) return [`Could not read Stripe webhook endpoints: ${json.error?.message ?? res.status}`];
+  const ours = (json.data ?? []).filter((e) => e.url.endsWith('/functions/v1/stripe-webhook'));
+  if (ours.length === 0) return ['There is no Stripe webhook endpoint for stripe-webhook.'];
+  const problems: string[] = [];
+  for (const e of ours) {
+    if (e.status !== 'enabled') {
+      problems.push(`Stripe has <strong>${e.status}</strong> webhook endpoint ${e.id}. Stripe does this after repeated failed deliveries: check stripe-webhook logs, then re-enable it in Stripe.`);
+    }
+    for (const needed of ['checkout.session.completed', 'charge.refunded']) {
+      if (!e.enabled_events.includes('*') && !e.enabled_events.includes(needed)) {
+        problems.push(`Webhook endpoint ${e.id} is not listening for ${needed}.`);
+      }
+    }
+  }
+  return problems;
 }
 
 Deno.serve(async (req) => {
@@ -98,6 +125,26 @@ Deno.serve(async (req) => {
       console.log(`reconcile-renewals: ${s.id} -> ${JSON.stringify(outcome)}`);
     }
     results.push({ ...base, outcome: outcome.status, detail: outcome });
+  }
+
+  if (!dryRun) {
+    const alerts: string[] = [];
+    const rescued = results.filter((r) => r.outcome === 'renewed' || r.outcome === 'duplicate');
+    if (rescued.length) {
+      alerts.push(
+        `${rescued.length} renewal payment(s) were only picked up by the daily check, so the webhook and the return page both missed them: ${rescued.map((r) => escapeAlertText(r.checkout_session_id)).join(', ')}`,
+      );
+    }
+    const failed = results.filter((r) => r.outcome === 'error');
+    if (failed.length) {
+      alerts.push(`${failed.length} renewal payment(s) could not be applied: ${failed.map((r) => escapeAlertText(r.checkout_session_id)).join(', ')}`);
+    }
+    try {
+      alerts.push(...(await webhookEndpointProblems(secret)));
+    } catch (e) {
+      alerts.push(`Could not check the Stripe webhook endpoint: ${escapeAlertText(e instanceof Error ? e.message : String(e))}`);
+    }
+    if (alerts.length) await sendOpsAlert('Payments need attention', alerts);
   }
 
   return jsonResponse({

@@ -2,6 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { escapeAlertText, sendOpsAlert } from '../_shared/ops-alert.ts';
 
 // The deletion deadline is stored per-profile in `delete_after`, set when the account is
 // closed. It is deliberately not derived from `updated_at`: that column is bumped by the
@@ -42,28 +44,50 @@ Deno.serve(async (req) => {
     }
 
     let purged = 0;
+    let skippedAdmins = 0;
+    const failures: string[] = [];
     for (const r of rows ?? []) {
       const uid = r.auth_user_id as string;
+      // Never delete a staff login, even if its member profile was closed: the
+      // account is also how they sign in to the admin area.
+      const { data: authUser } = await admin.auth.admin.getUserById(uid);
+      if (authUser?.user && isUserAdmin(authUser.user)) {
+        skippedAdmins++;
+        continue;
+      }
+      // The email log keeps the row for statistics but should not keep their address.
+      await admin.from('email_log').update({ recipient_email: null }).eq('recipient_profile_id', r.id as string);
       const { error: delErr } = await admin.auth.admin.deleteUser(uid);
       if (delErr) {
         console.error('purge-archived-accounts deleteUser', uid, delErr);
+        failures.push(`profile ${r.id as string}: ${delErr.message}`);
         continue;
       }
       purged++;
     }
-
+    const result = {
+      purged_count: purged,
+      eligible: (rows ?? []).length,
+      skipped_admins: skippedAdmins,
+      failed: failures.length,
+    };
     if (runId) {
       await admin
         .from('cron_job_runs')
         .update({
-          status: 'success',
+          status: failures.length ? 'error' : 'success',
           finished_at: new Date().toISOString(),
-          result: { purged_count: purged, eligible: (rows ?? []).length },
+          result: failures.length ? { ...result, failures } : result,
         })
         .eq('id', runId);
     }
-
-    return jsonResponse({ ok: true, purged_count: purged, eligible: (rows ?? []).length }, req);
+    if (failures.length) {
+      await sendOpsAlert(
+        `${failures.length} closed account(s) could not be deleted`,
+        failures.map(escapeAlertText),
+      );
+    }
+    return jsonResponse({ ok: failures.length === 0, ...result }, req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (runId) {
