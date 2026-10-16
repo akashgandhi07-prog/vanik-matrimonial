@@ -44,6 +44,10 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: `Webhook signature: ${msg}` }, req, 400);
   }
 
+  if (event.type === 'charge.refunded') {
+    return await recordRefund(stripe, event.data.object as Stripe.Charge, req);
+  }
+
   if (event.type !== 'checkout.session.completed') {
     return jsonResponse({ received: true }, req);
   }
@@ -128,3 +132,44 @@ Deno.serve(async (req) => {
 
   return jsonResponse({ received: true, skipped: 'unknown_purpose' }, req);
 });
+
+/**
+ * Mirrors a refund into stripe_checkout_sessions so admin > Payments shows it, whether it
+ * was issued from admin > Payments or straight from the Stripe Dashboard. Registration
+ * rows do not store the payment intent, so the session is found through Stripe.
+ */
+async function recordRefund(stripe: Stripe, charge: Stripe.Charge, req: Request): Promise<Response> {
+  const paymentIntentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+  if (!paymentIntentId) return jsonResponse({ received: true, skipped: 'no_payment_intent' }, req);
+
+  const sessions = await stripe.checkout.sessions.list({ payment_intent: paymentIntentId, limit: 1 });
+  const sessionId = sessions.data[0]?.id;
+  if (!sessionId) return jsonResponse({ received: true, skipped: 'no_checkout_session' }, req);
+
+  const admin = getAdminClient();
+  const { data: row } = await admin
+    .from('stripe_checkout_sessions')
+    .select('refund_id, refund_amount, refunded_at')
+    .eq('checkout_session_id', sessionId)
+    .maybeSingle();
+  if (!row) return jsonResponse({ received: true, skipped: 'session_not_recorded' }, req);
+
+  const refunds = await stripe.refunds.list({ payment_intent: paymentIntentId, limit: 1 });
+  const nowIso = new Date().toISOString();
+  const { error } = await admin
+    .from('stripe_checkout_sessions')
+    .update({
+      // Keep the id written by admin > Payments if it got there first.
+      refund_id: (row.refund_id as string | null) ?? refunds.data[0]?.id ?? 'stripe-dashboard',
+      refund_amount: charge.amount_refunded,
+      refunded_at: (row.refunded_at as string | null) ?? nowIso,
+      payment_intent_id: paymentIntentId,
+      updated_at: nowIso,
+    })
+    .eq('checkout_session_id', sessionId);
+  if (error) {
+    console.error('stripe-webhook refund sync', error);
+    return jsonResponse({ error: error.message }, req, 500);
+  }
+  return jsonResponse({ received: true, refund_recorded: true }, req);
+}
