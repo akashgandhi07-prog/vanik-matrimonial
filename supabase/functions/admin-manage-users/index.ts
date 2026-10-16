@@ -13,6 +13,27 @@ import { replacePrimaryGalleryPhoto } from '../_shared/profile-photos.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 
+/**
+ * Max ids per `.in()` filter. PostgREST takes the list in the URL, and a few hundred
+ * uuids (~40 chars each once encoded) overflow the request line: the fetch fails with
+ * "error sending request" (this broke admin > Feedback once it had 400+ requests).
+ */
+const IN_LIST_CHUNK = 100;
+
+/** Runs an `.in()` query in IN_LIST_CHUNK-sized batches and concatenates the rows. */
+async function selectInChunks<T>(
+  ids: string[],
+  run: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_LIST_CHUNK) {
+    const { data, error } = await run(ids.slice(i, i + IN_LIST_CHUNK));
+    if (error) return { data: out, error };
+    out.push(...(data ?? []));
+  }
+  return { data: out, error: null };
+}
+
 type QueryErrorLike = {
   message?: string | null;
   code?: string | null;
@@ -35,7 +56,7 @@ function memberDisplayLabel(
 
 async function snapshotFeedbackNamesForProfiles(admin: { from: (table: string) => unknown }, profileIds: string[]) {
   if (profileIds.length === 0) return;
-  const chunkSize = 200;
+  const chunkSize = IN_LIST_CHUNK;
   for (let i = 0; i < profileIds.length; i += chunkSize) {
     const chunk = profileIds.slice(i, i + chunkSize);
     const [{ data: profs }, { data: privs }] = await Promise.all([
@@ -547,7 +568,7 @@ Deno.serve(async (req) => {
     if (profiles.length > 0) {
       const ids = profiles.map((p: { id: string }) => p.id);
       const idDocByProfile = new Map<string, string | null>();
-      const chunkSize = 600;
+      const chunkSize = IN_LIST_CHUNK;
       for (let i = 0; i < ids.length; i += chunkSize) {
         const idChunk = ids.slice(i, i + chunkSize);
         const { data: priv, error: mErr } = await admin
@@ -670,7 +691,7 @@ Deno.serve(async (req) => {
     const privateByProfile = new Map<string, PrivExportRow>();
     if (needsPrivate && profRows.length > 0) {
       const ids = profRows.map((p) => String(p.id ?? '')).filter(Boolean);
-      const chunkSize = 500;
+      const chunkSize = IN_LIST_CHUNK;
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize);
         const { data: priv, error: mErr } = await admin
@@ -690,7 +711,7 @@ Deno.serve(async (req) => {
     const notesByProfile = new Map<string, string>();
     if (needsNotes && profRows.length > 0) {
       const ids = profRows.map((p) => String(p.id ?? '')).filter(Boolean);
-      const chunkSize = 500;
+      const chunkSize = IN_LIST_CHUNK;
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize);
         const { data: noteRows, error: nErr } = await admin
@@ -930,7 +951,7 @@ Deno.serve(async (req) => {
 
     const allIds = [...profileIdSet];
     const seenLower = new Map<string, string>();
-    const chunkSize = 500;
+    const chunkSize = IN_LIST_CHUNK;
     for (let i = 0; i < allIds.length; i += chunkSize) {
       const chunk = allIds.slice(i, i + chunkSize);
       const { data: priv, error: mErr } = await admin
@@ -1096,10 +1117,9 @@ Deno.serve(async (req) => {
     ];
     const targetByProfileId: Record<string, { first_name: string; reference_number: string | null }> = {};
     if (targetIds.length > 0) {
-      const { data: targetProfiles, error: tErr } = await admin
-        .from('profiles')
-        .select('id, first_name, reference_number')
-        .in('id', targetIds);
+      const { data: targetProfiles, error: tErr } = await selectInChunks(targetIds, (chunk) =>
+        admin.from('profiles').select('id, first_name, reference_number').in('id', chunk)
+      );
       if (tErr) return jsonResponse({ error: tErr.message }, req, 500);
       for (const p of targetProfiles ?? []) {
         const row = p as { id: string; first_name: string; reference_number: string | null };
@@ -1289,10 +1309,9 @@ Deno.serve(async (req) => {
     }
     const names: Record<string, string> = {};
     if (idSet.size > 0) {
-      const { data: profs, error: pErr } = await admin
-        .from('profiles')
-        .select('id, first_name, reference_number')
-        .in('id', [...idSet]);
+      const { data: profs, error: pErr } = await selectInChunks([...idSet], (chunk) =>
+        admin.from('profiles').select('id, first_name, reference_number').in('id', chunk)
+      );
       if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
       for (const p of profs ?? []) {
         const row = p as { id: string; first_name: string; reference_number: string | null };
@@ -1373,7 +1392,7 @@ Deno.serve(async (req) => {
       ),
     ];
     const requestsById = new Map<string, { requester_id: string | null; candidate_ids: string[] | null }>();
-    const reqChunk = 400;
+    const reqChunk = IN_LIST_CHUNK;
     for (let i = 0; i < requestIds.length; i += reqChunk) {
       const chunk = requestIds.slice(i, i + reqChunk);
       const { data: reqs, error: rqErr } = await admin
@@ -1415,7 +1434,7 @@ Deno.serve(async (req) => {
     > = {};
     const surnameByProfile = new Map<string, string | null>();
     const idList = [...profileIds];
-    const profChunk = 400;
+    const profChunk = IN_LIST_CHUNK;
     for (let i = 0; i < idList.length; i += profChunk) {
       const chunk = idList.slice(i, i + profChunk);
       const [{ data: profs, error: pErr }, { data: privs, error: privErr }] = await Promise.all([
@@ -1467,10 +1486,9 @@ Deno.serve(async (req) => {
     }
     const profiles: Record<string, { id: string; first_name: string; reference_number: string | null }> = {};
     if (pidSet.size > 0) {
-      const { data: profs, error: pErr } = await admin
-        .from('profiles')
-        .select('id, first_name, reference_number')
-        .in('id', [...pidSet]);
+      const { data: profs, error: pErr } = await selectInChunks([...pidSet], (chunk) =>
+        admin.from('profiles').select('id, first_name, reference_number').in('id', chunk)
+      );
       if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
       for (const p of profs ?? []) {
         const row = p as { id: string; first_name: string; reference_number: string | null };
@@ -2861,10 +2879,9 @@ Deno.serve(async (req) => {
       { first_name: string; reference_number: string | null; created_at: string }
     > = {};
     if (profileIds.length > 0) {
-      const { data: profs, error: pErr } = await admin
-        .from('profiles')
-        .select('id, first_name, reference_number, created_at')
-        .in('id', profileIds);
+      const { data: profs, error: pErr } = await selectInChunks(profileIds, (chunk) =>
+        admin.from('profiles').select('id, first_name, reference_number, created_at').in('id', chunk)
+      );
       if (pErr) return jsonResponse({ error: pErr.message }, req, 500);
       for (const p of profs ?? []) {
         const row = p as {
