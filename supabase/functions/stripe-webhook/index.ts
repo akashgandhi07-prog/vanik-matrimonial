@@ -2,17 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'https://esm.sh/stripe@16.12.0?target=deno';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
-import {
-  EARLY_RENEWAL_BONUS_MONTHS,
-  graceEndsAt,
-  qualifiesForEarlyRenewalBonus,
-} from '../_shared/membership.ts';
-
-function addMonths(from: Date, months: number): Date {
-  const d = new Date(from);
-  d.setMonth(d.getMonth() + months);
-  return d;
-}
+import { applyRenewalPayment, renewalSessionFromStripe } from '../_shared/renewal.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -111,99 +101,20 @@ Deno.serve(async (req) => {
   }
 
   if (purpose === 'renewal') {
-    const profileId = meta.profile_id;
-    if (typeof profileId !== 'string') {
-      return jsonResponse({ received: true, skipped: 'no_profile_id' }, req);
+    const outcome = await applyRenewalPayment(
+      admin,
+      renewalSessionFromStripe(session as unknown as Record<string, unknown>),
+    );
+    if (outcome.status === 'error') {
+      return jsonResponse({ error: outcome.message }, req, 500);
     }
-
-    const { data: prof, error: pe } = await admin
-      .from('profiles')
-      .select('id, auth_user_id, membership_expires_at, status, hidden_reason')
-      .eq('id', profileId)
-      .maybeSingle();
-
-    if (pe || !prof || (prof.auth_user_id as string) !== authUserId) {
-      return jsonResponse({ received: true, skipped: 'profile_mismatch' }, req);
+    if (outcome.status === 'renewed') {
+      return jsonResponse({ received: true, renewed: true, bonus_months: outcome.bonus_months }, req);
     }
-
-    // Belt-and-braces: warn if Stripe customer_email doesn't match registered email
-    const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
-    if (customerEmail) {
-      const { data: privRow } = await admin
-        .from('member_private')
-        .select('email')
-        .eq('profile_id', profileId)
-        .maybeSingle();
-      const registeredEmail = privRow?.email as string | null | undefined;
-      if (registeredEmail && registeredEmail.toLowerCase() !== customerEmail.toLowerCase()) {
-        console.warn(
-          `stripe-webhook renewal: customer_email ${customerEmail} does not match registered email ${registeredEmail} for profile ${profileId} - proceeding (authUserId check passed)`
-        );
-      }
+    if (outcome.status === 'skipped') {
+      return jsonResponse({ received: true, skipped: outcome.reason }, req);
     }
-
-    const st = prof.status as string;
-    const renewable = new Set(['active', 'expired', 'closed']);
-    if (!renewable.has(st)) {
-      return jsonResponse({ received: true, skipped: 'bad_status' }, req);
-    }
-
-    const appliedAt = new Date().toISOString();
-    const { error: insErr } = await admin.from('stripe_checkout_sessions').insert({
-      checkout_session_id: checkoutSessionId,
-      auth_user_id: authUserId,
-      profile_id: profileId,
-      purpose: 'renewal',
-      payment_status: 'paid',
-      amount_total: amountTotal,
-      currency,
-      payment_intent_id: paymentIntentId,
-      renewal_applied_at: appliedAt,
-      updated_at: appliedAt,
-    });
-
-    if (insErr) {
-      if (insErr.code === '23505') {
-        return jsonResponse({ received: true, idempotent: true }, req);
-      }
-      console.error('stripe_checkout_sessions insert renewal', insErr);
-      return jsonResponse({ error: insErr.message }, req, 500);
-    }
-
-    const now = new Date();
-    const curExp = prof.membership_expires_at ? new Date(prof.membership_expires_at as string) : null;
-    // Renewing during the grace period continues from the old expiry date: the grace
-    // days are a courtesy, not extra paid time. After grace, the new year starts today.
-    const start = curExp && graceEndsAt(curExp) > now ? curExp : now;
-    // Judge "early" by when checkout was opened, so finishing payment just after
-    // midnight on the last day still earns the bonus month the reminder promised.
-    const openedAt = session.created ? new Date(session.created * 1000) : now;
-    const bonusMonths = qualifiesForEarlyRenewalBonus(curExp, openedAt) ? EARLY_RENEWAL_BONUS_MONTHS : 0;
-    const newExp = addMonths(start, 12 + bonusMonths);
-
-    const { error: upErr } = await admin
-      .from('profiles')
-      .update({
-        membership_expires_at: newExp.toISOString(),
-        status: 'active',
-        // Renewing clears a matched flag -- they are coming back -- but must not undo a
-        // member's own pause or a staff hide. A payment is not a moderation override.
-        hidden_reason: prof.hidden_reason === 'matched' ? null : prof.hidden_reason,
-        delete_after: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', profileId);
-
-    if (upErr) {
-      // Do NOT delete the session record - deleting causes Stripe to retry, which re-inserts,
-      // fails again, deletes again, creating an infinite retry loop.
-      // Leaving the record in place means Stripe's next retry hits the 23505 idempotency check
-      // and receives a 200, stopping retries. The payment record is preserved for manual recovery.
-      console.error('profile renewal update failed - payment recorded, membership NOT extended', upErr);
-      return jsonResponse({ error: upErr.message }, req, 500);
-    }
-
-    return jsonResponse({ received: true, renewed: true, bonus_months: bonusMonths }, req);
+    return jsonResponse({ received: true, [outcome.status === 'duplicate' ? 'duplicate' : 'idempotent']: true }, req);
   }
 
   return jsonResponse({ received: true, skipped: 'unknown_purpose' }, req);

@@ -20,6 +20,14 @@ export default function MembershipExpired() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const returnHandled = useRef(false);
+  const unmounted = useRef(false);
+  useEffect(() => {
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+    };
+  }, []);
   // Where this visit came from, captured before the Stripe return handler rewrites the URL.
   const [visitSource] = useState(() => {
     const params = new URLSearchParams(location.search);
@@ -92,15 +100,17 @@ export default function MembershipExpired() {
       setSearchParams(next, { replace: true });
       return;
     }
-    if (searchParams.get('checkout') !== 'success') return;
+    if (searchParams.get('checkout') !== 'success' || returnHandled.current) return;
+    returnHandled.current = true;
+    const sessionId = searchParams.get('session_id');
 
     setNotice('Payment received. Updating your membership…');
     const next = new URLSearchParams(searchParams);
     next.delete('checkout');
     next.delete('session_id');
+    // This re-runs the effect, so the work below must not be tied to its cleanup:
+    // it is guarded by returnHandled and stopped only by unmounting.
     setSearchParams(next, { replace: true });
-
-    let cancelled = false;
 
     function subscriptionRenewed(
       before: { exp: string | null; st: string },
@@ -118,11 +128,17 @@ export default function MembershipExpired() {
       return b > a;
     }
 
+    function done() {
+      if (unmounted.current) return;
+      setNotice('Renewal complete. Opening your member area…');
+      navigate('/dashboard/browse', { replace: true });
+    }
+
     void (async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
+      if (!user || unmounted.current) return;
       const authUserId = user.id;
 
       async function snapshot() {
@@ -138,28 +154,36 @@ export default function MembershipExpired() {
       }
 
       const before = await snapshot();
-      for (let i = 0; i < 12 && !cancelled; i++) {
+
+      // Check the payment with Stripe and apply it now, rather than waiting on the webhook.
+      if (sessionId) {
+        try {
+          const res = (await invokeFunction('confirm-renewal', { session_id: sessionId })) as { status?: string };
+          if (res.status === 'renewed' || res.status === 'already_applied' || res.status === 'duplicate') {
+            await load();
+            done();
+            return;
+          }
+        } catch (e) {
+          console.warn('confirm-renewal', e instanceof Error ? e.message : e);
+        }
+      }
+
+      for (let i = 0; i < 12 && !unmounted.current; i++) {
         if (i > 0) await new Promise((r) => setTimeout(r, 1500));
         await load();
         const after = await snapshot();
         if (subscriptionRenewed(before, after)) {
-          if (!cancelled) {
-            setNotice('Renewal complete. Opening your member area…');
-            navigate('/dashboard/browse', { replace: true });
-          }
+          done();
           return;
         }
       }
-      if (!cancelled) {
+      if (!unmounted.current) {
         setNotice(
-          'Payment received. If your expiry date still looks wrong, refresh the page or check your email (including junk or spam) for confirmation.',
+          'Payment received. Your membership will update within a day. If it has not, please email matrimonial@vanikcouncil.uk and we will sort it out.',
         );
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [searchParams, setSearchParams, load, navigate]);
 
   const longDate = (d: Date) =>
