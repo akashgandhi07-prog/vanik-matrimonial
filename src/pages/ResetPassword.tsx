@@ -11,6 +11,10 @@ export default function ResetPassword() {
   const [ready, setReady] = useState(false);
   const [linkTimedOut, setLinkTimedOut] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Accounts with an authenticator app (admins) must confirm a code before Supabase
+  // allows a password change: a recovery link alone only gives an AAL1 session.
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,6 +61,29 @@ export default function ResetPassword() {
     }
     setLoading(true);
     try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+        let factorId = mfaFactorId;
+        if (!factorId) {
+          const { data: factors } = await supabase.auth.mfa.listFactors();
+          factorId = factors?.totp?.find((f) => f.status === 'verified')?.id ?? null;
+          if (!factorId) {
+            setError('This account needs a second sign-in step we cannot complete here. Please contact matrimonial@vanikcouncil.uk.');
+            return;
+          }
+          setMfaFactorId(factorId);
+        }
+        const code = mfaCode.replace(/\s/g, '');
+        if (!/^\d{6}$/.test(code)) {
+          setError('Enter the 6-digit code from your authenticator app to confirm the change.');
+          return;
+        }
+        const { error: mfaErr } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+        if (mfaErr) {
+          setError('That code did not work. Check your authenticator app and try again.');
+          return;
+        }
+      }
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) {
         setError(userFacingAuthError(err));
@@ -121,6 +148,22 @@ export default function ResetPassword() {
                   required
                 />
               </div>
+              {mfaFactorId && (
+                <div>
+                  <label className="label" htmlFor="mfa-code">
+                    Authenticator code
+                  </label>
+                  <input
+                    id="mfa-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              )}
               {error && <p style={{ color: 'var(--color-danger)', margin: 0 }}>{error}</p>}
               <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? 'Updating…' : 'Update password'}
