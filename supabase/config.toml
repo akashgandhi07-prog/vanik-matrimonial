@@ -115,6 +115,12 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+[functions.confirm-renewal]
+verify_jwt = false
+
+[functions.reconcile-renewals]
+verify_jwt = false
+
 [functions.admin-add-member]
 verify_jwt = false
 

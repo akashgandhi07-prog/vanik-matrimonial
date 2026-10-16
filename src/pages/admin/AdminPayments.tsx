@@ -14,6 +14,8 @@ type PaymentRow = {
   refund_id: string | null;
   refund_amount: number | null;
   refunded_at: string | null;
+  /** Null on a paid renewal means a repeat payment that did not extend the membership. */
+  renewal_applied_at: string | null;
   created_at: string;
   member_name: string | null;
   member_reference: string | null;
@@ -359,6 +361,7 @@ export default function AdminPayments() {
                 const refunded = r.refund_id != null;
                 const paused = r.member_hidden_reason != null;
                 const closed = r.member_status === 'closed';
+                const repeatRenewal = r.purpose === 'renewal' && !refunded && r.renewal_applied_at == null;
                 return (
                   <Fragment key={r.checkout_session_id}>
                     <tr style={{ borderTop: '1px solid #e5e7eb' }}>
@@ -386,6 +389,11 @@ export default function AdminPayments() {
                           </span>
                         ) : (
                           <span style={{ color: 'var(--color-success)' }}>Paid</span>
+                        )}
+                        {repeatRenewal && (
+                          <div style={{ color: 'var(--color-danger)', fontSize: 13 }}>
+                            Repeat payment, not applied - refund it
+                          </div>
                         )}
                         {r.member_status && (
                           <div style={{ color: '#6b7280', fontSize: 13, textTransform: 'capitalize' }}>

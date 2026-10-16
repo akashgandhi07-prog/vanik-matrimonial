@@ -21,6 +21,7 @@ type SessionRow = {
   refund_id: string | null;
   refund_amount: number | null;
   refunded_at: string | null;
+  renewal_applied_at: string | null;
   created_at: string;
 };
 
@@ -62,7 +63,7 @@ Deno.serve(async (req) => {
     const { data: rows, error } = await admin
       .from('stripe_checkout_sessions')
       .select(
-        'checkout_session_id, auth_user_id, profile_id, purpose, payment_status, amount_total, currency, payment_intent_id, refund_id, refund_amount, refunded_at, created_at'
+        'checkout_session_id, auth_user_id, profile_id, purpose, payment_status, amount_total, currency, payment_intent_id, refund_id, refund_amount, refunded_at, renewal_applied_at, created_at'
       )
       .order('created_at', { ascending: false })
       .limit(LIST_LIMIT);
