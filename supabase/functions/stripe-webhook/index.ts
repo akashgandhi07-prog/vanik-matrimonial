@@ -29,9 +29,18 @@ Deno.serve(async (req) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, whSecret);
+    // Deno only has async WebCrypto: the synchronous constructEvent always throws here,
+    // which is why every delivery was rejected and Stripe disabled the endpoint.
+    event = await stripe.webhooks.constructEventAsync(
+      body,
+      sig,
+      whSecret,
+      undefined,
+      Stripe.createSubtleCryptoProvider(),
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error('stripe-webhook signature check failed:', msg);
     return jsonResponse({ error: `Webhook signature: ${msg}` }, req, 400);
   }
 
