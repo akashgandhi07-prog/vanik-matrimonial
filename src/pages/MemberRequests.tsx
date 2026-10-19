@@ -17,6 +17,7 @@ import { newErrorCode, reportError } from '../lib/errorLog';
 import { isProfileListedOnRegister } from '../lib/memberStatus';
 import { invokeFunction, supabase } from '../lib/supabase';
 import { whatsappUrlFromPhone } from '../lib/whatsapp';
+import { telHref } from '../lib/profileLabels';
 
 type ContactDetailRow = {
   request_id?: string;
@@ -61,11 +62,6 @@ type RequestedProfileRpcRow = {
   email: string | null;
   linkedin_url: string | null;
 };
-
-function telHref(phone: string): string {
-  const cleaned = phone.replace(/[^\d+]/g, '');
-  return cleaned ? `tel:${cleaned}` : `tel:${encodeURIComponent(phone)}`;
-}
 
 function friendlyContactsError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err ?? '');

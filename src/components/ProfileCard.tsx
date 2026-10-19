@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { sentenceCaseIfAllCaps, titleCaseIfAllCaps } from '../lib/displayCase';
-
-type Fact = { label: string; value: ReactNode; long?: boolean };
+import { dietLabel, religionLabel } from '../lib/profileLabels';
 
 export type ProfileCardProps = {
   age?: number | null;
@@ -36,16 +35,16 @@ export default function ProfileCard({
   actions,
   note,
 }: ProfileCardProps) {
-  const facts: Fact[] = [];
-  if (profession) facts.push({ label: 'Profession', value: titleCaseIfAllCaps(profession) });
-  if (height) facts.push({ label: 'Height', value: height });
-  if (diet) facts.push({ label: 'Diet', value: diet });
-  if (location) facts.push({ label: 'Location', value: titleCaseIfAllCaps(location) });
-  if (religion) facts.push({ label: 'Religion', value: religion });
-  if (nationality) facts.push({ label: 'Nationality', value: titleCaseIfAllCaps(nationality) });
-  if (settlement?.trim()) {
-    facts.push({ label: 'Plans to settle', value: sentenceCaseIfAllCaps(settlement.trim()), long: true });
-  }
+  const job = profession ? titleCaseIfAllCaps(profession) : null;
+  const title = job ? (age != null ? `${job}, ${age}` : job) : age != null ? `Age ${age}` : 'Member';
+  const subline = [location ? titleCaseIfAllCaps(location) : null, gender].filter(Boolean).join(' · ');
+  const tags = [
+    religionLabel(religion),
+    dietLabel(diet),
+    height,
+    nationality ? titleCaseIfAllCaps(nationality) : null,
+  ].filter((t): t is string => !!t);
+  const settlementText = settlement?.trim() ? sentenceCaseIfAllCaps(settlement.trim()) : null;
 
   const clickable = typeof onOpen === 'function';
 
@@ -67,34 +66,43 @@ export default function ProfileCard({
       }
     >
       <div className="profile-card-head">
-        <h3 className="profile-card-name">{age != null ? `Age ${age}` : 'Member'}</h3>
-        <div className="profile-card-tags">
-          {gender ? <span className="profile-tag">{gender}</span> : null}
-          <span className="profile-tag profile-tag--verified">
-            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path
-                d="M3.5 8.5l3 3 6-6.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+        <h3 className="profile-card-name">{title}</h3>
+        {subline ? (
+          <p className="profile-card-subline">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+              <circle cx="12" cy="9.5" r="2.5" />
             </svg>
-            Verified
-          </span>
-        </div>
+            {subline}
+          </p>
+        ) : null}
       </div>
 
-      {facts.length > 0 ? (
-        <dl className="profile-card-facts">
-          {facts.map((f) => (
-            <div className="profile-card-fact" key={f.label}>
-              <dt>{f.label}</dt>
-              <dd className={f.long ? 'profile-card-fact-long' : undefined}>{f.value}</dd>
-            </div>
-          ))}
-        </dl>
+      <ul className="profile-card-tags" aria-label="At a glance">
+        <li className="profile-tag profile-tag--verified">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path
+              d="M3.5 8.5l3 3 6-6.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Verified
+        </li>
+        {tags.map((t) => (
+          <li className="profile-tag" key={t}>
+            {t}
+          </li>
+        ))}
+      </ul>
+
+      {settlementText ? (
+        <p className="profile-card-settlement">
+          <span>Plans to settle:</span> {settlementText}
+        </p>
       ) : null}
 
       {actions ? <div className="profile-card-actions">{actions}</div> : null}

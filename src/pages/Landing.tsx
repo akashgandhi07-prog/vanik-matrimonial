@@ -33,15 +33,17 @@ export default function Landing() {
         {/* HERO */}
         <section className="landing-hero2 layout-max">
           <div className="landing-hero2-text">
-            <p className="landing-kicker">Vanik Council</p>
+            <p className="landing-kicker">Trusted by our community for over 40 years</p>
             <h1 className="landing-title">Vanik Matrimonial Register</h1>
             <p className="landing-lead">
-              A private, verified register for adults aged 18 and over from Gujarati Hindu
-              and Jain families, looking for a life partner who shares their values. Preview
-              profiles for free, register for £10 a year, and request contact only when you
-              are ready - no endless chatting, no time-wasters. Trusted by our community for
-              over 40 years.
+              A private, verified register helping adults from Gujarati Hindu and Jain families
+              find a life partner who shares their values.
             </p>
+            <ul className="landing-points">
+              <li>Every member is checked by a Vanik Council volunteer</li>
+              <li>Request contact only when you are ready, no endless chatting</li>
+              <li>£10 a year, not-for-profit, with no adverts</li>
+            </ul>
             <div className="landing-actions landing-actions--primary">
               <Link to="/register" className="btn btn-primary landing-cta-register">
                 Register (£10/year)
@@ -51,8 +53,7 @@ export default function Landing() {
               </Link>
             </div>
             <p className="landing-cta-note">
-              Approved members get saved profiles, up to three introductions at a time, and a
-              full dashboard. Already a member?{' '}
+              Preview profiles for free before you join. Already a member?{' '}
               <Link to="/login" className="landing-cta-signin">Sign in</Link>.
             </p>
           </div>
@@ -81,15 +82,15 @@ export default function Landing() {
               <span className="landing-step-num">2</span>
               <h3>Browse &amp; save</h3>
               <p>
-                Browse people who are looking for the same thing you are - marriage, not
-                endless chatting - and save anyone who catches your eye.
+                Browse people who are looking for the same thing you are: marriage, not
+                endless chatting. Save anyone who catches your eye.
               </p>
             </li>
             <li className="landing-step">
               <span className="landing-step-num">3</span>
               <h3>Request contact</h3>
               <p>
-                When you&rsquo;re ready, request contact details and take it from there -
+                When you&rsquo;re ready, request contact details and take it from there:
                 a phone call, a coffee, a proper conversation. Up to three introductions
                 at a time keeps it personal.
               </p>
@@ -139,14 +140,14 @@ export default function Landing() {
               </p>
             </details>
             <details className="landing-faq-item">
-              <summary>I&rsquo;m a parent - can I register on behalf of my son or daughter?</summary>
+              <summary>I&rsquo;m a parent. Can I register on behalf of my son or daughter?</summary>
               <p>
-                We love that parents want to help - many happy matches in our community
+                We love that parents want to help: many happy matches in our community
                 started exactly that way. The account itself, though, should be created
                 by the person looking to marry: they are the one who will browse
                 profiles, receive introductions and speak with matches, and we verify
                 each member&rsquo;s own identity. The best way to help is to share this
-                page with them and encourage them to register - it only takes a few
+                page with them and encourage them to register. It only takes a few
                 minutes, and you are very welcome to sit with them while they do.
               </p>
             </details>
@@ -154,8 +155,8 @@ export default function Landing() {
               <summary>How much does membership cost?</summary>
               <p>
                 Annual membership is £10, payable by card when you register. The register
-                is a not-for-profit service run by the community, for the community -
-                there is no advertising and data is never sold.
+                is a not-for-profit service run by the community, for the community.
+                There is no advertising and data is never sold.
               </p>
             </details>
             <details className="landing-faq-item">
@@ -180,7 +181,7 @@ export default function Landing() {
               <p>
                 Once approved, you browse verified profiles and save anyone you would
                 like to know more about. You can then request contact details and view
-                them in your dashboard - up to three at a time, with fair weekly and
+                them in your dashboard, up to three at a time, with fair weekly and
                 monthly limits to keep things balanced.
               </p>
             </details>
