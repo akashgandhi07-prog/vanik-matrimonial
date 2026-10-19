@@ -2667,6 +2667,12 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  /* Single column makes the square photo span the whole screen width; crop it shorter. */
+  .member-saved-photo {
+    max-height: 220px;
+    object-position: center 25%;
+  }
+
   .member-tray-collapsed-row {
     display: flex;
   }
@@ -3197,6 +3203,36 @@ textarea:focus-visible {
 
   .profile-modal-body {
     padding: 16px 16px 20px !important;
+  }
+}
+
+/* Stacked (phone) layout: keep the photo compact and let it scroll away with the
+   details, instead of pinning a large photo above a squashed scroll area. */
+@media (max-width: 719px) {
+  .profile-modal-layout {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .profile-modal-body {
+    flex: none;
+    overflow: visible;
+  }
+
+  .profile-modal-media {
+    max-height: min(30vh, 240px);
+    min-height: 160px;
+  }
+
+  .profile-modal-photo {
+    max-height: min(30vh, 240px);
+  }
+}
+
+@media (max-width: 600px) {
+  /* Full-screen sheet on phones (see .modal-panel above); the base cap leaves a gap at the bottom. */
+  .profile-modal-panel {
+    max-height: none;
   }
 }
 

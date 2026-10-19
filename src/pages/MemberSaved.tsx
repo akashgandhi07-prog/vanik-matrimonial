@@ -139,7 +139,7 @@ export default function MemberSaved() {
           >
             <div style={{ position: 'relative' }}>
               {alreadyRequested ? (
-                <ProfileThumb profileId={c.id} firstName={c.first_name} />
+                <ProfileThumb profileId={c.id} firstName={c.first_name} className="member-saved-photo" />
               ) : null}
               {alreadyRequested && (
                 <span
