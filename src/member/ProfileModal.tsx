@@ -273,7 +273,7 @@ export function ProfileModal({
                       strokeLinejoin="round"
                     />
                   </svg>
-                  Verified by a volunteer
+                  Verified
                 </span>
               </div>
             </header>
