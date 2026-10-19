@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ProfileThumb, useProfilePhotoDisplayUrls } from './ProfileThumb';
+import { useProfilePhotoDisplayUrls } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
 import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import type { ProfileRow } from './memberContext';
 import { linkedInDisplay } from '../lib/linkedin';
+import { dietLabel, religionLabel, telHref } from '../lib/profileLabels';
+import { whatsappUrlFromPhone } from '../lib/whatsapp';
 
 type Props = {
   candidate: ProfileRow;
@@ -30,16 +32,6 @@ type Props = {
   onToggleTray: () => void;
 };
 
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div className="profile-modal-kv">
-      <span className="profile-modal-kv-label">{label}</span>
-      <span className="profile-modal-kv-value">{value}</span>
-    </div>
-  );
-}
-
 export function ProfileModal({
   candidate: c,
   contactDetails,
@@ -58,6 +50,7 @@ export function ProfileModal({
 }: Props) {
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [copied, setCopied] = useState(false);
   const photoUrls = useProfilePhotoDisplayUrls(c.id, c.first_name, !anonymous);
   const gallerySize = !anonymous ? photoUrls.length : 0;
   const hasMultiPhotos = gallerySize > 1;
@@ -125,9 +118,34 @@ export function ProfileModal({
     };
   }, []);
 
-  const heightDisplay = c.height_cm
-    ? `${c.height_cm} cm (${cmToFeetInches(c.height_cm)})`
-    : null;
+  const subline = [c.job_title ? titleCaseIfAllCaps(c.job_title) : null, c.place_of_birth ? titleCaseIfAllCaps(c.place_of_birth) : null]
+    .filter(Boolean)
+    .join(' · ');
+
+  const chips = [
+    religionLabel(c.religion),
+    dietLabel(c.diet),
+    c.height_cm ? `${cmToFeetInches(c.height_cm)} (${c.height_cm} cm)` : null,
+  ].filter((v): v is string => !!v);
+
+  const details = [
+    { label: 'Nationality', value: c.nationality ? titleCaseIfAllCaps(c.nationality) : null },
+    { label: 'Family origin', value: c.town_country_of_origin ? titleCaseIfAllCaps(c.town_country_of_origin) : null },
+    { label: 'Education', value: c.education ? titleCaseIfAllCaps(c.education) : null },
+    { label: 'Plans to settle', value: c.future_settlement_plans ? sentenceCaseIfAllCaps(c.future_settlement_plans) : null },
+  ].filter((d): d is { label: string; value: string } => !!d.value);
+
+  const whatsappUrl = contactDetails?.mobile ? whatsappUrlFromPhone(contactDetails.mobile) : null;
+
+  async function copyNumber(phone: string) {
+    try {
+      await navigator.clipboard.writeText(phone);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be blocked (e.g. insecure context); the number is still shown and tappable.
+    }
+  }
 
   const displayTitle = anonymous
     ? ([c.gender, c.age ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Profile')
@@ -156,7 +174,7 @@ export function ProfileModal({
     >
       <div
         className="card modal-panel profile-modal-panel"
-        style={{ padding: 0, maxWidth: 920 }}
+        style={{ padding: 0 }}
         onClick={(e) => e.stopPropagation()}
       >
         <button type="button" aria-label="Close profile" onClick={onClose} className="profile-modal-close">
@@ -181,14 +199,7 @@ export function ProfileModal({
                 }
                 onClick={() => setPhotoLightboxOpen(true)}
               >
-                <ProfileThumb
-                  profileId={c.id}
-                  firstName={c.first_name}
-                  className="profile-modal-photo"
-                  anonymous={false}
-                  controlledSrc={currentPhotoUrl}
-                  imageFit="contain"
-                />
+                <img src={currentPhotoUrl} alt={`${c.first_name}'s profile photo`} className="profile-modal-photo" />
               </button>
               {hasMultiPhotos && (
                 <>
@@ -228,20 +239,47 @@ export function ProfileModal({
             </div>
           )}
 
-          <div className="profile-modal-body" style={{ padding: '20px 24px 24px' }}>
-            <h2
-              id="profile-modal-title"
-              style={{ margin: '0 0 4px', fontSize: 22 }}
-            >
-              {displayTitle}
-            </h2>
-            {c.job_title && (
-              <p style={{ margin: '0 0 16px', color: 'var(--color-text-secondary)', fontSize: 14 }}>
-                {titleCaseIfAllCaps(c.job_title)}
-              </p>
-            )}
+          <div className="profile-modal-body">
+            <header className="profile-modal-header">
+              {!anonymous && currentPhotoUrl && (
+                // Phones get a compact photo here instead of the media column (hidden by CSS).
+                <button
+                  type="button"
+                  className="profile-modal-avatar"
+                  aria-label={
+                    hasMultiPhotos ? `View ${gallerySize} photos full size` : 'View photo full size'
+                  }
+                  onClick={() => setPhotoLightboxOpen(true)}
+                >
+                  <img src={currentPhotoUrl} alt="" />
+                  {hasMultiPhotos && (
+                    <span className="profile-modal-avatar-count" aria-hidden>
+                      {safeIndex + 1}/{gallerySize}
+                    </span>
+                  )}
+                </button>
+              )}
+              <div className="profile-modal-heading">
+                <h2 id="profile-modal-title">{displayTitle}</h2>
+                {subline && <p className="profile-modal-subline">{subline}</p>}
+                <span className="profile-modal-verified">
+                  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path
+                      d="M3.5 8.5l3 3 6-6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Verified
+                </span>
+              </div>
+            </header>
+
             {anonymous && (
-              <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
+              <p className="profile-modal-hint">
                 {blocked ? (
                   <>
                     Their photo is visible when you open this person under{' '}
@@ -256,34 +294,81 @@ export function ProfileModal({
               </p>
             )}
 
-            <Row label="Religion" value={c.religion} />
-            <Row label="Nationality" value={titleCaseIfAllCaps(c.nationality)} />
-            <Row label="Location" value={titleCaseIfAllCaps(c.place_of_birth)} />
-            <Row label="Family origin" value={titleCaseIfAllCaps(c.town_country_of_origin)} />
-            <Row label="Diet" value={c.diet} />
-            <Row label="Height" value={heightDisplay} />
-            <Row label="Education" value={titleCaseIfAllCaps(c.education)} />
-            <Row label="Plans to settle" value={sentenceCaseIfAllCaps(c.future_settlement_plans)} />
-            {/* Contact details - only shown when the user has already received them (My Requests view) */}
-            {contactDetails?.mobile && <Row label="Phone" value={contactDetails.mobile} />}
-            {contactDetails?.linkedin_url && (
-              <div className="profile-modal-kv">
-                <span className="profile-modal-kv-label">LinkedIn</span>
-                <span className="profile-modal-kv-value">
-                  <a href={contactDetails.linkedin_url} target="_blank" rel="noopener noreferrer">
-                    {linkedInDisplay(contactDetails.linkedin_url)}
-                  </a>
-                </span>
-              </div>
+            {(contactDetails?.mobile || contactDetails?.linkedin_url) && (
+              <section className="profile-modal-contact" aria-label="Contact details">
+                <div className="profile-modal-contact-actions">
+                  {contactDetails.mobile && (
+                    <a className="profile-modal-contact-btn profile-modal-contact-btn--call" href={telHref(contactDetails.mobile)}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />
+                      </svg>
+                      Call
+                    </a>
+                  )}
+                  {whatsappUrl && (
+                    <a
+                      className="profile-modal-contact-btn profile-modal-contact-btn--whatsapp"
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1 1 21 11.5z" />
+                      </svg>
+                      WhatsApp
+                    </a>
+                  )}
+                  {contactDetails.linkedin_url && (
+                    <a
+                      className="profile-modal-contact-btn"
+                      href={contactDetails.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={linkedInDisplay(contactDetails.linkedin_url)}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <rect x="3" y="7" width="18" height="13" rx="2" />
+                        <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                      LinkedIn
+                    </a>
+                  )}
+                </div>
+                {contactDetails.mobile && (
+                  <div className="profile-modal-contact-number">
+                    <a href={telHref(contactDetails.mobile)}>{contactDetails.mobile}</a>
+                    <button type="button" className="profile-modal-link-btn" onClick={() => void copyNumber(contactDetails.mobile!)}>
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {chips.length > 0 && (
+              <ul className="profile-modal-chips" aria-label="At a glance">
+                {chips.map((chip) => (
+                  <li key={chip}>{chip}</li>
+                ))}
+              </ul>
             )}
 
             {c.hobbies && (
-              <div style={{ padding: '8px 0' }}>
-                <p style={{ margin: '0 0 4px', fontSize: 14, color: 'var(--color-text-secondary)' }}>
-                  Hobbies &amp; interests
-                </p>
-                <p style={{ margin: 0, fontSize: 16 }}>{sentenceCaseIfAllCaps(c.hobbies)}</p>
-              </div>
+              <section className="profile-modal-section">
+                <h3>Hobbies and interests</h3>
+                <p>{sentenceCaseIfAllCaps(c.hobbies)}</p>
+              </section>
+            )}
+
+            {details.length > 0 && (
+              <dl className="profile-modal-details">
+                {details.map((d) => (
+                  <div key={d.label}>
+                    <dt>{d.label}</dt>
+                    <dd>{d.value}</dd>
+                  </div>
+                ))}
+              </dl>
             )}
 
             {/* Action buttons */}
@@ -316,18 +401,18 @@ export function ProfileModal({
               ) : null}
             </div>
             {allowRequestAction && !blocked && (
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              <p className="profile-modal-footnote">
                 A request is a two-way introduction. When you submit, this member is emailed straight away to say you
                 asked, and given your name, profile and contact details. You get theirs at the same time.
               </p>
             )}
             {!allowRequestAction && showRequestFromBrowseHint && (
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              <p className="profile-modal-footnote">
                 To request contact details, open this profile from Browse and add it to your request tray.
               </p>
             )}
             {blocked && allowRequestAction && (
-              <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--color-warning)' }}>
+              <p className="profile-modal-footnote" style={{ color: 'var(--color-warning)' }}>
                 You already requested this profile. Use the button above to open their card in My requests (photo and
                 contacts).
               </p>
