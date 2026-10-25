@@ -139,11 +139,29 @@ Deno.serve(async (req) => {
         )
       );
 
-      const outstandingRequestIds = new Set<string>();
+      const missing: { requestId: string; candidateId: string }[] = [];
       for (const r of staleList) {
         const cids = (r.candidate_ids as string[]) ?? [];
         for (const cid of cids) {
-          if (!fed.has(`${r.id}:${cid}`)) outstandingRequestIds.add(r.id as string);
+          if (!fed.has(`${r.id}:${cid}`)) missing.push({ requestId: r.id as string, candidateId: cid });
+        }
+      }
+
+      // A purged candidate owes no feedback: the purge sets feedback.candidate_id
+      // to NULL, so feedback already given no longer matches, and none can be
+      // given for a profile that is gone.
+      const outstandingRequestIds = new Set<string>();
+      if (missing.length > 0) {
+        const { data: stillThere, error: stErr } = await admin
+          .from('profiles')
+          .select('id')
+          .in('id', [...new Set(missing.map((m) => m.candidateId))]);
+        if (stErr) {
+          return jsonErr(req, 500, 'feedback_check_failed', stErr.message);
+        }
+        const existing = new Set((stillThere ?? []).map((p) => p.id as string));
+        for (const m of missing) {
+          if (existing.has(m.candidateId)) outstandingRequestIds.add(m.requestId);
         }
       }
 

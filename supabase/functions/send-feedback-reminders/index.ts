@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
       const age = daysSince(created);
       if (age < 21) continue;
 
-      const outstanding: string[] = [];
+      const missing: string[] = [];
       for (const cid of cids) {
         const { count } = await admin
           .from('feedback')
@@ -77,8 +77,14 @@ Deno.serve(async (req) => {
           // Only forward feedback the requester WROTE clears the reminder -
           // reverse feedback written about them must not suppress it.
           .eq('direction', 'requester_on_candidate');
-        if ((count ?? 0) === 0) outstanding.push(cid);
+        if ((count ?? 0) === 0) missing.push(cid);
       }
+      if (missing.length === 0) continue;
+
+      // Purged candidates owe no feedback (see submit-contact-request).
+      const { data: stillThere } = await admin.from('profiles').select('id').in('id', missing);
+      const existing = new Set((stillThere ?? []).map((p) => p.id as string));
+      const outstanding = missing.filter((cid) => existing.has(cid));
       if (outstanding.length === 0) continue;
 
       const sent21 = !!reqRow.feedback_reminder_21_sent_at;
