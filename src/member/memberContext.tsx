@@ -91,7 +91,13 @@ type MemberCtx = {
     candidate_ids: string[];
     email_status: string;
   }[];
+  /**
+   * `request_id:candidate_id` pairs that need no more feedback: given, or the
+   * candidate's account has since been purged (see `removedCandidateKeys`).
+   */
   feedbackKeys: Set<string>;
+  /** Pairs in `feedbackKeys` only because the candidate's account was purged. */
+  removedCandidateKeys: Set<string>;
   /** Members who have requested the signed-in member, newest first. */
   requestersOfMe: RequesterOfMeRow[];
   /** request_ids for which the signed-in member has given feedback about their requester. */
@@ -134,6 +140,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     }[]
   >([]);
   const [feedbackKeys, setFeedbackKeys] = useState<Set<string>>(new Set());
+  const [removedCandidateKeys, setRemovedCandidateKeys] = useState<Set<string>>(new Set());
   const [requestersOfMe, setRequestersOfMe] = useState<RequesterOfMeRow[]>([]);
   const [reverseFeedbackKeys, setReverseFeedbackKeys] = useState<Set<string>>(new Set());
   const [archivedRequests, setArchivedRequests] = useState<{ made: Set<string>; received: Set<string> }>({
@@ -373,13 +380,48 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           .select("request_id, candidate_id")
           .eq("requester_id", myId)
           .eq("direction", "requester_on_candidate");
-        setFeedbackKeys(
-          new Set(
-            (fbRows ?? []).map(
-              (r) => `${r.request_id as string}:${r.candidate_id as string}`,
-            ),
+        const given = new Set(
+          (fbRows ?? []).map(
+            (r) => `${r.request_id as string}:${r.candidate_id as string}`,
           ),
         );
+
+        // A purged candidate owes no feedback (the server gate agrees). The
+        // purge nulls feedback.candidate_id, so feedback already given stops
+        // matching. member_request_profiles returns every candidate that still
+        // has a profile, whatever its state, so anyone absent has been purged.
+        const removed = new Set<string>();
+        const pendingRequestIds = (rq ?? [])
+          .filter((r) =>
+            ((r.candidate_ids as string[]) ?? []).some(
+              (cid) => !given.has(`${r.id}:${cid}`),
+            ),
+          )
+          .map((r) => r.id as string);
+        if (pendingRequestIds.length > 0) {
+          const { data: present, error: presentErr } = await supabase.rpc(
+            "member_request_profiles",
+            { p_request_ids: pendingRequestIds },
+          );
+          if (presentErr) {
+            console.warn("request profiles query:", presentErr.message);
+          } else {
+            const presentKeys = new Set(
+              ((present ?? []) as { request_id: string; profile_id: string }[]).map(
+                (p) => `${p.request_id}:${p.profile_id}`,
+              ),
+            );
+            for (const r of rq ?? []) {
+              if (!pendingRequestIds.includes(r.id as string)) continue;
+              for (const cid of (r.candidate_ids as string[]) ?? []) {
+                const key = `${r.id}:${cid}`;
+                if (!given.has(key) && !presentKeys.has(key)) removed.add(key);
+              }
+            }
+          }
+        }
+        setFeedbackKeys(new Set([...given, ...removed]));
+        setRemovedCandidateKeys(removed);
 
         // Feedback I have given about people who requested ME (optional, never blocking).
         const { data: revRows, error: revErr } = await supabase
@@ -499,6 +541,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setBookmarks([]);
         setRequests([]);
         setFeedbackKeys(new Set());
+        setRemovedCandidateKeys(new Set());
         setRequestersOfMe([]);
         setReverseFeedbackKeys(new Set());
         setArchivedRequests({ made: new Set(), received: new Set() });
@@ -554,6 +597,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      removedCandidateKeys,
       requestersOfMe,
       reverseFeedbackKeys,
       archivedRequests,
@@ -574,6 +618,7 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       bookmarks,
       requests,
       feedbackKeys,
+      removedCandidateKeys,
       requestersOfMe,
       reverseFeedbackKeys,
       archivedRequests,

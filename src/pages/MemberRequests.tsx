@@ -103,6 +103,7 @@ export default function MemberRequests() {
     candidates,
     requests,
     feedbackKeys,
+    removedCandidateKeys,
     bookmarks,
     toggleBookmark,
     requestersOfMe,
@@ -981,6 +982,13 @@ export default function MemberRequests() {
                       const c = candidates.find((x) => x.id === cid);
                       const details = contacts.find((row) => row.profile_id === cid);
                       const name = details?.first_name || c?.first_name || cid.slice(0, 8) + '…';
+                      if (removedCandidateKeys.has(key)) {
+                        return (
+                          <li key={key} style={{ marginBottom: 4 }}>
+                            Former member: <span className="badge badge-muted">Left the register - no feedback needed</span>
+                          </li>
+                        );
+                      }
                       if (feedbackKeys.has(key)) {
                         return (
                           <li key={key} style={{ marginBottom: 4 }}>
