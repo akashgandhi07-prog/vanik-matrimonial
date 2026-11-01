@@ -38,7 +38,10 @@ export function createdPublicTables(sql) {
     "gi",
   );
   const out = new Set();
-  for (const m of stripComments(sql).matchAll(re)) {
+  // Blank out string literals so text like 'CREATE TABLE AS' (an event-trigger
+  // tag) is not read as a table definition.
+  const code = stripComments(sql).replace(/'(?:[^']|'')*'/g, "''");
+  for (const m of code.matchAll(re)) {
     if (m[1] && /^temp/i.test(m[1].trim())) continue;
     const schema = (m[2] ?? "public").replace(/"/g, "").toLowerCase();
     if (schema !== "public") continue;
