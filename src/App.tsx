@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Analytics } from './components/Analytics';
 import { RouteMeta } from './components/RouteMeta';
 import { SessionProvider } from './components/SessionContext';
 import { SiteHeader } from './components/SiteHeader';
@@ -23,6 +24,9 @@ import DemoBrowse from './pages/DemoBrowse';
 import Feedback from './pages/Feedback';
 import ForgotPassword from './pages/ForgotPassword';
 import AppFeedback from './pages/AppFeedback';
+import ContentPage from './pages/ContentPage';
+import GuidesIndex from './pages/GuidesIndex';
+import NotFound from './pages/NotFound';
 import WhatsNew from './pages/WhatsNew';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -64,58 +68,69 @@ function AuthHashRedirect({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/** Everything inside the router. Shared by the browser (`App`) and build-time prerendering (`entry-server`). */
+export function AppRoutes() {
+  return (
+    <SessionProvider>
+      <AuthHashRedirect>
+        <RouteMeta />
+        <Analytics />
+        <SiteHeader />
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/whats-new" element={<WhatsNew />} />
+          <Route path="/app-feedback" element={<AppFeedback />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/demo" element={<DemoBrowse />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
+          <Route path="/registration-pending" element={<RegistrationPending />} />
+          <Route path="/registration-rejected" element={<RegistrationRejected />} />
+          <Route path="/membership-expired" element={<MembershipExpired />} />
+          <Route path="/renew-membership" element={<MembershipExpired />} />
+          <Route path="/dashboard" element={<MemberShell />}>
+            <Route index element={<Navigate to="browse" replace />} />
+            <Route path="browse" element={<MemberBrowse />} />
+            <Route path="saved" element={<MemberSaved />} />
+            <Route path="requests" element={<MemberRequests />} />
+            <Route path="my-profile" element={<MemberMyProfile />} />
+            <Route path="referrals" element={<MemberReferrals />} />
+          </Route>
+          <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverview />} />
+            <Route path="members" element={<AdminMembers />} />
+            <Route path="members/:id" element={<AdminMemberDetail />} />
+            <Route path="requests" element={<AdminRequests />} />
+            <Route path="sharing" element={<AdminSharingPreview />} />
+            <Route path="feedback" element={<AdminFeedback />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
+            <Route path="add-member" element={<AdminAddMember />} />
+            <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
+            <Route path="payments" element={<AdminPayments />} />
+            <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="email-log" element={<AdminEmailLog />} />
+            <Route path="email-export" element={<AdminEmailExport />} />
+            <Route path="error-log" element={<AdminErrorLog />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+          <Route path="/guides" element={<GuidesIndex />} />
+          <Route path="/guides/:slug" element={<ContentPage />} />
+          <Route path="/:slug" element={<ContentPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AuthHashRedirect>
+    </SessionProvider>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <SessionProvider>
-        <AuthHashRedirect>
-          <RouteMeta />
-          <SiteHeader />
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/whats-new" element={<WhatsNew />} />
-            <Route path="/app-feedback" element={<AppFeedback />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/demo" element={<DemoBrowse />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/verify-email-success" element={<VerifyEmailSuccess />} />
-            <Route path="/registration-pending" element={<RegistrationPending />} />
-            <Route path="/registration-rejected" element={<RegistrationRejected />} />
-            <Route path="/membership-expired" element={<MembershipExpired />} />
-            <Route path="/renew-membership" element={<MembershipExpired />} />
-            <Route path="/dashboard" element={<MemberShell />}>
-              <Route index element={<Navigate to="browse" replace />} />
-              <Route path="browse" element={<MemberBrowse />} />
-              <Route path="saved" element={<MemberSaved />} />
-              <Route path="requests" element={<MemberRequests />} />
-              <Route path="my-profile" element={<MemberMyProfile />} />
-              <Route path="referrals" element={<MemberReferrals />} />
-            </Route>
-            <Route path="/feedback/:requestId/:candidateId" element={<Feedback />} />
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminOverview />} />
-              <Route path="members" element={<AdminMembers />} />
-              <Route path="members/:id" element={<AdminMemberDetail />} />
-              <Route path="requests" element={<AdminRequests />} />
-              <Route path="sharing" element={<AdminSharingPreview />} />
-              <Route path="feedback" element={<AdminFeedback />} />
-              <Route path="analytics" element={<AdminAnalytics />} />
-              <Route path="add-member" element={<AdminAddMember />} />
-              <Route path="scheduled-jobs" element={<AdminScheduledJobs />} />
-              <Route path="payments" element={<AdminPayments />} />
-              <Route path="coupons" element={<AdminCoupons />} />
-              <Route path="email-log" element={<AdminEmailLog />} />
-              <Route path="email-export" element={<AdminEmailExport />} />
-              <Route path="error-log" element={<AdminErrorLog />} />
-              <Route path="settings" element={<AdminSettings />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AuthHashRedirect>
-      </SessionProvider>
+      <AppRoutes />
     </BrowserRouter>
   );
 }

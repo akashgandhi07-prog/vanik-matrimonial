@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:demo": "node scripts/seed_demo_accounts.mjs",
@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.103.0",
     "browser-image-compression": "^2.0.2",
     "isomorphic-dompurify": "^3.8.0",
+    "marked": "^15.0.12",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.14.0",

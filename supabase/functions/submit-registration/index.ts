@@ -63,6 +63,46 @@ function seekingGenderFromBody(raw: unknown, gender: 'Male' | 'Female'): 'Male' 
   return gender === 'Female' ? 'Male' : 'Female';
 }
 
+/** Allowed answers to the optional "How did you hear about us?" question. Keep in
+ *  step with the member_private_heard_about_check constraint, Register.tsx and the
+ *  analytics labels in admin-manage-users. */
+const HEARD_ABOUT_VALUES = new Set([
+  'friend_family',
+  'google',
+  'ai_assistant',
+  'community',
+  'vanik_council',
+  'social_media',
+  'speed_dating',
+  'other',
+]);
+
+/**
+ * Optional marketing answer. Never a reason to reject a registration: anything
+ * missing or unrecognised becomes null, and the free text is only kept for "other".
+ */
+function heardAboutFromBody(body: Record<string, unknown>): {
+  heard_about: string | null;
+  heard_about_other: string | null;
+} {
+  const raw = typeof body.heard_about === 'string' ? body.heard_about.trim() : '';
+  const heardAbout = HEARD_ABOUT_VALUES.has(raw) ? raw : null;
+  const other =
+    heardAbout === 'other' && typeof body.heard_about_other === 'string'
+      ? stripHtml(body.heard_about_other, 100) || null
+      : null;
+  return { heard_about: heardAbout, heard_about_other: other };
+}
+
+/**
+ * A database error caused by the heard_about columns: not in the schema yet
+ * (function deployed before the migration, PGRST204) or, as a backstop, a CHECK
+ * violation. Either way the registration is saved again without the answer.
+ */
+function isHeardAboutError(err: { message?: string } | null): boolean {
+  return !!err && /heard_about/.test(err.message ?? '');
+}
+
 async function verifyObjectExists(
   admin: ReturnType<typeof getAdminClient>,
   bucket: string,
@@ -281,6 +321,14 @@ Deno.serve(async (req) => {
   const consentRecordedAt = new Date().toISOString();
   const registrationSubmitIpHash = await hashRegistrationSubmitIp(ip, consentIpSecret);
 
+  // Only sent to the database when answered, so an older front end that omits the
+  // question (or a resubmission that skips it) never blanks a stored answer, and
+  // unanswered registrations still work before the columns exist.
+  const heardAbout = heardAboutFromBody(body);
+  const heardAboutPayload: Record<string, string | null> = heardAbout.heard_about
+    ? { heard_about: heardAbout.heard_about, heard_about_other: heardAbout.heard_about_other }
+    : {};
+
   const privatePayload = {
     surname,
     date_of_birth: dob,
@@ -332,7 +380,15 @@ Deno.serve(async (req) => {
     if (upProf) {
       return jsonResponse({ error: upProf.message }, req, 500);
     }
-    const { error: upPriv } = await admin.from('member_private').update(privatePayload).eq('profile_id', profileId);
+    let { error: upPriv } = await admin
+      .from('member_private')
+      .update({ ...privatePayload, ...heardAboutPayload })
+      .eq('profile_id', profileId);
+    if (upPriv && Object.keys(heardAboutPayload).length && isHeardAboutError(upPriv)) {
+      // Columns missing (migration not applied yet) or rejected: save without the answer.
+      console.warn('heard_about not saved on resubmission:', upPriv.message);
+      ({ error: upPriv } = await admin.from('member_private').update(privatePayload).eq('profile_id', profileId));
+    }
     if (upPriv) {
       return jsonResponse({ error: upPriv.message }, req, 500);
     }
@@ -373,10 +429,19 @@ Deno.serve(async (req) => {
 
     profileId = insProfile.id as string;
 
-    const { error: mErr } = await admin.from('member_private').insert({
+    let { error: mErr } = await admin.from('member_private').insert({
       profile_id: profileId,
       ...privatePayload,
+      ...heardAboutPayload,
     });
+    if (mErr && Object.keys(heardAboutPayload).length && isHeardAboutError(mErr)) {
+      // Columns missing (migration not applied yet) or rejected: save without the answer.
+      console.warn('heard_about not saved on registration:', mErr.message);
+      ({ error: mErr } = await admin.from('member_private').insert({
+        profile_id: profileId,
+        ...privatePayload,
+      }));
+    }
     if (mErr) {
       await admin.from('profiles').delete().eq('id', profileId);
       return jsonResponse({ error: mErr.message }, req, 500);

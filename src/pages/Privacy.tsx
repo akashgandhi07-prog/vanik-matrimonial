@@ -1,3 +1,4 @@
+import { CookieSettingsButton } from '../components/Analytics';
 import { PublicLayout } from '../components/Layout';
 import { PRIVACY_POLICY_LAST_UPDATED_DISPLAY, PRIVACY_POLICY_VERSION_ID } from '../lib/privacyPolicyVersion';
 
@@ -110,6 +111,10 @@ export default function Privacy() {
             <strong>Website hosting</strong>: the organisation that serves the public website (for example a static host in
             front of our application) may process IP addresses and standard HTTP logs.
           </li>
+          <li>
+            <strong>Google Analytics</strong>: only if you accept analytics cookies, and only on our public pages. See{' '}
+            <a href="#cookies">Analytics cookies</a> below.
+          </li>
         </ul>
         <p>
           Council staff and designated administrators with role-based access can view member records to verify
@@ -166,6 +171,42 @@ export default function Privacy() {
           <strong>localStorage</strong> so you can continue later. That draft can include personal data until you submit or
           clear your browser data. It is not uploaded until you complete each step and submit. Use a private device and clear
           storage if you share the computer.
+        </p>
+
+        <h2 id="cookies">Analytics cookies</h2>
+        <p>
+          We use <strong>Google Analytics</strong>, loaded through Google Tag Manager, to understand how people find the
+          register and which public pages are useful, so we can reach more families. It only runs if you click{' '}
+          <strong>Accept</strong> on the cookie banner.
+          If you choose <strong>No thanks</strong>, or make no choice, nothing is sent to Google.
+        </p>
+        <p>
+          Analytics only runs on our <strong>public pages</strong>, such as the home page, registration, the profile
+          preview, guides and this policy. It is <strong>never</strong> used inside the member dashboard, the admin area,
+          sign-in or account pages, so nothing about your profile, religion, matches or introductions ever reaches Google.
+        </p>
+        <p>When you accept, Google Analytics collects:</p>
+        <ul>
+          <li>the public pages you visit and roughly how long you spend on them,</li>
+          <li>how you found us (for example a search engine, a link or a campaign),</li>
+          <li>your approximate location (town or region, worked out from your IP address, which is not stored), and</li>
+          <li>your device type, browser and screen size.</li>
+        </ul>
+        <p>
+          It sets two cookies: <strong>_ga</strong>, which tells one visit from another, and{' '}
+          <strong>_ga_&lt;id&gt;</strong>, which keeps track of the current session. Both last for up to{' '}
+          <strong>2 years</strong>. We have turned off Google signals and advertising features, and we never use
+          analytics for adverts. Google acts as our processor and may process this data outside the UK under the
+          safeguards described above. We keep your choice in your browser&apos;s localStorage (
+          <em>vmr-analytics-consent</em>) so we do not ask on every visit.
+        </p>
+        <p>
+          You can change your mind at any time. Use the <strong>Cookie settings</strong> link at the bottom of any public
+          page, or the button here, and the banner will appear again. If you withdraw consent we stop Analytics straight
+          away and delete its cookies from your browser.
+        </p>
+        <p>
+          <CookieSettingsButton />
         </p>
 
         <h2>Security</h2>

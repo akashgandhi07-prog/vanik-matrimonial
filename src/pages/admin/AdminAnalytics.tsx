@@ -40,6 +40,15 @@ type PauseStats = {
   recent_notes: { label: string; reason: string; note: string; created_at: string }[];
 };
 
+type HeardAboutPeriod = { total: number; counts: Record<string, number> };
+
+type HeardAboutStats = {
+  available: boolean;
+  all_time: HeardAboutPeriod;
+  last_90_days: HeardAboutPeriod;
+  other_recent: { label: string; text: string; created_at: string }[];
+};
+
 type AnalyticsStats = {
   members: {
     total: number;
@@ -51,6 +60,7 @@ type AnalyticsStats = {
     ageUnknown?: number;
   };
   pauses?: PauseStats;
+  heard_about?: HeardAboutStats;
   nudges?: {
     sent: number;
     signed_in_after: number;
@@ -106,6 +116,23 @@ const PAUSE_REASON_LABELS: Record<string, string> = {
   other: 'Another reason',
   prefer_not_say: 'Preferred not to say',
 };
+
+/** Order matches the registration form; "Not answered" always last. */
+const HEARD_ABOUT_LABELS: [string, string][] = [
+  ['friend_family', 'Friend or family'],
+  ['google', 'Google or another search engine'],
+  ['ai_assistant', 'ChatGPT or another AI assistant'],
+  ['community', 'Temple, sangh or community association'],
+  ['vanik_council', 'Vanik Council website or newsletter'],
+  ['social_media', 'Social media (Facebook, Instagram, WhatsApp)'],
+  ['speed_dating', 'A speed dating event'],
+  ['other', 'Something else'],
+  ['not_answered', 'Not answered'],
+];
+
+function pctOf(n: number, total: number): string {
+  return total > 0 ? `${Math.round((n / total) * 100)}%` : '-';
+}
 
 function weekLabel(weekStart: string): string {
   const d = new Date(`${weekStart}T00:00:00Z`);
@@ -218,6 +245,8 @@ export default function AdminAnalytics() {
       void load();
     });
   }, [load]);
+
+  const heardAbout = stats?.heard_about;
 
   return (
     <div>
@@ -390,6 +419,86 @@ export default function AdminAnalytics() {
                         <li key={`${n.created_at}-${i}`} style={{ marginBottom: 4 }}>
                           {new Date(n.created_at).toLocaleDateString('en-GB')} · {n.label} (
                           {PAUSE_REASON_LABELS[n.reason] ?? n.reason}): "{n.note}"
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {heardAbout && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h2 style={{ marginTop: 0 }}>How members heard about us</h2>
+              <p className="field-hint" style={{ marginTop: -6 }}>
+                Optional question at registration. Everyone who registered before it was added shows as "Not
+                answered", so the last 90 days is the fairer view.
+              </p>
+              {!heardAbout.available ? (
+                <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
+                  Not available yet: the database update for this question has not been applied.
+                </p>
+              ) : (
+                <>
+                  <div className="table-scroll">
+                    <table style={{ width: '100%', fontSize: 14, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.12)' }}>
+                          <th style={thStyle}>Source</th>
+                          <th style={thStyle}>Last 90 days</th>
+                          <th style={thStyle}>All time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {HEARD_ABOUT_LABELS.map(([key, label]) => {
+                          const recent = heardAbout.last_90_days.counts[key] ?? 0;
+                          const all = heardAbout.all_time.counts[key] ?? 0;
+                          const muted = key === 'not_answered' ? { color: 'var(--color-text-secondary)' } : undefined;
+                          return (
+                            <tr key={key} style={rowBorder}>
+                              <td style={{ ...tdStyle, ...muted }}>{label}</td>
+                              <td style={tdStyle}>
+                                <strong>{recent}</strong>{' '}
+                                <span style={{ color: 'var(--color-text-secondary)' }}>
+                                  ({pctOf(recent, heardAbout.last_90_days.total)})
+                                </span>
+                              </td>
+                              <td style={tdStyle}>
+                                <strong>{all}</strong>{' '}
+                                <span style={{ color: 'var(--color-text-secondary)' }}>
+                                  ({pctOf(all, heardAbout.all_time.total)})
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: '2px solid rgba(0,0,0,0.12)' }}>
+                          <td style={tdStyle}>
+                            <strong>Total registrations</strong>
+                          </td>
+                          <td style={tdStyle}>
+                            <strong>{heardAbout.last_90_days.total}</strong>
+                          </td>
+                          <td style={tdStyle}>
+                            <strong>{heardAbout.all_time.total}</strong>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                  <h3 style={{ fontSize: 15, margin: '16px 0 6px' }}>"Something else" answers, last 90 days</h3>
+                  {heardAbout.other_recent.length === 0 ? (
+                    <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
+                      Nobody has written in their own answer yet.
+                    </p>
+                  ) : (
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                      {heardAbout.other_recent.map((o, i) => (
+                        <li key={`${o.created_at}-${i}`} style={{ marginBottom: 4 }}>
+                          {new Date(o.created_at).toLocaleDateString('en-GB')} · {o.label}: "{o.text}"
                         </li>
                       ))}
                     </ul>

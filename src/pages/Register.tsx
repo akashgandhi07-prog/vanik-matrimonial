@@ -6,6 +6,7 @@ import { PublicLayout } from '../components/Layout';
 import { ageFromDob, isAdminUser, publicAuthUrl, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
+import { certainlySignedOut } from '../lib/sessionHint';
 import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import {
   isValidInternationalPhone,
@@ -35,6 +36,24 @@ const REFERRAL_CODE_RE = /^VR-[A-Z2-9]{4,8}$/i;
 type Step = 1 | 2 | 3;
 const DIET_OPTIONS = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 
+/** Optional "How did you hear about us?" answers. Values must match the allowlist in
+ *  submit-registration and the member_private_heard_about_check constraint. */
+const HEARD_ABOUT_OPTIONS = [
+  { value: 'friend_family', label: 'Friend or family' },
+  { value: 'google', label: 'Google or another search engine' },
+  { value: 'ai_assistant', label: 'ChatGPT or another AI assistant' },
+  { value: 'community', label: 'Temple, sangh or community association' },
+  { value: 'vanik_council', label: 'Vanik Council website or newsletter' },
+  { value: 'social_media', label: 'Social media (Facebook, Instagram, WhatsApp)' },
+  { value: 'speed_dating', label: 'A speed dating event' },
+  { value: 'other', label: 'Something else' },
+] as const;
+type HeardAbout = (typeof HEARD_ABOUT_OPTIONS)[number]['value'];
+const HEARD_ABOUT_VALUES = new Set<string>(HEARD_ABOUT_OPTIONS.map((o) => o.value));
+function isHeardAbout(v: unknown): v is HeardAbout {
+  return typeof v === 'string' && HEARD_ABOUT_VALUES.has(v);
+}
+
 type FormState = {
   step: Step;
   gender: 'Male' | 'Female' | '';
@@ -51,6 +70,8 @@ type FormState = {
   coupon_hint: '' | 'valid' | 'invalid';
   referral_code: string;
   referral_hint: '' | 'valid' | 'invalid';
+  heard_about: HeardAbout | '';
+  heard_about_other: string;
   first_name: string;
   surname: string;
   nationality: string;
@@ -87,6 +108,8 @@ const defaultState: FormState = {
   coupon_hint: '',
   referral_code: '',
   referral_hint: '',
+  heard_about: '',
+  heard_about_other: '',
   first_name: '',
   surname: '',
   nationality: '',
@@ -260,7 +283,8 @@ export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sessionReady, setSessionReady] = useState(false);
+  // Signed-out visitors (and the prerendered page) see the sign-up form at once.
+  const [sessionReady, setSessionReady] = useState(certainlySignedOut);
   const [session, setSession] = useState<Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -478,6 +502,11 @@ export default function Register() {
         coupon_hint: '',
         referral_code: (m.referred_by_code as string) ?? prev.referral_code,
         referral_hint: '',
+        heard_about: isHeardAbout(m.heard_about) ? m.heard_about : prev.heard_about,
+        heard_about_other:
+          isHeardAbout(m.heard_about) && typeof m.heard_about_other === 'string'
+            ? m.heard_about_other
+            : prev.heard_about_other,
         id_document_path: '',
         photo_path: '',
         photo_paths: [],
@@ -516,7 +545,13 @@ export default function Register() {
     }
     if (stored && REFERRAL_CODE_RE.test(stored)) {
       const code = stored;
-      setForm((f) => (f.referral_code ? f : { ...f, referral_code: code, referral_hint: '' }));
+      // Arriving through a friend's link: suggest "Friend or family" for the optional
+      // "How did you hear about us?" question, unless they have already answered it.
+      setForm((f) =>
+        f.referral_code
+          ? f
+          : { ...f, referral_code: code, referral_hint: '', heard_about: f.heard_about || 'friend_family' }
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; later param changes must not overwrite typing
   }, []);
@@ -828,6 +863,9 @@ export default function Register() {
         consent_age: form.consent_age,
         consent_privacy_terms: form.consent_privacy,
         consent_mobile_own: form.consent_mobile_own,
+        // Optional; older functions simply ignore these keys.
+        heard_about: isHeardAbout(form.heard_about) ? form.heard_about : '',
+        heard_about_other: form.heard_about === 'other' ? sanitizeText(form.heard_about_other, 100) : '',
       };
       await invokeFunction('submit-registration', payload);
       sessionStorage.setItem('vmr_pending_email', session.user.email);
@@ -1941,6 +1979,48 @@ export default function Register() {
                   </div>
                 )}
                 {fieldErrors.photo_path && <p className="field-error">{fieldErrors.photo_path}</p>}
+              </div>
+              <div>
+                <label className="label" htmlFor="reg-heard-about">
+                  How did you hear about us? (optional)
+                </label>
+                <p id="reg-heard-about-hint" className="field-hint" style={{ marginTop: 0 }}>
+                  It helps us reach more people in the community. Only our team sees your answer.
+                </p>
+                <select
+                  id="reg-heard-about"
+                  name="heard_about"
+                  autoComplete="off"
+                  aria-describedby="reg-heard-about-hint"
+                  value={isHeardAbout(form.heard_about) ? form.heard_about : ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    update({ heard_about: isHeardAbout(v) ? v : '' });
+                  }}
+                >
+                  <option value="">Select…</option>
+                  {HEARD_ABOUT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {form.heard_about === 'other' && (
+                  <div style={{ marginTop: 10 }}>
+                    <label className="label" htmlFor="reg-heard-about-other">
+                      Tell us where (optional)
+                    </label>
+                    <input
+                      id="reg-heard-about-other"
+                      name="heard_about_other"
+                      type="text"
+                      autoComplete="off"
+                      maxLength={100}
+                      value={form.heard_about_other}
+                      onChange={(e) => update({ heard_about_other: e.target.value })}
+                    />
+                  </div>
+                )}
               </div>
               {billingEnabled && form.coupon_hint !== 'valid' && (
                 <div

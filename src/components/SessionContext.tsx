@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { isAdminUser } from '../lib/auth';
+import { certainlySignedOut } from '../lib/sessionHint';
 import { invokeFunction, supabase } from '../lib/supabase';
 
 export type SessionSnapshot = {
@@ -39,7 +40,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [greetingName, setGreetingName] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(certainlySignedOut);
 
   const refresh = useCallback(async () => {
     const { data: sessionWrap } = await supabase.auth.getSession();

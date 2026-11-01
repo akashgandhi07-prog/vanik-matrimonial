@@ -2,7 +2,7 @@
  * Stored on successful registration (`member_private.consent_privacy_policy_version`).
  * Keep in sync with `supabase/functions/_shared/privacy-policy-version.ts` (`DEFAULT_PRIVACY_POLICY_VERSION_ID`).
  */
-export const PRIVACY_POLICY_VERSION_ID = '2026-10-10';
+export const PRIVACY_POLICY_VERSION_ID = '2026-11-01';
 
 /** Must match visible “Last updated” on `/privacy`. */
-export const PRIVACY_POLICY_LAST_UPDATED_DISPLAY = '10 October 2026';
+export const PRIVACY_POLICY_LAST_UPDATED_DISPLAY = '1 November 2026';

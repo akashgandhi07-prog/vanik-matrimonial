@@ -1721,6 +1721,70 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- How members heard about us (optional registration question) ----
+    // Fetched on its own so a missing column (migration not applied yet) only
+    // empties this section instead of failing the whole page.
+    const HEARD_ABOUT_KEYS = [
+      'friend_family',
+      'google',
+      'ai_assistant',
+      'community',
+      'vanik_council',
+      'social_media',
+      'speed_dating',
+      'other',
+    ] as const;
+    const heardAboutAllTime: Record<string, number> = { not_answered: 0 };
+    const heardAboutLast90: Record<string, number> = { not_answered: 0 };
+    for (const k of HEARD_ABOUT_KEYS) {
+      heardAboutAllTime[k] = 0;
+      heardAboutLast90[k] = 0;
+    }
+    let heardAboutTotal = 0;
+    let heardAboutTotal90 = 0;
+    let heardAboutAvailable = false;
+    const heardAboutOtherRecent: { label: string; text: string; created_at: string }[] = [];
+    {
+      const since90Iso = new Date(nowMs - 90 * 864e5).toISOString();
+      const haRes = await fetchAllTableRows(
+        admin,
+        'member_private',
+        'profile_id, heard_about, heard_about_other, created_at',
+        'profile_id'
+      );
+      if (haRes.error) {
+        console.error('analytics_stats: heard_about:', haRes.error);
+      } else {
+        heardAboutAvailable = true;
+        const known = new Set<string>(HEARD_ABOUT_KEYS);
+        for (const r of haRes.rows as {
+          profile_id: string;
+          heard_about: string | null;
+          heard_about_other: string | null;
+          created_at: string | null;
+        }[]) {
+          const key = r.heard_about && known.has(r.heard_about) ? r.heard_about : 'not_answered';
+          const recent = !!r.created_at && r.created_at >= since90Iso;
+          heardAboutTotal += 1;
+          heardAboutAllTime[key] += 1;
+          if (recent) {
+            heardAboutTotal90 += 1;
+            heardAboutLast90[key] += 1;
+            const text = r.heard_about === 'other' ? r.heard_about_other?.trim() : '';
+            if (text) {
+              heardAboutOtherRecent.push({
+                label: labelById.get(r.profile_id) ?? 'Removed member',
+                text,
+                created_at: r.created_at as string,
+              });
+            }
+          }
+        }
+        heardAboutOtherRecent.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        heardAboutOtherRecent.splice(50);
+      }
+    }
+
     // ---- Time series (Monday-start UTC weeks) ----
     const buckets = analyticsWeekBuckets(WEEKS);
     const registrationsByWeek = analyticsWeekSeries(profiles.map((p) => p.created_at), buckets);
@@ -1902,6 +1966,12 @@ Deno.serve(async (req) => {
           total: pauseFeedbackTotal,
           byReason: pauseReasonCounts,
           recent_notes: recentPauseNotes,
+        },
+        heard_about: {
+          available: heardAboutAvailable,
+          all_time: { total: heardAboutTotal, counts: heardAboutAllTime },
+          last_90_days: { total: heardAboutTotal90, counts: heardAboutLast90 },
+          other_recent: heardAboutOtherRecent,
         },
         expiring: { in30: expiring30, in60: expiring60 },
         registrationsByWeek,

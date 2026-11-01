@@ -1,53 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-
-const SITE_ORIGIN = 'https://matrimonial.vanikcouncil.uk';
-const SITE_NAME = 'Vanik Matrimonial Register';
-
-const DEFAULT_DESCRIPTION =
-  'A private, not-for-profit matrimonial introduction service for Gujarati Hindu and Jain families in the UK, run by Vanik Council volunteers for over 40 years. Membership £10 a year.';
-
-type PageMeta = {
-  title: string;
-  description?: string;
-  /** Only indexable pages get a canonical URL; everything else is noindexed. */
-  indexable?: boolean;
-};
-
-const PAGE_META: Record<string, PageMeta> = {
-  '/': {
-    title: 'Vanik Matrimonial Register - Gujarati Hindu & Jain Introductions UK',
-    description: DEFAULT_DESCRIPTION,
-    indexable: true,
-  },
-  '/register': {
-    title: `Register - ${SITE_NAME}`,
-    description:
-      'Join the Vanik Matrimonial Register for £10 a year. Applications are verified by Vanik Council volunteers within 2 working days.',
-    indexable: true,
-  },
-  '/demo': {
-    title: `Browse Profiles - ${SITE_NAME}`,
-    description:
-      'Preview verified matrimonial profiles from Gujarati Hindu and Jain families before you register. Full profiles and introductions are available to approved members.',
-    indexable: true,
-  },
-  '/privacy': {
-    title: `Privacy Policy - ${SITE_NAME}`,
-    description:
-      'How the Vanik Matrimonial Register protects your data. Contact details are shared only inside the member dashboard and nothing is displayed publicly.',
-    indexable: true,
-  },
-  '/login': {
-    title: `Sign in - ${SITE_NAME}`,
-  },
-  '/whats-new': {
-    title: `What's New - ${SITE_NAME}`,
-    description:
-      'Recent improvements to the Vanik Matrimonial Register, in plain English. Many changes come straight from member feedback.',
-    indexable: true,
-  },
-};
+import { DEFAULT_DESCRIPTION, SITE_NAME, canonicalUrl, pageMetaFor } from '../lib/pageMeta';
 
 function setMetaTag(name: string, content: string | null) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
@@ -78,20 +31,19 @@ function setCanonical(href: string | null) {
 }
 
 /**
- * Keeps title, description, robots and canonical in sync with the route.
- * index.html ships the homepage values statically for crawlers that do not
- * run JavaScript; this component takes over once the app mounts.
+ * Keeps title, description, robots and canonical in sync with the route after client-side
+ * navigation. Crawlers get the same values in each page's static HTML (scripts/prerender.mjs).
  */
 export function RouteMeta() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const meta = PAGE_META[pathname];
+    const meta = pageMetaFor(pathname);
     document.title = meta?.title ?? SITE_NAME;
     setMetaTag('description', meta?.description ?? (meta?.indexable ? DEFAULT_DESCRIPTION : null));
     if (meta?.indexable) {
       setMetaTag('robots', null);
-      setCanonical(`${SITE_ORIGIN}${pathname === '/' ? '/' : pathname}`);
+      setCanonical(canonicalUrl(pathname));
     } else {
       setMetaTag('robots', 'noindex');
       setCanonical(null);

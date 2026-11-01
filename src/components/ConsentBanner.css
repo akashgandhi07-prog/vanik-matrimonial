@@ -1,0 +1,98 @@
+/* Cookie consent banner for Google Analytics. Small, bottom of screen, equal-weight buttons. */
+
+.consent-banner {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 60;
+  margin: 0 auto;
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: 14px;
+  line-height: 1.45;
+  animation: consent-banner-in 0.2s ease-out;
+}
+
+.consent-banner__text {
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.consent-banner__text a {
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.consent-banner__actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.consent-banner__btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  min-height: 40px;
+  min-width: 96px;
+}
+
+@media (max-width: 520px) {
+  .consent-banner {
+    flex-direction: column;
+    align-items: stretch;
+    font-size: 13.5px;
+  }
+
+  .consent-banner__btn {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+@keyframes consent-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .consent-banner {
+    animation: none;
+  }
+}
+
+/* "Cookie settings" looks like a link but is a button (it changes state, it does not navigate). */
+.cookie-settings-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.cookie-settings-button:hover {
+  color: var(--color-primary);
+}
+
+.cookie-settings-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
