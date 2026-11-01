@@ -1,5 +1,4 @@
 {
-  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/bff/functions/:path*",
@@ -15,27 +14,31 @@
     },
     {
       "source": "/(login|forgot-password|reset-password|verify-email-success|registration-pending|registration-rejected|membership-expired|renew-membership|app-feedback)",
-      "destination": "/app"
+      "destination": "/app.html"
     },
     {
       "source": "/dashboard",
-      "destination": "/app"
+      "destination": "/app.html"
     },
     {
       "source": "/dashboard/:path*",
-      "destination": "/app"
+      "destination": "/app.html"
     },
     {
       "source": "/admin",
-      "destination": "/app"
+      "destination": "/app.html"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/app"
+      "destination": "/app.html"
     },
     {
       "source": "/feedback/:path*",
-      "destination": "/app"
+      "destination": "/app.html"
+    },
+    {
+      "source": "/:path((?!.*\\.).+)",
+      "destination": "/:path.html"
     }
   ],
   "headers": [
