@@ -103,9 +103,9 @@ Content lives as Markdown files in the repo, turned into static pages at build.
 - [ ] Quarterly: refresh member stats in this plan and adjust targets
 
 ## 6. Akash's to-do (off-site and accounts)
-- [x] Verification file is live; press Verify in Google Search Console and submit the sitemap
+- [ ] Verification file is live; press Verify in Google Search Console and submit the sitemap
 - [ ] Bing Webmaster Tools: import from Search Console (powers ChatGPT search and Copilot)
-- [ ] Create a GA4 property and send the measurement ID (`G-...`)
+- [ ] In GTM-WQWC68QN: GA4 tag firing on the `page_view_clean` custom event; in GA4 turn off enhanced measurement's history-change page views; publish the container
 - [ ] Prominent link from vanikcouncil.uk to the register
 - [ ] List of affiliated associations with websites, and ask each for a link
 - [ ] Volunteer names (and consent) for the About page
