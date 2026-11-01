@@ -59,33 +59,33 @@ So content should lean towards women (safety, verification, respect), people in 
 ## 5. Work plan
 
 ### PR 1: Measurement (week 1)
-- [ ] GA4 on public pages only, Consent Mode v2 with a banner (analytics off until accepted), CSP updated for Google tags
-- [ ] "How did you hear about us?" (optional): friend or family, Google, ChatGPT or other AI, temple or association, social media, speed dating event, other. Store on `member_private`; show the breakdown in Admin > Analytics
+- [x] Google Tag Manager (GTM-WQWC68QN) on public pages only, after consent, with a banner; CSP updated. Akash: in GTM add a GA4 tag on the `page_view_clean` event and turn off history-change page views
+- [~] "How did you hear about us?" (optional) - built and live in the form; waiting on migration `20261101120000` and function deploys (submit-registration, admin-manage-users) before answers are saved: friend or family, Google, ChatGPT or other AI, temple or association, social media, speed dating event, other. Store on `member_private`; show the breakdown in Admin > Analytics
 - [ ] Baseline: 20 test prompts run in ChatGPT, Perplexity, Gemini and Google, results recorded in `docs/ai-visibility-log.md`
 
 ### PR 2: Crawlable foundation (week 1-2)
-- [ ] Build-time static HTML for every public page: own title, description, canonical, social preview, full text
-- [ ] Homepage renders the logged-out version in that HTML (no "Loading…")
-- [ ] Demo profiles stay live-loaded. **No member data ever goes into static files**
-- [ ] Real 404 status for unknown URLs
-- [ ] Sitemap generated from the page list with last-modified dates
-- [ ] robots.txt names and allows the AI crawlers; private areas stay blocked
-- [ ] `llms.txt` with the fact sheet and key links
-- [ ] Structured data per page: Organization (charity number, founding date, links to the Council site), FAQPage on the FAQ, BreadcrumbList, Event for speed dating
-- [ ] Fuller footer: About, FAQ, For parents, Events, Guides, Privacy, Vanik Council
+- [x] Build-time static HTML for every public page: own title, description, canonical, social preview, full text
+- [x] Homepage renders the logged-out version in that HTML (no "Loading…")
+- [x] Demo profiles stay live-loaded. **No member data ever goes into static files**
+- [x] Real 404 status for unknown URLs
+- [x] Sitemap generated from the page list with last-modified dates
+- [x] robots.txt names and allows the AI crawlers; private areas stay blocked
+- [x] `llms.txt` with the fact sheet and key links
+- [x] Structured data per page: Organization (charity number, founding date, links to the Council site), FAQPage on the FAQ, BreadcrumbList, Article on guides. Event schema waits for real dates
+- [x] Fuller footer: About, FAQ, For parents, Events, Guides, Privacy, Vanik Council
 
 ### PR 3: Core pages (weeks 2-3)
 Content lives as Markdown files in the repo, turned into static pages at build.
-- [ ] `/about` - Vanik Council, 1978, charity 1137083, volunteers, 40+ years, hundreds of marriages
-- [ ] `/faq` - 30+ questions, grouped (joining, safety and privacy, introductions, cost, parents, abroad)
-- [ ] `/for-parents` - how parents can help, why the single person registers, sharing the link
-- [ ] `/how-it-works` - full walkthrough with what verification involves
-- [ ] `/events` - speed dating twice a year, what happens, next dates
-- [ ] `/jain-matrimonial-uk` and `/gujarati-hindu-matrimonial-uk` - community pages with real substance
-- [ ] `/compared` - Vanik Register vs Shaadi.com, Jeevansathi and dating apps: price, verification, approach
-- [ ] `/safety` - verification, privacy and safety, written with women in mind
+- [x] `/about` - Vanik Council, 1978, charity 1137083, volunteers, 40+ years, hundreds of marriages
+- [x] `/faq` - 30+ questions, grouped (joining, safety and privacy, introductions, cost, parents, abroad)
+- [x] `/for-parents` - how parents can help, why the single person registers, sharing the link
+- [x] `/how-it-works` - full walkthrough with what verification involves
+- [x] `/events` - speed dating twice a year, what happens, next dates
+- [x] `/jain-matrimonial-uk` and `/gujarati-hindu-matrimonial-uk` - community pages with real substance
+- [x] `/compared` - Vanik Register vs Shaadi.com, Jeevansathi and dating apps: price, verification, approach
+- [x] `/safety` - verification, privacy and safety, written with women in mind
 
-### PR 4: First 10 guides (weeks 3-5)
+### PR 4: First 10 guides (weeks 3-5) - done 1 Nov 2026, live at /guides
 1. How to write a matrimonial profile that gets replies
 2. Questions to ask before saying yes
 3. Helping your son or daughter find a partner: a guide for parents
@@ -103,7 +103,7 @@ Content lives as Markdown files in the repo, turned into static pages at build.
 - [ ] Quarterly: refresh member stats in this plan and adjust targets
 
 ## 6. Akash's to-do (off-site and accounts)
-- [ ] Merge PR #11, then press Verify in Google Search Console and submit the sitemap
+- [x] Verification file is live; press Verify in Google Search Console and submit the sitemap
 - [ ] Bing Webmaster Tools: import from Search Console (powers ChatGPT search and Copilot)
 - [ ] Create a GA4 property and send the measurement ID (`G-...`)
 - [ ] Prominent link from vanikcouncil.uk to the register
