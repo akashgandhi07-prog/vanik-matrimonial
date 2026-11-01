@@ -60,7 +60,7 @@ So content should lean towards women (safety, verification, respect), people in 
 
 ### PR 1: Measurement (week 1)
 - [x] Google Tag Manager (GTM-WQWC68QN) on public pages only, after consent, with a banner; CSP updated. Akash: in GTM add a GA4 tag on the `page_view_clean` event and turn off history-change page views
-- [~] "How did you hear about us?" (optional) - built and live in the form; waiting on migration `20261101120000` and function deploys (submit-registration, admin-manage-users) before answers are saved: friend or family, Google, ChatGPT or other AI, temple or association, social media, speed dating event, other. Store on `member_private`; show the breakdown in Admin > Analytics
+- [x] "How did you hear about us?" (optional): live 1 Nov 2026 (migration 20261101120000 applied, submit-registration and admin-manage-users deployed). Breakdown in Admin > Analytics
 - [ ] Baseline: 20 test prompts run in ChatGPT, Perplexity, Gemini and Google, results recorded in `docs/ai-visibility-log.md`
 
 ### PR 2: Crawlable foundation (week 1-2)
