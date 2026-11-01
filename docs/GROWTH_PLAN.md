@@ -103,9 +103,9 @@ Content lives as Markdown files in the repo, turned into static pages at build.
 - [ ] Quarterly: refresh member stats in this plan and adjust targets
 
 ## 6. Akash's to-do (off-site and accounts)
-- [ ] Verification file is live; press Verify in Google Search Console and submit the sitemap
-- [ ] Bing Webmaster Tools: import from Search Console (powers ChatGPT search and Copilot)
-- [ ] In GTM-WQWC68QN: GA4 tag firing on the `page_view_clean` custom event; in GA4 turn off enhanced measurement's history-change page views; publish the container
+- [x] Google Search Console: verified (HTML file) and sitemap submitted 1 Nov 2026, 25 pages discovered
+- [x] Bing Webmaster Tools: imported from Search Console 1 Nov 2026, sitemap processing
+- [x] GA4: new "Vanik Council" account, property G-QTVFTQ3MK5 (history-change page views off). GTM-WQWC68QN version 2 published 1 Nov 2026: Google tag + GA4 page_view on `page_view_clean`. Check Realtime shows data (first hits returned 503 while the property was new)
 - [ ] Prominent link from vanikcouncil.uk to the register
 - [ ] List of affiliated associations with websites, and ask each for a link
 - [ ] Volunteer names (and consent) for the About page
