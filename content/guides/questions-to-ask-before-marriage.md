@@ -3,6 +3,9 @@ title: Questions to Ask Before Saying Yes to Marriage
 description: Questions to ask before saying yes to marriage, covering values, family, living arrangements, money, faith, children and career, and how to raise them kindly.
 heading: Questions to ask before saying yes
 updated: 2026-11-01
+published: 2026-11-01
+topic: Meeting someone
+related: hindu-jain-matches, first-meeting, parents-guide
 ---
 
 Before saying yes, talk openly about the things that shape daily married life: values, family roles, where you will live, money, faith, children and careers. You are not looking for identical answers, you are looking for answers you can both live with, and a partner who can discuss differences calmly.
@@ -100,6 +103,29 @@ A difference you can talk about calmly is usually manageable. A difference that 
 ## Should parents be part of these conversations?
 
 Parents often have wisdom and good questions, and many families like to meet early. But the core conversations are between the two people getting married. Talk things through as a couple first, then involve families. If you are a parent reading this, our [guide for parents](/guides/parents-guide) has ideas on supporting without taking over.
+
+
+## Frequently asked questions
+
+### How many times should you meet before agreeing to marry?
+
+There is no set number. What matters is that you have talked honestly about values, family, where you will live, money, faith and children, and that you have seen how you both handle a disagreement. For most couples that takes a good number of meetings and conversations over several months, not a handful of dates.
+
+### What should you ask at a first meeting after a matrimonial introduction?
+
+Keep the first meeting light: work, family, how you spend weekends, travel and food, and what made each of you start looking now. Save the bigger questions for once you both want to keep meeting. Our guide to [your first meeting](/guides/first-meeting) has more ideas.
+
+### What are the red flags to look out for before marriage?
+
+Be cautious if someone refuses to discuss important topics, becomes angry or dismissive when you disagree, pushes you to decide quickly, or asks for money. A difference you can talk about calmly is usually manageable; a refusal to talk is a much bigger warning sign. Our [staying safe](/guides/staying-safe) guide lists more.
+
+### Is it rude to ask about money before marriage?
+
+No, as long as you ask kindly and at the right stage. It is not a first-meeting topic, but before you commit you should each understand the other's debts, saving habits and any family support they give or expect to give. Sharing your own situation first makes it easier.
+
+### What questions do families usually ask each other?
+
+Families often want to understand values, faith practice, food at home, family responsibilities and where the couple might live. It works best when the couple have talked these through first and then bring their families in. Our [guide for parents](/guides/parents-guide) has ideas for supporting without taking over.
 
 ## Ready to meet someone who wants the same things?
 

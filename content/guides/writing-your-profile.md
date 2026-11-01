@@ -3,6 +3,9 @@ title: How to Write a Matrimonial Profile That Gets Replies
 description: Practical tips for a Gujarati matrimonial profile that gets replies, covering what to say about work, diet and hobbies, which photos to use and what to skip.
 heading: How to write a matrimonial profile that gets replies
 updated: 2026-11-01
+published: 2026-11-01
+topic: Starting your search
+related: first-meeting, hindu-jain-matches, register-or-dating-app
 ---
 
 A matrimonial profile gets replies when it is specific, honest and warm: a clear recent photo, a few real details about your life, and a sense of what you hope for. You do not need to sound impressive. You need to sound like a real person someone would like to meet for a coffee.
@@ -79,6 +82,33 @@ Avoid long lists of musts, such as minimum heights or salaries. They tend to rea
 - Are my height, diet and religion accurate?
 - Is there an easy question someone could ask me?
 - Have I read it aloud once to check it sounds like me?
+
+
+## Frequently asked questions
+
+### How long should a matrimonial profile be?
+
+Shorter than most people think. A few clear lines about your work, two or three hobbies with a small detail each, and a sentence on what you are hoping for is plenty. Someone should be able to read it in under a minute and come away with an easy question to ask you.
+
+### How many photos should I put on a matrimonial profile?
+
+Use every slot you have. On the Vanik Matrimonial Register you can add up to three photos, and a good mix is one clear head-and-shoulders shot, one full-length photo and one of you doing something you enjoy. Your main photo should be recent and show only you.
+
+### Should I mention my salary on a matrimonial profile?
+
+Usually not. A clear job title tells people enough about your work, and a salary in your profile can make it read like a negotiation. Money is worth talking about honestly once you are getting to know someone, and our guide to [questions to ask before saying yes](/guides/questions-to-ask-before-marriage) covers how.
+
+### Can my parents write my matrimonial profile for me?
+
+They can help, but the words should be yours. Parents are great at remembering the things you undersell and at proofreading, but the person reading your profile wants to meet you. On the Vanik Matrimonial Register the person looking to marry creates their own account and profile.
+
+### How do I write a matrimonial profile if I have been married before?
+
+Be honest and brief. A short, factual line is enough, without going into detail, and it is fairer to mention it up front than to raise it later. Then let the rest of your profile show who you are now and what you are hoping for.
+
+### What should I write if I don't know what to say about myself?
+
+Answer a few simple prompts: what you do on a free Sunday, what your friends rely on you for and what you could happily talk about for an hour. Pick the two or three answers that feel most like you and add one specific detail to each. Asking a sibling or close friend how they would describe you helps too.
 
 ## What happens after you submit?
 

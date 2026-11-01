@@ -3,6 +3,9 @@ title: First Meeting After a Matrimonial Introduction
 description: What to expect at a first meeting after a matrimonial introduction, including how to arrange it, where to meet, what to talk about and how to follow up.
 heading: Your first meeting after an introduction
 updated: 2026-11-01
+published: 2026-11-01
+topic: Meeting someone
+related: questions-to-ask-before-marriage, staying-safe, speed-dating-night
 ---
 
 A first meeting after an introduction works well when it is short, public and relaxed: a coffee or a walk for an hour or so, with easy conversation about everyday life rather than a full interview about marriage. The only goal is to find out whether you would both like to meet again.
@@ -90,6 +93,33 @@ Once you are both keen to keep meeting, start bringing in the topics that shape 
 ## Staying safe
 
 Meet in public, tell a friend or family member where you are going, arrange your own transport, and keep personal details like your home address private until you know someone well. Trust your instincts. If anything makes you uncomfortable, you can leave. Read more in our guide on [staying safe when meeting someone new](/guides/staying-safe).
+
+
+## Frequently asked questions
+
+### How long should a first meeting after an introduction last?
+
+About an hour is ideal. It is long enough to get a feel for each other and short enough that neither of you feels stuck if it isn't working. If it is going well, it is better to finish while you both still have things to say and arrange a second meeting.
+
+### What should I wear to a first matrimonial meeting?
+
+Smart casual, in something you feel comfortable and like yourself in. Think of what you might wear to a nice lunch with friends rather than a family function. If you are meeting outdoors, dress for the weather and for walking.
+
+### Should families meet before the couple meets?
+
+It depends on the family. Some still prefer parents to meet early, but many couples now meet one-to-one first and involve families once they both feel positive. Agree on it openly beforehand so nobody is surprised on the day.
+
+### How soon should I message after a first meeting?
+
+Within a day or so. A short, warm message thanking them and saying whether you would like to meet again is enough. If you don't feel it is right, a kind, clear message is better than going quiet.
+
+### How do I politely say no after a first meeting?
+
+Thank them, say clearly that you don't think you are the right match, and wish them well. For example: "Thank you for meeting me, I enjoyed our conversation. I don't think we're the right match, but I wish you every happiness." You don't need to give a detailed reason.
+
+### What if I am nervous about meeting someone?
+
+Almost everyone is. Have a short phone or video call first, choose a place you know, and plan one or two easy questions. Saying "I'm a bit nervous, I've not done this before" often relaxes you both.
 
 ## Looking for your first introduction?
 

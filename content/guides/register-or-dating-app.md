@@ -3,6 +3,9 @@ title: Matrimonial Register or Dating App, Which Suits You?
 description: A fair look at matrimonial registers and dating apps for Gujarati Hindu and Jain singles, comparing intentions, verification, cost, privacy and pace.
 heading: Matrimonial register or dating app, which suits you?
 updated: 2026-11-01
+published: 2026-11-01
+topic: Starting your search
+related: writing-your-profile, staying-safe, finding-a-partner-in-your-20s
 ---
 
 A matrimonial register suits you if you are clearly looking for marriage, want verified members who share your background, and prefer a slower, more private process. A dating app suits you if you want a large pool, lots of casual conversations and are happy to filter for intentions yourself. Plenty of people use both, and that is perfectly sensible.
@@ -89,6 +92,29 @@ If you do use several routes, be honest with people about where things stand, an
 ## What about family involvement?
 
 Some people find a register makes it easier to involve family, because parents recognise and trust a community service. Others prefer to keep their search private until they meet someone. Either is fine. On the Vanik Matrimonial Register the person looking to marry creates their own account, and parents are encouraged to share the link and help. Our [guide for parents](/guides/parents-guide) has more on this.
+
+
+## Frequently asked questions
+
+### Is a matrimonial site better than a dating app if I want to get married?
+
+It depends what you want. A matrimonial register suits people who are ready for marriage and want verified members with a shared background. A dating app suits people who want a large pool and are happy to work out intentions themselves. Many people use both.
+
+### Are there dating apps for Gujarati singles?
+
+Some general dating apps let you filter by religion or community, and some people from Gujarati families meet their partners that way. If shared background, verification and marriage-minded members matter most to you, a community register like the Vanik Matrimonial Register may suit you better.
+
+### How much does a matrimonial service cost in the UK?
+
+Prices vary widely, so check what is included before you pay. The Vanik Matrimonial Register costs £10 a year. It is not-for-profit, has no paid tiers or adverts, and never sells your data.
+
+### Are profiles on matrimonial sites verified?
+
+Not always, so check how each service does it. On the Vanik Matrimonial Register a volunteer checks every application, including proof of identity, within 2 working days, and only approved members can browse profiles.
+
+### Is it old-fashioned to use a matrimonial register?
+
+Not at all. Plenty of people in their twenties and thirties use one alongside apps and friends, because it saves time: everyone there is looking for marriage. You browse at your own pace and request contact only when you are ready.
 
 ## Try it before you decide
 

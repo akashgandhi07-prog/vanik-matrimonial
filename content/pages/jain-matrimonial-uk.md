@@ -2,6 +2,7 @@
 title: Jain Matrimonial Service in the UK
 description: A not-for-profit Jain matrimonial register for the UK, run by Vanik Council volunteers. Every member is ID-checked. £10 a year, no adverts.
 heading: Jain matrimonial register for UK families
+published: 2026-11-01
 updated: 2026-11-01
 ---
 
@@ -53,6 +54,29 @@ Yes, and we encourage it. The account must be created by the person looking to m
 ## What about meeting in person?
 
 Vanik Council also runs speed dating events twice a year for Gujarati Hindu and Jain singles. See [events](/events) to find out how to hear about the next one.
+
+
+## Frequently asked questions
+
+### Is there a Jain matrimonial service in London or Leicester?
+
+Yes. The Vanik Matrimonial Register is a UK-wide register for Jain and Gujarati Hindu families, run by Vanik Council volunteers. It is not tied to one city, so you can join whether you live in London, Leicester or anywhere else in the UK, and every profile shows where someone lives.
+
+### How much does a Jain matrimonial service cost?
+
+The Vanik Matrimonial Register costs £10 a year. It is not-for-profit, with no paid tiers and no adverts, and your data is never sold.
+
+### Is the register only for Vanik Jain families?
+
+No. It is run by Vanik Council, but it is open to adults 18 and over from all Gujarati Hindu and Jain families, whether or not your family is Vanik.
+
+### Can I find a Jain partner who lives abroad?
+
+The register is mainly for families in the UK, and members living abroad are welcome too. Members can add their future settlement plans, so it is easy to see who is open to moving.
+
+### Are there Jain singles events in the UK?
+
+Vanik Council runs speed dating events twice a year for Gujarati Hindu and Jain singles. Details are announced by email; see [events](/events) or email matrimonial@vanikcouncil.uk to hear about the next one.
 
 ## Take the first step
 

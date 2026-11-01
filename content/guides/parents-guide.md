@@ -3,6 +3,10 @@ title: Helping Your Son or Daughter Find a Partner
 description: A guide for Gujarati Hindu and Jain parents helping a son or daughter find a life partner, with ways to start the conversation and support without pressure.
 heading: Helping your son or daughter find a partner, a guide for parents
 updated: 2026-11-01
+published: 2026-11-01
+topic: Faith and family
+related: staying-safe, writing-your-profile, finding-a-partner-in-your-20s
+audience: parents
 ---
 
 The most helpful thing a parent can do is support without steering: listen to what your son or daughter wants, help them find good places to meet suitable people, and then trust them to lead. Children who feel trusted tend to involve their parents more, not less.
@@ -72,6 +76,33 @@ It is natural to worry when your child meets someone new. Encourage sensible hab
 ## What if they are not interested right now?
 
 Then let it be. People come to marriage in their own time, and readiness matters more than timing. Keep the relationship warm, mention options lightly from time to time, and trust that when they are ready they will remember you offered help without pressure.
+
+
+## Frequently asked questions
+
+### How can I find a suitable match for my son or daughter in the UK?
+
+Start by asking what they want and whether they would like your help. Then point them to places where they can meet people who share your family's background and values, such as a community register, samaj events and trusted family introductions. The Vanik Matrimonial Register is open to adults 18 and over from all Gujarati Hindu and Jain families and is run by Vanik Council volunteers.
+
+### Can parents create a matrimonial profile for their child?
+
+Not on the Vanik Matrimonial Register. The account is created by the person looking to marry, because they are the one who browses, receives introductions and speaks with matches, and volunteers verify their own identity. Parents are very welcome to sit with them while they register and to help with the profile.
+
+### Should I share my son or daughter's biodata in WhatsApp groups?
+
+Only with their agreement. Once a photo and details are shared in a group, you cannot control where they go next, and many young people are upset to find out it has happened. A private register, where contact details are only shared on request, is a safer way for them to be seen.
+
+### What age should my child start looking for a partner?
+
+There is no right age. The register is open from 18, but readiness matters more than timing. Some people want to start in their early twenties, others after training or a few years of work. Ask gently, respect the answer, and leave the door open.
+
+### What if my child wants to marry someone from a different background?
+
+Listen first and ask about the person as an individual. Talk about why your traditions matter to you rather than setting rules, and give the relationship time. Many couples from different backgrounds build happy homes when both families feel heard. For a Hindu and Jain match, our guide to [Hindu and Jain matches](/guides/hindu-jain-matches) may help.
+
+### How do I know a matrimonial service is safe for my child?
+
+Look for real identity checks, privacy for contact details and a clear organisation behind it. On the Vanik Matrimonial Register a volunteer checks every application, including proof of identity, within 2 working days, contact details are only shared inside the member dashboard, and it is run by Vanik Council (UK), registered charity 1137083.
 
 ## About the Vanik Matrimonial Register
 

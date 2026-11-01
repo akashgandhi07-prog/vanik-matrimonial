@@ -3,6 +3,7 @@ title: Helping Your Son or Daughter Find a Partner
 description: A guide for Gujarati Hindu and Jain parents: how to help your son or daughter join the Vanik Matrimonial Register, and why they create the account themselves.
 heading: For parents: how you can help
 updated: 2026-11-01
+audience: parents
 ---
 
 Parents cannot register on behalf of a son or daughter, but you can help in many ways: share the link, sit with them while they sign up, and talk through introductions together. The account itself must be created by the person looking to marry, because they browse, receive introductions and speak to matches, and we verify their own identity.

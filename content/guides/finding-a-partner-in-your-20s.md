@@ -3,6 +3,9 @@ title: Looking for a Partner in Your 20s, Without Pressure
 description: Low-pressure advice for Gujarati Hindu and Jain singles in their 20s looking for a life partner, from handling family hopes to keeping your own pace.
 heading: Looking for a partner in your 20s, without the pressure
 updated: 2026-11-01
+published: 2026-11-01
+topic: Starting your search
+related: writing-your-profile, register-or-dating-app, parents-guide
 ---
 
 Looking for a life partner in your 20s does not have to mean rushing. You can start gently, at your own pace, by meeting people who share your values and are also thinking about marriage, while still focusing on your studies, career and friendships. Starting early simply gives you more time to get to know people properly.
@@ -73,6 +76,29 @@ If you are not ready, say so kindly. A good partner will understand that you wan
 That is normal too. Finding the right person can take time, and your twenties give you plenty of it. Keep living a full life: friends, hobbies, work, family. Those are also the things that make you an interesting person to meet.
 
 You might also enjoy community events. Vanik Council runs [speed dating evenings](/guides/speed-dating-night) twice a year, which can be a relaxed way to meet a few people in one night.
+
+
+## Frequently asked questions
+
+### What is a good age to get married?
+
+There is no right age. The best time is when you feel ready and have met someone you want to build a life with. Starting to look in your twenties simply gives you more time to get to know people without rushing.
+
+### Is 25 too young to join a matrimonial register?
+
+No. The Vanik Matrimonial Register is open to adults from 18. Plenty of people start in their twenties, and you can go at your own pace with up to three introductions at a time.
+
+### How do I tell my parents I'm not ready to get married yet?
+
+Choose a calm moment and be honest about where you are: "I'd like to meet someone, but I'm not in a rush. I'll tell you if I meet someone I like." Giving them a small role, such as helping with photos, often eases the pressure.
+
+### Can students join a matrimonial register?
+
+Yes, if you are 18 or over. The Vanik Matrimonial Register is open to adults from all Gujarati Hindu and Jain families. Just be honest on your profile about where you are, for example "Final-year student, graduating next summer".
+
+### Where can I meet Gujarati Hindu and Jain singles in their 20s?
+
+Through a community register, samaj and festival events, friends and family, and events such as Vanik Council's [speed dating evenings](/guides/speed-dating-night). Using a few routes at once tends to work better than relying on one.
 
 ## Starting gently
 

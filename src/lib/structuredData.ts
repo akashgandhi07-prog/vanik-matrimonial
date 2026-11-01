@@ -1,5 +1,5 @@
-import type { FaqItem } from '../content/content';
-import { SITE_NAME, SITE_ORIGIN, canonicalUrl, pageMetaFor } from './pageMeta';
+import { GUIDES, type ContentEntry, type FaqItem } from '../content/content';
+import { SITE_NAME, SITE_ORIGIN, canonicalUrl, guideImageUrl, pageMetaFor } from './pageMeta';
 
 /**
  * schema.org JSON-LD for each prerendered page. Facts here must match docs/GROWTH_PLAN.md
@@ -124,6 +124,94 @@ function breadcrumbs(trail: { name: string; path: string }[]) {
   };
 }
 
+/** A named volunteer when the guide has one (with their consent), otherwise the charity itself. */
+function person(name: string, role: string) {
+  return {
+    '@type': 'Person',
+    name,
+    jobTitle: role || undefined,
+    worksFor: { '@id': ORG_ID },
+    url: canonicalUrl('/about'),
+  };
+}
+
+function guideGraph(pathname: string, entry: ContentEntry): Record<string, unknown>[] {
+  const url = canonicalUrl(pathname);
+  const image = guideImageUrl(entry.slug);
+  const graph: Record<string, unknown>[] = [
+    {
+      '@type': 'WebPage',
+      '@id': url,
+      url,
+      name: entry.heading,
+      description: entry.description,
+      inLanguage: 'en-GB',
+      isPartOf: { '@id': WEBSITE_ID },
+      primaryImageOfPage: { '@type': 'ImageObject', url: image, width: 1200, height: 675 },
+      breadcrumb: { '@id': `${url}#breadcrumb` },
+      reviewedBy: entry.reviewer ? person(entry.reviewer, entry.reviewerRole) : undefined,
+      lastReviewed: entry.reviewer ? entry.updated || undefined : undefined,
+    },
+    {
+      '@type': 'Article',
+      '@id': `${url}#article`,
+      headline: entry.heading,
+      description: entry.description,
+      image: [image],
+      datePublished: entry.published || undefined,
+      dateModified: entry.updated || undefined,
+      inLanguage: 'en-GB',
+      articleSection: entry.topic || undefined,
+      wordCount: entry.wordCount,
+      author: entry.author ? person(entry.author, entry.authorRole) : { '@id': ORG_ID },
+      publisher: { '@id': ORG_ID },
+      mainEntityOfPage: { '@id': url },
+      isPartOf: { '@id': WEBSITE_ID },
+      about: { '@id': `${SITE_ORIGIN}/#service` },
+    },
+    {
+      ...breadcrumbs([
+        { name: 'Home', path: '/' },
+        { name: 'Guides', path: '/guides' },
+        { name: entry.heading, path: pathname },
+      ]),
+      '@id': `${url}#breadcrumb`,
+    },
+  ];
+  if (entry.faq.length > 0) graph.push(faqPage(pathname, entry.faq));
+  return graph;
+}
+
+function guidesIndexGraph(): Record<string, unknown>[] {
+  const url = canonicalUrl('/guides');
+  const meta = pageMetaFor('/guides');
+  return [
+    {
+      '@type': 'CollectionPage',
+      '@id': url,
+      url,
+      name: 'Guides for Gujarati Hindu and Jain singles and parents',
+      description: meta?.description,
+      inLanguage: 'en-GB',
+      isPartOf: { '@id': WEBSITE_ID },
+      about: { '@id': ORG_ID },
+      mainEntity: {
+        '@type': 'ItemList',
+        itemListElement: GUIDES.map((g, i) => ({
+          '@type': 'ListItem',
+          position: i + 1,
+          url: canonicalUrl(g.path),
+          name: g.heading,
+        })),
+      },
+    },
+    breadcrumbs([
+      { name: 'Home', path: '/' },
+      { name: 'Guides', path: '/guides' },
+    ]),
+  ];
+}
+
 export function structuredDataFor(pathname: string): Record<string, unknown> {
   const meta = pageMetaFor(pathname);
   const graph: Record<string, unknown>[] = [ORGANIZATION, WEBSITE];
@@ -131,27 +219,10 @@ export function structuredDataFor(pathname: string): Record<string, unknown> {
 
   if (pathname === '/') {
     graph.push(SERVICE, faqPage('/', HOME_FAQ));
+  } else if (pathname === '/guides') {
+    graph.push(SERVICE, ...guidesIndexGraph());
   } else if (entry?.kind === 'guide') {
-    graph.push(
-      {
-        '@type': 'Article',
-        '@id': `${canonicalUrl(pathname)}#article`,
-        headline: entry.heading,
-        description: entry.description,
-        dateModified: entry.updated || undefined,
-        datePublished: entry.updated || undefined,
-        inLanguage: 'en-GB',
-        author: { '@id': ORG_ID },
-        publisher: { '@id': ORG_ID },
-        mainEntityOfPage: canonicalUrl(pathname),
-        isPartOf: { '@id': WEBSITE_ID },
-      },
-      breadcrumbs([
-        { name: 'Home', path: '/' },
-        { name: 'Guides', path: '/guides' },
-        { name: entry.heading, path: pathname },
-      ])
-    );
+    graph.push(SERVICE, ...guideGraph(pathname, entry));
   } else if (meta) {
     const name = entry?.heading ?? meta.title.replace(` - ${SITE_NAME}`, '');
     graph.push(
@@ -161,6 +232,7 @@ export function structuredDataFor(pathname: string): Record<string, unknown> {
         url: canonicalUrl(pathname),
         name,
         description: meta.description,
+        datePublished: entry?.published || undefined,
         dateModified: meta.updated,
         inLanguage: 'en-GB',
         isPartOf: { '@id': WEBSITE_ID },

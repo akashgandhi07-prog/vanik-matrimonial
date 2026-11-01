@@ -3,6 +3,9 @@ title: Speed Dating at Vanik Council, What to Expect
 description: What usually happens at a speed dating evening, tips for feeling relaxed and making conversation, and how to hear about Vanik Council's next speed dating event.
 heading: Speed dating at Vanik Council, and what usually happens on the night
 updated: 2026-11-01
+published: 2026-11-01
+topic: Meeting someone
+related: first-meeting, finding-a-partner-in-your-20s, staying-safe
 ---
 
 At a typical speed dating evening, you have a series of short, timed conversations with other guests, then let the organisers know who you would like to see again, and matches are shared afterwards. Vanik Council runs speed dating events twice a year, and the details of each one are announced by email, so the simplest way to hear about the next one is to email matrimonial@vanikcouncil.uk.
@@ -77,6 +80,33 @@ If you do not match with anyone, please do not be discouraged. A few minutes is 
 ## Staying safe
 
 A speed dating evening is a hosted, organised setting, which helps. For any follow-up meeting, the usual sensible steps apply: meet in a public place, tell someone your plans, arrange your own transport and keep personal details private until you know someone well. Read more in our guide to [staying safe](/guides/staying-safe).
+
+
+## Frequently asked questions
+
+### Is there Gujarati speed dating in the UK?
+
+Yes. Vanik Council runs speed dating events twice a year for Gujarati Hindu and Jain singles. Dates, venues and details are announced by email, so the best way to hear about the next one is to email matrimonial@vanikcouncil.uk.
+
+### Is there Jain speed dating in the UK?
+
+Vanik Council's speed dating evenings are for Gujarati Hindu and Jain singles, so Jain singles are very welcome. Details are confirmed for each event and announced by email. Check our [events page](/events) or email matrimonial@vanikcouncil.uk.
+
+### What age range is speed dating for?
+
+It depends on the event. The age range is set for each evening and included in the announcement, so check the details before you book.
+
+### What should I wear to speed dating?
+
+Smart casual is usually right: something comfortable that you feel good in. Check the event announcement in case there is any dress guidance.
+
+### How many people will I meet at a speed dating event?
+
+It depends on how many guests there are, but you can expect a series of short conversations through the evening, often a few minutes each, usually with a break in the middle.
+
+### What if I don't get any matches at speed dating?
+
+Please don't be discouraged. A few minutes is very little time, and nerves affect everyone. Many people find the evening good practice, and you can keep meeting people through the [register](/register) all year round.
 
 ## Can you use speed dating alongside the register?
 

@@ -34,6 +34,22 @@ const esc = (s) =>
 /** JSON inside <script> must not be able to close the tag. */
 const jsonForScript = (v) => JSON.stringify(v, null, 2).replace(/</g, '\\u003c');
 
+const DEFAULT_IMAGE = `${SITE_ORIGIN}/og-image.png`;
+for (const marker of [DEFAULT_IMAGE, '<meta property="og:image:height" content="630" />', 'property="og:image:alt"']) {
+  if (!template.includes(marker)) throw new Error(`prerender: index.html is missing ${marker}`);
+}
+
+/** Pages with their own image (guides) swap it in for the shared social preview image. */
+function withImage(page, image, alt) {
+  if (!image) return page;
+  const file = path.join(dist, new URL(image).pathname);
+  if (!fs.existsSync(file)) throw new Error(`prerender: ${image} is missing; run npm run guide-images`);
+  return page
+    .replaceAll(DEFAULT_IMAGE, image)
+    .replace('<meta property="og:image:height" content="630" />', '<meta property="og:image:height" content="675" />')
+    .replace(/(property="og:image:alt"\s+content=")[^"]*"/, `$1${esc(alt)}"`);
+}
+
 function fill({ title, head, html }) {
   return template
     .replace(TITLE_TAG, `<title>${esc(title)}</title>`)
@@ -44,7 +60,16 @@ function fill({ title, head, html }) {
 function indexableHead(pathname, meta) {
   const url = canonicalUrl(pathname);
   const description = meta.description ?? '';
-  const type = meta.content?.kind === 'guide' ? 'article' : 'website';
+  const entry = meta.content;
+  const type = entry?.kind === 'guide' ? 'article' : 'website';
+  const articleTimes =
+    entry?.kind === 'guide'
+      ? [
+          entry.published && `<meta property="article:published_time" content="${esc(entry.published)}" />`,
+          entry.updated && `<meta property="article:modified_time" content="${esc(entry.updated)}" />`,
+          entry.topic && `<meta property="article:section" content="${esc(entry.topic)}" />`,
+        ].filter(Boolean)
+      : [];
   return [
     `<meta name="description" content="${esc(description)}" />`,
     `<link rel="canonical" href="${esc(url)}" />`,
@@ -54,6 +79,7 @@ function indexableHead(pathname, meta) {
     `<meta property="og:url" content="${esc(url)}" />`,
     `<meta name="twitter:title" content="${esc(meta.title)}" />`,
     `<meta name="twitter:description" content="${esc(description)}" />`,
+    ...articleTimes,
     `<script type="application/ld+json">\n${jsonForScript(structuredDataFor(pathname))}\n</script>`,
   ].join('\n    ');
 }
@@ -74,7 +100,8 @@ for (const pathname of paths) {
   if (html.includes('Loading…') || !html.includes('<h1')) {
     throw new Error(`prerender: ${pathname} did not render its content (no <h1> or still loading)`);
   }
-  write(outFile(pathname), fill({ title: meta.title, head: indexableHead(pathname, meta), html }));
+  const page = fill({ title: meta.title, head: indexableHead(pathname, meta), html });
+  write(outFile(pathname), withImage(page, meta.image, meta.content?.heading ?? meta.title));
 }
 
 write(

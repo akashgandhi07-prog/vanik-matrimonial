@@ -3,6 +3,9 @@ title: Staying Safe When Meeting Someone New for Marriage
 description: How the Vanik Matrimonial Register verifies members, plus practical safety tips for messages, video calls and first meetings with someone new.
 heading: How we verify members, and how to stay safe when meeting someone new
 updated: 2026-11-01
+published: 2026-11-01
+topic: Staying safe
+related: first-meeting, matches-beyond-london, parents-guide
 ---
 
 Staying safe means taking the same sensible care with every new person, however they were introduced: verify who they are, keep personal details private at first, meet in public, and tell someone where you are going. On the Vanik Matrimonial Register, a volunteer checks every application, including proof of identity, before anyone can browse, but your own good habits still matter.
@@ -72,6 +75,29 @@ If someone makes you uncomfortable, you can stop replying. You are never obliged
 If you are concerned about a member's behaviour on the register, email the volunteer team at matrimonial@vanikcouncil.uk so they can look into it.
 
 If you ever feel in immediate danger, call 999. If you have been the victim of fraud, you can report it to Action Fraud.
+
+
+## Frequently asked questions
+
+### How can I tell if a matrimonial profile is fake?
+
+Watch for details that keep changing or don't match the profile, someone who always avoids video calls or meeting, and anyone who moves very fast or asks for money. A short video call before meeting is the simplest check. On the Vanik Matrimonial Register, every member's identity is checked by a volunteer before they can browse.
+
+### What are common matrimonial scams?
+
+The most common pattern is someone who builds trust quickly, avoids meeting in person, and then asks for money, gifts or bank details to deal with an emergency or a "temporary" problem. Never send money to someone you have not met and known for a long time, however convincing the story.
+
+### Is it safe to give my phone number to a match?
+
+Usually, once you have had a few conversations and feel comfortable. Take your time, and keep your home address, workplace details and financial information private until you know someone well. On the register, contact details are only shared inside the member dashboard when someone requests them.
+
+### Should I video call someone before meeting them?
+
+Yes, it is a good idea. A short video call confirms the person matches their photos and lets you see whether you feel comfortable before you travel to meet them.
+
+### Where do I report matrimonial fraud in the UK?
+
+Report fraud to Action Fraud, and call 999 if you ever feel in immediate danger. If the person is a member of the Vanik Matrimonial Register, also email matrimonial@vanikcouncil.uk so the volunteer team can look into it.
 
 ## Start with people who have been checked
 

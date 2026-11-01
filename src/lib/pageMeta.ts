@@ -14,6 +14,8 @@ export type PageMeta = {
   /** Last meaningful edit (YYYY-MM-DD), for the sitemap. */
   updated?: string;
   content?: ContentEntry;
+  /** Social preview image, when the page has its own (1200x675 PNG). */
+  image?: string;
 };
 
 const STATIC_PAGE_META: Record<string, PageMeta> = {
@@ -68,6 +70,7 @@ export function pageMetaFor(pathname: string): PageMeta | undefined {
     indexable: true,
     updated: entry.updated || undefined,
     content: entry,
+    image: entry.kind === 'guide' ? guideImageUrl(entry.slug) : undefined,
   };
 }
 
@@ -80,6 +83,11 @@ export function prerenderPaths(): string[] {
     ...CONTENT_PAGES.map((e) => e.path),
     ...GUIDES.map((e) => e.path),
   ];
+}
+
+/** Per-guide image made by `npm run guide-images` into public/images/guides. */
+export function guideImageUrl(slug: string): string {
+  return `${SITE_ORIGIN}/images/guides/${slug}.png`;
 }
 
 export function canonicalUrl(pathname: string): string {

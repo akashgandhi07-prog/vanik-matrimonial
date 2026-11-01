@@ -2,6 +2,7 @@
 title: Gujarati Hindu Matrimonial Service in the UK
 description: A not-for-profit Gujarati Hindu matrimonial register for the UK, run by Vanik Council volunteers for over 40 years. ID-checked members, £10 a year.
 heading: Gujarati Hindu matrimonial register for UK families
+published: 2026-11-01
 updated: 2026-11-01
 ---
 
@@ -56,6 +57,29 @@ The account must be created by the person looking to marry, because they will br
 ## Is there anything in person?
 
 Yes. Vanik Council runs speed dating events twice a year. See [events](/events) for how to hear about the next one.
+
+
+## Frequently asked questions
+
+### Is there a Gujarati matrimonial service in London or Leicester?
+
+Yes. The Vanik Matrimonial Register is a UK-wide register for Gujarati Hindu and Jain families, run by Vanik Council volunteers. It is not tied to one city, so you can join whether you live in London, Leicester or anywhere else in the UK, and every profile shows where someone lives.
+
+### How much does a Gujarati matrimonial site cost?
+
+The Vanik Matrimonial Register costs £10 a year. It is not-for-profit, with no paid tiers and no adverts, and your data is never sold.
+
+### Is this a Vanik samaj matrimonial service?
+
+It is run by Vanik Council (UK), the umbrella organisation for Vanik associations across the UK, founded in 1978. But you do not need to be from a Vanik family: it is open to adults 18 and over from all Gujarati Hindu and Jain families.
+
+### Can I find a Gujarati partner who lives abroad?
+
+The register is mainly for families in the UK, and members living abroad are welcome too. Members can add their future settlement plans, so it is easy to see who is open to moving.
+
+### Are there Gujarati singles events in the UK?
+
+Vanik Council runs speed dating events twice a year for Gujarati Hindu and Jain singles. Details are announced by email; see [events](/events) or email matrimonial@vanikcouncil.uk to hear about the next one.
 
 ## Get started
 

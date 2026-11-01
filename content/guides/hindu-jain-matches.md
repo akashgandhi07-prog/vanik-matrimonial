@@ -3,6 +3,9 @@ title: Hindu and Jain Matches, Talking About Diet and Faith
 description: How Gujarati Hindu and Jain couples can talk about diet, faith, festivals and family expectations, and what to discuss early before families get involved.
 heading: Hindu and Jain matches, and how to talk about diet, faith and family
 updated: 2026-11-01
+published: 2026-11-01
+topic: Faith and family
+related: questions-to-ask-before-marriage, parents-guide, writing-your-profile
 ---
 
 Hindu and Jain matches can work very well when both people talk honestly and early about food at home, faith practice, festivals and family expectations. Gujarati Hindu and Jain families often share a great deal of culture, so the differences are usually about detail and degree, and those are easier to agree on before an engagement than after.
@@ -68,6 +71,29 @@ The register lets you see each member's religion and diet, which makes it easier
 ## What should you ask before saying yes?
 
 Beyond diet and faith, a strong marriage rests on shared values, clear expectations about family and honest conversations about money, children and where you will live. Our guide to [questions to ask before saying yes](/guides/questions-to-ask-before-marriage) covers all of these.
+
+
+## Frequently asked questions
+
+### Can a Jain marry a Hindu?
+
+Yes. Gujarati Hindu and Jain families share a great deal of culture, and many happy marriages bring the two together. What matters most is agreeing early on food at home, which festivals and fasts you keep, and how you will involve both families.
+
+### Do Jains eat onion and garlic?
+
+Many Jains do not. A Jain diet typically avoids root vegetables such as onion, garlic, potato and carrot, as well as meat, fish and eggs. Practice varies from person to person and family to family, so it is always worth asking rather than assuming.
+
+### What is the difference between a Jain diet and a vegetarian diet?
+
+A vegetarian diet avoids meat and fish, and may include onion, garlic, other root vegetables and sometimes eggs. A Jain diet is usually stricter: it also avoids root vegetables, and some people avoid eating after sunset or keep extra rules on certain days.
+
+### Will I have to follow a Jain diet if I marry into a Jain family?
+
+Not necessarily. It is something to agree as a couple and with both families. Many couples keep a home kitchen that suits the stricter diet so everyone can eat at home comfortably, while each person keeps their own habits when eating out.
+
+### Is there a matrimonial service for both Gujarati Hindu and Jain families?
+
+Yes. The Vanik Matrimonial Register is open to adults 18 and over from all Gujarati Hindu and Jain families, Vanik or not. Every profile shows religion and diet, so you can focus on your own tradition or search more widely.
 
 ## Meet people who understand your background
 

@@ -97,6 +97,15 @@ Content lives as Markdown files in the repo, turned into static pages at build.
 9. Speed dating at Vanik Council: what happens on the night
 10. Leicester, London and beyond: finding a match outside your area
 
+### PR 5: Guide design and E-E-A-T (1 Nov 2026)
+- [x] Redesigned guides and content pages: header band, answer-first callout, "On this page", sticky register card, register boxes mid-article and at the end, "Who writes our guides" box, topic-matched "Keep reading" cards. Parent-facing pages get parent copy ("Preview profiles together")
+- [x] `/guides` grouped by topic
+- [x] Long-tail FAQ section on every guide and both community pages (57 questions), shown as an accordion and published as FAQPage
+- [x] Article data: per-guide image (`npm run guide-images`), separate `published` and `updated` dates, word count, section; CollectionPage for `/guides`
+- [ ] Named author and reviewer: front matter `author`, `authorRole`, `reviewer`, `reviewerRole` are ready; add once volunteers consent (see Akash's to-do)
+- [ ] Success stories, with consent
+- [ ] Event schema once the next speed dating dates are set
+
 ### Ongoing (from December)
 - [ ] 2 guides a month, chosen from Search Console queries and the AI prompt log
 - [ ] Monthly: rerun the 20 AI test prompts, review GSC and GA, check signups by source

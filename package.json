@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "guide-images": "vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/guide-images.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:demo": "node scripts/seed_demo_accounts.mjs",
