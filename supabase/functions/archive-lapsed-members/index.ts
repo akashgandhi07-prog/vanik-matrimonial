@@ -32,15 +32,20 @@ Deno.serve(async (req) => {
   let archived = 0;
   for (const r of rows ?? []) {
     const pid = r.id as string;
-    const { error: up } = await admin
+    // Repeat the selection filter: a member who renewed while this loop runs must
+    // not be closed (and so scheduled for deletion).
+    const { data: upRows, error: up } = await admin
       .from('profiles')
       .update({
         status: 'closed',
         hidden_reason: null,
         delete_after: new Date(Date.now() + RETENTION_AFTER_CLOSE_DAYS * 864e5).toISOString(),
       })
-      .eq('id', pid);
-    if (up) continue;
+      .eq('id', pid)
+      .eq('status', 'expired')
+      .lt('membership_expires_at', cutoff)
+      .select('id');
+    if (up || !upRows?.length) continue;
     archived++;
 
     if (mailOk) {

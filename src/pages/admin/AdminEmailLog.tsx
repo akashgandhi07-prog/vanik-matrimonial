@@ -55,7 +55,6 @@ export default function AdminEmailLog() {
       await invokeFunction('send-email', {
         type: r.email_type,
         recipient_profile_id: r.recipient_profile_id,
-        recipient_email: r.recipient_email,
       });
       void load();
     } catch (e) {

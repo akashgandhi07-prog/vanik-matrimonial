@@ -63,8 +63,57 @@ export function renewalSessionFromStripe(s: Record<string, unknown>): RenewalSes
 
 function addMonths(from: Date, months: number): Date {
   const d = new Date(from);
+  const day = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + months);
+  // Clamp to the month's last day: 31 Jan + 13 months is 29 Feb, not 2 Mar.
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
   return d;
+}
+
+/**
+ * A renewal was paid but cannot be applied (profile gone or not renewable).
+ * Record the payment so it shows in admin > Payments and later retries become
+ * idempotent, and tell staff - otherwise the member is charged and nobody knows.
+ */
+async function recordUnappliedRenewal(
+  admin: AdminClient,
+  session: RenewalSession,
+  authUserId: string,
+  profileId: string | null,
+  reason: string
+): Promise<RenewalOutcome> {
+  const now = new Date().toISOString();
+  const { error } = await admin.from('stripe_checkout_sessions').insert({
+    checkout_session_id: session.id,
+    auth_user_id: authUserId,
+    profile_id: profileId,
+    purpose: 'renewal',
+    payment_status: 'paid',
+    amount_total: session.amountTotal,
+    currency: session.currency,
+    payment_intent_id: session.paymentIntentId,
+    renewal_applied_at: null,
+    updated_at: now,
+  });
+  if (error?.code === '23505') return { status: 'already_applied' };
+  await sendOpsAlert('A paid renewal could not be applied', [
+    `Checkout session ${escapeAlertText(session.id)} for profile ${escapeAlertText(profileId ?? '(missing)')}`,
+    `Reason: ${escapeAlertText(reason)}`,
+    error
+      ? `The payment could not be recorded either: ${escapeAlertText(error.message)}`
+      : 'The payment is recorded in admin > Payments. Extend the membership by hand or refund it.',
+  ]);
+  return { status: 'skipped', reason };
+}
+
+async function alertDuplicate(sessionId: string, profileId: string) {
+  await sendOpsAlert('A member paid for their renewal twice', [
+    `Checkout session ${escapeAlertText(sessionId)} for profile ${escapeAlertText(profileId)}`,
+    `Another renewal was applied within ${DUPLICATE_WINDOW_DAYS} days, so this payment did not extend the membership again.`,
+    'Refund it from admin > Payments.',
+  ]);
 }
 
 export async function applyRenewalPayment(admin: AdminClient, session: RenewalSession): Promise<RenewalOutcome> {
@@ -81,8 +130,10 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
     .select('id, auth_user_id, membership_expires_at, status, hidden_reason')
     .eq('id', profileId)
     .maybeSingle();
-  if (pe || !prof || (prof.auth_user_id as string) !== authUserId) {
-    return { status: 'skipped', reason: 'profile_mismatch' };
+  // A read error is temporary: return an error so Stripe / the daily sweep retries.
+  if (pe) return { status: 'error', message: pe.message };
+  if (!prof || (prof.auth_user_id as string) !== authUserId) {
+    return recordUnappliedRenewal(admin, session, authUserId, prof ? profileId : null, 'profile_mismatch');
   }
 
   // Belt-and-braces: warn if Stripe customer_email doesn't match registered email
@@ -102,7 +153,9 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
 
   const st = prof.status as string;
   const renewable = new Set(['active', 'expired', 'closed']);
-  if (!renewable.has(st)) return { status: 'skipped', reason: 'bad_status' };
+  if (!renewable.has(st)) {
+    return recordUnappliedRenewal(admin, session, authUserId, profileId, `bad_status (${st})`);
+  }
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - DUPLICATE_WINDOW_DAYS * 864e5).toISOString();
@@ -112,6 +165,8 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
     .eq('profile_id', profileId)
     .eq('purpose', 'renewal')
     .neq('checkout_session_id', session.id)
+    // A refunded renewal no longer counts: paying again after a refund is genuine.
+    .is('refund_id', null)
     .gt('renewal_applied_at', windowStart)
     .limit(1);
   if (recentErr) return { status: 'error', message: recentErr.message };
@@ -145,6 +200,7 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
     console.warn(
       `renewal: session ${session.id} is a repeat payment for profile ${profileId} within ${DUPLICATE_WINDOW_DAYS} days - recorded, membership not extended again`
     );
+    await alertDuplicate(session.id, profileId);
     return { status: 'duplicate' };
   }
 
@@ -159,7 +215,10 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
   const bonusMonths = qualifiesForEarlyRenewalBonus(curExp, openedAt) ? EARLY_RENEWAL_BONUS_MONTHS : 0;
   const newExp = addMonths(start, 12 + bonusMonths);
 
-  const { error: upErr } = await admin
+  // Only move the expiry if nobody else did since we read it: two different
+  // payments processed at the same moment both pass the duplicate check above,
+  // and would otherwise both write the same new date (charged twice, extended once).
+  let upQuery = admin
     .from('profiles')
     .update({
       membership_expires_at: newExp.toISOString(),
@@ -171,6 +230,21 @@ export async function applyRenewalPayment(admin: AdminClient, session: RenewalSe
       updated_at: new Date().toISOString(),
     })
     .eq('id', profileId);
+  upQuery = prof.membership_expires_at
+    ? upQuery.eq('membership_expires_at', prof.membership_expires_at as string)
+    : upQuery.is('membership_expires_at', null);
+  const { data: upRows, error: upErr } = await upQuery.select('id');
+
+  if (!upErr && (upRows ?? []).length === 0) {
+    // Lost the race to another renewal for the same member: this payment is the
+    // repeat. Mark it as not applied so staff see it, exactly like a duplicate.
+    await admin
+      .from('stripe_checkout_sessions')
+      .update({ renewal_applied_at: null, updated_at: new Date().toISOString() })
+      .eq('checkout_session_id', session.id);
+    await alertDuplicate(session.id, profileId);
+    return { status: 'duplicate' };
+  }
 
   if (upErr) {
     // Do NOT delete the session record - deleting causes Stripe to retry, which re-inserts,

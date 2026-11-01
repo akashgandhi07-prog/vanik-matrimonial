@@ -135,6 +135,8 @@ Deno.serve(async (req) => {
         .select('sent_at')
         .eq('recipient_profile_id', d.id)
         .eq('email_type', 'renewal_reminder')
+        // A send that failed outright never reached the member: retry it.
+        .neq('status', 'failed')
         .order('sent_at', { ascending: false })
         .limit(1)
         .maybeSingle();

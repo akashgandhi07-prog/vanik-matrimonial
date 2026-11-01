@@ -3103,18 +3103,15 @@ Deno.serve(async (req) => {
     const { data: prow } = await admin.from('profiles').select('auth_user_id').eq('id', profileId).single();
     const uid = prow?.auth_user_id as string | undefined;
     if (!uid) return jsonResponse({ error: 'Profile not found' }, req, 404);
-    const { error: banErr } = await admin.auth.admin.updateUserById(uid, { ban_duration: '2s' });
-    if (banErr) return jsonResponse({ error: banErr.message }, req, 500);
-    await new Promise((r) => setTimeout(r, 2100));
-    const { error: unbanErr } = await admin.auth.admin.updateUserById(uid, { ban_duration: 'none' });
-    if (unbanErr) return jsonResponse({ error: unbanErr.message }, req, 500);
+    const { data: revoked, error: revErr } = await admin.rpc('admin_revoke_user_sessions', { p_user_id: uid });
+    if (revErr) return jsonResponse({ error: revErr.message }, req, 500);
     await admin.from('admin_actions').insert({
       admin_user_id: callerId,
       target_profile_id: profileId,
       action_type: 'sessions_revoked',
-      notes: 'Brief account lock to invalidate refresh tokens',
+      notes: `Signed out of ${Number(revoked ?? 0)} session(s); open tabs lose access when their token expires (up to 1 hour)`,
     });
-    return jsonResponse({ ok: true }, req);
+    return jsonResponse({ ok: true, sessions_revoked: Number(revoked ?? 0) }, req);
   }
 
   if (action === 'send_password_recovery_for_member') {
@@ -3123,14 +3120,16 @@ Deno.serve(async (req) => {
     }
     const profileId = typeof body.profile_id === 'string' ? body.profile_id : '';
     if (!profileId) return jsonResponse({ error: 'profile_id required' }, req, 400);
-    const { data: memE } = await admin.from('member_private').select('email').eq('profile_id', profileId).single();
-    const email = memE?.email as string | undefined;
-    if (!email) return jsonResponse({ error: 'No email for profile' }, req, 400);
-    const redirectTo = `${publicSiteBaseUrl()}/login`;
-    const { error: re } = await admin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: { redirectTo },
+    // Send to the login's own address (member_private.email can differ), and let
+    // Supabase Auth send the email: generateLink only returns a link.
+    const { data: prow } = await admin.from('profiles').select('auth_user_id').eq('id', profileId).maybeSingle();
+    const uid = prow?.auth_user_id as string | undefined;
+    if (!uid) return jsonResponse({ error: 'Profile not found' }, req, 404);
+    const { data: authUser, error: auErr } = await admin.auth.admin.getUserById(uid);
+    const email = authUser?.user?.email;
+    if (auErr || !email) return jsonResponse({ error: auErr?.message ?? 'No login email for profile' }, req, 400);
+    const { error: re } = await userClient.auth.resetPasswordForEmail(email, {
+      redirectTo: `${publicSiteBaseUrl()}/reset-password`,
     });
     if (re) return jsonResponse({ error: re.message }, req, 500);
     await admin.from('admin_actions').insert({

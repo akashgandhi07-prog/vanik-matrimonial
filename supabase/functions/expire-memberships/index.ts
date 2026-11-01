@@ -46,11 +46,16 @@ Deno.serve(async (req) => {
     let expired = 0;
     for (const r of rows ?? []) {
       const pid = r.id as string;
-      const { error: up } = await admin
+      // Repeat the selection filter: a renewal applied while this loop runs must
+      // not be flipped back to expired.
+      const { data: upRows, error: up } = await admin
         .from('profiles')
         .update({ status: 'expired' })
-        .eq('id', pid);
-      if (up) continue;
+        .eq('id', pid)
+        .eq('status', 'active')
+        .lt('membership_expires_at', cutoff)
+        .select('id');
+      if (up || !upRows?.length) continue;
       expired++;
 
       if (mailOk) {
