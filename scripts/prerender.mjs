@@ -7,7 +7,7 @@
  *   dist/index.html            homepage
  *   dist/<path>.html           every other public page (e.g. dist/guides/first-meeting.html)
  *   dist/404.html              real 404 for unknown URLs
- *   dist/app.html              noindex shell for signed-in and account routes (see vercel.json)
+ *   dist/app.html              noindex shell for signed-in and account routes (see vercel.json, served at /app)
  *   dist/sitemap.xml, dist/llms.txt
  *
  * Never put member data in any of these files: only routes in prerenderPaths() are rendered, and

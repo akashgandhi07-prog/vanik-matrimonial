@@ -15,27 +15,27 @@
     },
     {
       "source": "/(login|forgot-password|reset-password|verify-email-success|registration-pending|registration-rejected|membership-expired|renew-membership|app-feedback)",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/dashboard",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/dashboard/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/admin",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/admin/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/feedback/:path*",
-      "destination": "/app.html"
+      "destination": "/app"
     }
   ],
   "headers": [
