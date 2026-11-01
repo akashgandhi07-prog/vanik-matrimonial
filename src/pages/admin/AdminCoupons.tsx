@@ -237,7 +237,6 @@ export default function AdminCoupons() {
               onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as typeof f.type }))}
             >
               <option value="free">Free (membership)</option>
-              <option value="discount_percent">Discount %</option>
             </select>
           </div>
           {form.type === 'discount_percent' && (

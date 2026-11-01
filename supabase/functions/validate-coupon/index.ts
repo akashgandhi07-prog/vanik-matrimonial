@@ -96,7 +96,8 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  if (!row.is_active) {
+  // Only free coupons waive the fee; percent discounts are not applied at checkout.
+  if (!row.is_active || row.type !== 'free') {
     return jsonResponse({ valid: false }, req);
   }
   if (row.expires_at && new Date(row.expires_at) < now) {

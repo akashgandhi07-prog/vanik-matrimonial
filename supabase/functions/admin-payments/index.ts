@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isSupportAdmin, isUserAdmin } from '../_shared/auth-admin.ts';
+import { isSupportAdmin, isUserAdmin, adminMfaSatisfied } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 import { membershipAccessCutoffIso } from '../_shared/membership.ts';
@@ -11,7 +11,8 @@ const FUNNEL_DAYS = 90;
 
 type SessionRow = {
   checkout_session_id: string;
-  auth_user_id: string;
+  // Null once the member's account has been purged; the payment record is kept.
+  auth_user_id: string | null;
   profile_id: string | null;
   purpose: string;
   payment_status: string;
@@ -51,6 +52,9 @@ Deno.serve(async (req) => {
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
     return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
+  if (!adminMfaSatisfied(authHeader)) {
+    return jsonResponse({ error: 'Two-factor verification required', code: 'mfa_required' }, req, 403);
+  }
 
   const body = (await req.json().catch(() => ({}))) as {
     action?: string;
@@ -73,7 +77,7 @@ Deno.serve(async (req) => {
 
     // Resolve each payment to a member. Registration payments are recorded before the
     // profile exists, so profile_id is often null - match those via auth_user_id.
-    const authIds = [...new Set(sessions.map((r) => r.auth_user_id))];
+    const authIds = [...new Set(sessions.map((r) => r.auth_user_id).filter((id): id is string => !!id))];
     const profilesByAuthId: Record<
       string,
       {
@@ -110,7 +114,7 @@ Deno.serve(async (req) => {
     }
 
     const payments = sessions.map((s) => {
-      const prof = profilesByAuthId[s.auth_user_id] ?? null;
+      const prof = s.auth_user_id ? (profilesByAuthId[s.auth_user_id] ?? null) : null;
       return {
         ...s,
         profile_id: s.profile_id ?? prof?.id ?? null,

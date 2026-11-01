@@ -7,6 +7,7 @@ import { rejectReasonIfNotJpegOrPng } from '../../lib/profilePhotoAccept';
 import { invokeFunction, supabase } from '../../lib/supabase';
 import { AdminMemberEditForm, type MemberPrivateFull, type MemberProfileFull } from './AdminMemberEditForm';
 import { MfaEnroll } from './MfaEnroll';
+import { MfaVerify } from './MfaVerify';
 import { useAdminGuard } from './useAdminGuard';
 
 type TimelineRow = {
@@ -163,7 +164,7 @@ function idPathLooksLikeImage(path: string | null | undefined): boolean {
 export default function AdminMemberDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { ok, mfaOk, refresh } = useAdminGuard();
+  const { ok, mfaOk, mfaStep, mfaFactorId, refresh } = useAdminGuard();
   const [profile, setProfile] = useState<MemberProfileFull | null>(null);
   const [priv, setPriv] = useState<MemberPrivateFull | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -374,7 +375,12 @@ export default function AdminMemberDetail() {
   if (ok === null || mfaOk === null) {
     return <div className="layout-max">Loading…</div>;
   }
-  if (!mfaOk) return <MfaEnroll onDone={() => void refresh()} />;
+  if (!mfaOk) {
+    if (mfaStep === 'verify' && mfaFactorId) {
+      return <MfaVerify factorId={mfaFactorId} onDone={() => void refresh()} />;
+    }
+    return <MfaEnroll onDone={() => void refresh()} />;
+  }
   if (detailError && !profile) {
     return (
       <div className="layout-max">

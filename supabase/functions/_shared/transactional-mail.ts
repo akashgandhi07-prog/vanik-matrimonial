@@ -53,9 +53,17 @@ export function normalizeMailRecipients(raw: string): string[] {
       raw
         .split(/[,;]/g)
         .map((s) => s.trim())
-        .filter((s) => s.length > 0)
+        // A bare address only: whitespace or control characters (CR/LF) would let
+        // a member-supplied email inject SMTP headers.
+        .filter((s) => /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(s))
     ),
   ];
+}
+
+/** Subjects often include member names; collapse CR/LF and other control
+ * characters so a name cannot inject headers or body text into the message. */
+export function sanitizeMailSubject(subject: string): string {
+  return subject.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
 function readSmtpUser(): string | undefined {
@@ -269,15 +277,16 @@ export async function sendTransactionalMail(
 ): Promise<{ id: string | null; error: string | null }> {
   const to = normalizeMailRecipients(payload.to);
   if (!to.length) return { id: null, error: 'No valid recipient email addresses' };
+  const subject = sanitizeMailSubject(payload.subject);
 
   const user = readSmtpUser();
   const pass = readSmtpPass();
   if (user && pass) {
-    return sendViaSmtp({ ...payload, to });
+    return sendViaSmtp({ ...payload, to, subject });
   }
   const resendKey = Deno.env.get('RESEND_API_KEY');
   if (resendKey) {
-    const r = await sendResendEmail(resendKey, { ...payload, to });
+    const r = await sendResendEmail(resendKey, { ...payload, to, subject });
     if (r.error && /not verified|verify your domain/i.test(r.error)) {
       return {
         id: null,

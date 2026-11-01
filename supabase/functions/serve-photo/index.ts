@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { adminMfaSatisfied, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
 
-  const isAdmin = isUserAdmin(userData.user);
+  // Admin photo access needs the TOTP step too, same as the admin functions.
+  const isAdmin = isUserAdmin(userData.user) && adminMfaSatisfied(authHeader);
 
   if (!isAdmin) {
     if (!requester) {

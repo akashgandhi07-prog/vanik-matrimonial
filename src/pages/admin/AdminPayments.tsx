@@ -5,7 +5,7 @@ import { invokeFunction, supabase } from '../../lib/supabase';
 
 type PaymentRow = {
   checkout_session_id: string;
-  auth_user_id: string;
+  auth_user_id: string | null;
   profile_id: string | null;
   purpose: string;
   payment_status: string;

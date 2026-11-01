@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { isUserAdmin, adminMfaSatisfied } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, EmailType } from '../_shared/dispatch-email.ts';
 import { isTransactionalMailConfigured } from '../_shared/transactional-mail.ts';
@@ -31,6 +31,9 @@ Deno.serve(async (req) => {
 
   if (!isUserAdmin(userData.user)) {
     return jsonResponse({ error: 'Forbidden' }, req, 403);
+  }
+  if (!adminMfaSatisfied(authHeader)) {
+    return jsonResponse({ error: 'Two-factor verification required', code: 'mfa_required' }, req, 403);
   }
 
   let body: {

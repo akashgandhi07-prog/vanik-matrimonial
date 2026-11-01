@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { adminPowerRole, isSupportAdmin, metaIsAdminFlag, isUserAdmin } from '../_shared/auth-admin.ts';
+import { adminPowerRole, isSupportAdmin, metaIsAdminFlag, isUserAdmin, adminMfaSatisfied } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, type EmailType } from '../_shared/dispatch-email.ts';
 import {
@@ -10,6 +10,12 @@ import {
 } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { replacePrimaryGalleryPhoto } from '../_shared/profile-photos.ts';
+import {
+  collectMemberStoragePaths,
+  memberDisplayLabel,
+  removeMemberStorage,
+  snapshotFeedbackNamesForProfiles,
+} from '../_shared/member-deletion.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 
@@ -40,52 +46,6 @@ type QueryErrorLike = {
   details?: string | null;
   hint?: string | null;
 };
-
-function memberDisplayLabel(
-  first: string | null | undefined,
-  surname: string | null | undefined,
-  referenceNumber: string | null | undefined
-): string {
-  const full = `${String(first ?? '').trim()} ${String(surname ?? '').trim()}`.trim();
-  const ref = String(referenceNumber ?? '').trim();
-  if (full && ref) return `${full} (${ref})`;
-  if (full) return full;
-  if (ref) return ref;
-  return '';
-}
-
-async function snapshotFeedbackNamesForProfiles(admin: { from: (table: string) => unknown }, profileIds: string[]) {
-  if (profileIds.length === 0) return;
-  const chunkSize = IN_LIST_CHUNK;
-  for (let i = 0; i < profileIds.length; i += chunkSize) {
-    const chunk = profileIds.slice(i, i + chunkSize);
-    const [{ data: profs }, { data: privs }] = await Promise.all([
-      admin.from('profiles').select('id, first_name, reference_number').in('id', chunk),
-      admin.from('member_private').select('profile_id, surname').in('profile_id', chunk),
-    ]);
-    const surnameBy = new Map(
-      (privs ?? []).map((r) => {
-        const row = r as { profile_id: string; surname: string | null };
-        return [row.profile_id, row.surname] as const;
-      })
-    );
-    for (const p of profs ?? []) {
-      const row = p as { id: string; first_name: string; reference_number: string | null };
-      const label = memberDisplayLabel(row.first_name, surnameBy.get(row.id) ?? null, row.reference_number);
-      if (!label) continue;
-      await admin
-        .from('feedback')
-        .update({ candidate_display_name: label })
-        .eq('candidate_id', row.id)
-        .is('candidate_display_name', null);
-      await admin
-        .from('feedback')
-        .update({ requester_display_name: label })
-        .eq('requester_id', row.id)
-        .is('requester_display_name', null);
-    }
-  }
-}
 
 function normalizeQueryError(label: string, err: unknown): string | null {
   if (!err) return null;
@@ -533,6 +493,9 @@ Deno.serve(async (req) => {
   if (userErr || !userData.user || !isUserAdmin(userData.user)) {
     return jsonResponse({ error: 'Forbidden' }, req, 403);
   }
+  if (!adminMfaSatisfied(authHeader)) {
+    return jsonResponse({ error: 'Two-factor verification required', code: 'mfa_required' }, req, 403);
+  }
 
   const callerId = userData.user.id;
 
@@ -819,44 +782,12 @@ Deno.serve(async (req) => {
     if (toDelete.length > 0) {
       const okProfileIds = toDelete.map((p) => p.profile_id);
 
-      const { data: photoRows } = await admin
-        .from('profile_photos')
-        .select('storage_path')
-        .in('profile_id', okProfileIds);
-      const photoPaths = new Set<string>();
-      for (const row of photoRows ?? []) {
-        const path = (row as { storage_path?: string }).storage_path;
-        if (path) photoPaths.add(path);
-      }
-      const { data: profExtras } = await admin
-        .from('profiles')
-        .select('photo_url, pending_photo_url')
-        .in('id', okProfileIds);
-      for (const row of profExtras ?? []) {
-        const r = row as { photo_url?: string | null; pending_photo_url?: string | null };
-        if (r.photo_url) photoPaths.add(r.photo_url);
-        if (r.pending_photo_url) photoPaths.add(r.pending_photo_url);
-      }
-      const photoList = [...photoPaths];
-      if (photoList.length > 0) {
-        const { error: remPh } = await admin.storage.from('profile-photos').remove(photoList);
-        if (remPh) console.error('delete_members_permanent profile-photos remove', remPh);
-      }
-
-      const { data: privRows } = await admin
-        .from('member_private')
-        .select('id_document_url')
-        .in('profile_id', okProfileIds);
-      const idPaths = [
-        ...new Set(
-          (privRows ?? [])
-            .map((row) => (row as { id_document_url?: string | null }).id_document_url)
-            .filter((x): x is string => typeof x === 'string' && x.length > 0)
-        ),
-      ];
-      if (idPaths.length > 0) {
-        const { error: remId } = await admin.storage.from('id-documents').remove(idPaths);
-        if (remId) console.error('delete_members_permanent id-documents remove', remId);
+      // Collect file paths first: the auth cascade removes the rows that point at
+      // them. Files are removed only for members whose login was actually deleted,
+      // so a failed deleteUser never leaves a live member without photos or ID.
+      const { byProfile: storageByProfile, error: pathErr } = await collectMemberStoragePaths(admin, okProfileIds);
+      if (pathErr) {
+        return jsonResponse({ error: `Could not look up member files, nothing deleted: ${pathErr}` }, req, 500);
       }
 
       await admin.from('admin_actions').update({ target_profile_id: null }).in('target_profile_id', okProfileIds);
@@ -873,6 +804,9 @@ Deno.serve(async (req) => {
           continue;
         }
         deleted.push(pid);
+        const paths = storageByProfile.get(pid);
+        const storageErrs = paths ? await removeMemberStorage(admin, paths) : [];
+        for (const e of storageErrs) console.error('delete_members_permanent storage remove', pid, e);
       }
     }
 
@@ -2008,174 +1942,6 @@ Deno.serve(async (req) => {
     );
   }
 
-  // One-off catch-up for the 2 Aug 2026 incident: approvals and one registration
-  // whose emails were lost when the mail library crashed the workers. Derives the
-  // affected members from the data (never a hard-coded list) and skips anyone who
-  // already has the email logged as sent, so it is safe to run more than once.
-  if (action === 'temp_fix_incident_emails') {
-    if (isSupportAdmin(userData.user)) {
-      return jsonResponse({ error: 'Support admin role cannot send emails' }, req, 403);
-    }
-    if (!isTransactionalMailConfigured()) {
-      return jsonResponse({ error: `Email is not configured. ${transactionalMailMissingReason()}` }, req, 500);
-    }
-    // Gmail blocked outbound mail from the evening of 2 Aug until the Brevo
-    // switch on 4 Aug; the window runs to "now" so everything in between is
-    // covered. email_log rows for blocked sends were flipped to 'failed'.
-    const WINDOW_START = '2026-08-02T00:00:00Z';
-    const WINDOW_END = new Date().toISOString();
-    const results: { label: string; email_type: string; outcome: string }[] = [];
-
-    const labelFor = async (profileId: string): Promise<string> => {
-      const { data: p } = await admin
-        .from('profiles')
-        .select('first_name, reference_number')
-        .eq('id', profileId)
-        .maybeSingle();
-      if (!p) return profileId.slice(0, 8);
-      return memberDisplayLabel(p.first_name as string, null, p.reference_number as string | null) || profileId.slice(0, 8);
-    };
-
-    const hasSentEmail = async (profileId: string, emailType: string): Promise<boolean> => {
-      const { count } = await admin
-        .from('email_log')
-        .select('id', { count: 'exact', head: true })
-        .eq('recipient_profile_id', profileId)
-        .eq('email_type', emailType)
-        .eq('status', 'sent');
-      return (count ?? 0) > 0;
-    };
-
-    // 1. Members approved during the incident window with no "account active" email.
-    const { data: acts, error: aErr } = await admin
-      .from('admin_actions')
-      .select('target_profile_id')
-      .eq('action_type', 'approved')
-      .gte('created_at', WINDOW_START)
-      .lt('created_at', WINDOW_END);
-    if (aErr) return jsonResponse({ error: aErr.message }, req, 500);
-    const approvedIds = [
-      ...new Set(
-        (acts ?? [])
-          .map((a) => (a as { target_profile_id: string | null }).target_profile_id)
-          .filter((x): x is string => !!x)
-      ),
-    ];
-    for (const pid of approvedIds) {
-      const label = await labelFor(pid);
-      if (await hasSentEmail(pid, 'registration_approved')) {
-        results.push({ label, email_type: 'registration_approved', outcome: 'already sent - skipped' });
-        continue;
-      }
-      const r = await dispatchEmail(admin, { type: 'registration_approved', recipientProfileId: pid });
-      results.push({
-        label,
-        email_type: 'registration_approved',
-        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
-      });
-    }
-
-    // 1b. Members rejected during the window with no rejection email - they
-    // don't know they need to fix and resubmit their application.
-    const { data: rejActs, error: rjErr } = await admin
-      .from('admin_actions')
-      .select('target_profile_id')
-      .eq('action_type', 'rejected')
-      .gte('created_at', WINDOW_START)
-      .lt('created_at', WINDOW_END);
-    if (rjErr) return jsonResponse({ error: rjErr.message }, req, 500);
-    const rejectedIds = [
-      ...new Set(
-        (rejActs ?? [])
-          .map((a) => (a as { target_profile_id: string | null }).target_profile_id)
-          .filter((x): x is string => !!x && !approvedIds.includes(x))
-      ),
-    ];
-    for (const pid of rejectedIds) {
-      const label = await labelFor(pid);
-      if (await hasSentEmail(pid, 'registration_rejected')) {
-        results.push({ label, email_type: 'registration_rejected', outcome: 'already sent - skipped' });
-        continue;
-      }
-      const { data: profRow } = await admin
-        .from('profiles')
-        .select('rejection_reason, status')
-        .eq('id', pid)
-        .maybeSingle();
-      if (!profRow || profRow.status !== 'rejected') {
-        results.push({ label, email_type: 'registration_rejected', outcome: 'no longer rejected - skipped' });
-        continue;
-      }
-      const r = await dispatchEmail(admin, {
-        type: 'registration_rejected',
-        recipientProfileId: pid,
-        extra_data: { reason: (profRow.rejection_reason as string | null) ?? 'See your application for details.' },
-      });
-      results.push({
-        label,
-        email_type: 'registration_rejected',
-        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
-      });
-    }
-
-    // 1c. Older rejected members (before the window) who got their rejection
-    // email but never resubmitted: one gentle "still open, fix and resubmit"
-    // nudge. Skipped once a followup has ever been sent, so it never repeats.
-    const { data: oldRejected, error: orErr } = await admin
-      .from('profiles')
-      .select('id, first_name')
-      .eq('status', 'rejected');
-    if (orErr) return jsonResponse({ error: orErr.message }, req, 500);
-    for (const row of (oldRejected ?? []) as { id: string; first_name: string }[]) {
-      if (rejectedIds.includes(row.id) || approvedIds.includes(row.id)) continue;
-      const label = await labelFor(row.id);
-      if (await hasSentEmail(row.id, 'rejection_followup')) {
-        results.push({ label, email_type: 'rejection_followup', outcome: 'already sent - skipped' });
-        continue;
-      }
-      const r = await dispatchEmail(admin, { type: 'rejection_followup', recipientProfileId: row.id });
-      results.push({
-        label,
-        email_type: 'rejection_followup',
-        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
-      });
-    }
-
-    // 2. Applicants who registered in the window with no confirmation email.
-    const { data: newProfs, error: npErr } = await admin
-      .from('profiles')
-      .select('id, first_name')
-      .gte('created_at', WINDOW_START)
-      .lt('created_at', WINDOW_END);
-    if (npErr) return jsonResponse({ error: npErr.message }, req, 500);
-    for (const row of (newProfs ?? []) as { id: string; first_name: string }[]) {
-      if (await hasSentEmail(row.id, 'registration_received')) continue;
-      const label = await labelFor(row.id);
-      const r = await dispatchEmail(admin, {
-        type: 'registration_received',
-        recipientProfileId: row.id,
-        extra_data: { first_name: row.first_name, resubmitted: false },
-      });
-      results.push({
-        label,
-        email_type: 'registration_received',
-        outcome: r.ok ? 'sent' : `failed: ${r.error ?? 'unknown'}`,
-      });
-    }
-
-    await admin.from('admin_actions').insert({
-      admin_user_id: userData.user.id,
-      target_profile_id: null,
-      action_type: 'bulk_pending_reminder',
-      notes: stripHtml(
-        `Temp Fix Email (2 Aug incident catch-up): ${results.map((r) => `${r.label} ${r.email_type} ${r.outcome}`).join('; ')}`,
-        2000
-      ),
-    });
-
-    return jsonResponse({ results }, req);
-  }
-
   if (action === 'update_member_record') {
     if (isSupportAdmin(userData.user)) {
       return jsonResponse({ error: 'Support admin role cannot edit member records' }, req, 403);
@@ -2990,15 +2756,14 @@ Deno.serve(async (req) => {
         400
       );
     }
-    const type = body.type === 'discount_percent' ? 'discount_percent' : 'free';
-    let discountPercent: number | null = null;
-    if (type === 'discount_percent') {
-      const n = Number(body.discount_percent);
-      if (!Number.isFinite(n) || n < 1 || n > 100) {
-        return jsonResponse({ error: 'discount_percent must be 1-100' }, req, 400);
-      }
-      discountPercent = n;
+    // Checkout has no partial-discount support, and registration treats any
+    // accepted coupon as "no payment", so a percent coupon would waive the whole
+    // fee. Only free-membership coupons can be created until checkout applies them.
+    if (body.type === 'discount_percent') {
+      return jsonResponse({ error: 'Discount % coupons are not supported yet - use a free coupon' }, req, 400);
     }
+    const type = 'free';
+    const discountPercent: number | null = null;
     const maxUses =
       body.max_uses != null && body.max_uses !== ''
         ? Math.floor(Number(body.max_uses))

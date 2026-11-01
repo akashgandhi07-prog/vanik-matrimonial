@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { invokeFunction, supabase } from '../../lib/supabase';
 import { MfaEnroll } from './MfaEnroll';
+import { MfaVerify } from './MfaVerify';
 import { useAdminGuard } from './useAdminGuard';
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
@@ -9,7 +10,7 @@ const navCls = ({ isActive }: { isActive: boolean }) =>
 
 export default function AdminLayout() {
   const navigate = useNavigate();
-  const { ok, mfaOk, denyReason, refresh, adminRole } = useAdminGuard();
+  const { ok, mfaOk, mfaStep, mfaFactorId, denyReason, refresh, adminRole } = useAdminGuard();
   const [wide, setWide] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 900px)').matches : true
   );
@@ -86,6 +87,9 @@ export default function AdminLayout() {
     return <div className="layout-max">Loading…</div>;
   }
   if (!mfaOk) {
+    if (mfaStep === 'verify' && mfaFactorId) {
+      return <MfaVerify factorId={mfaFactorId} onDone={() => void refresh()} />;
+    }
     return <MfaEnroll onDone={() => void refresh()} />;
   }
 
