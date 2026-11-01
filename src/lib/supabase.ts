@@ -13,7 +13,9 @@ if (!url || !anon) {
   console.warn('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
 }
 
-export const supabase = createClient(url ?? '', anon ?? '', {
+// supabase-js throws on an empty URL, which would crash the build-time prerender wherever the env vars
+// aren't set (e.g. Vercel previews of the second project). Prerendered pages never call Supabase.
+export const supabase = createClient(url || 'http://localhost', anon || 'missing-anon-key', {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
