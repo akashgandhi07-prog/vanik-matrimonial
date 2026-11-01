@@ -46,11 +46,12 @@ export function sessionAal(authHeader: string | null): string | null {
 }
 
 /**
- * Admins must have completed their TOTP step this session (aal2); a password
- * alone is not enough. ADMIN_MFA_REQUIRED=false switches this off temporarily,
- * e.g. while the admin UI that prompts for the code is still being deployed.
+ * With ADMIN_MFA_REQUIRED=true, admins must have completed their TOTP step this
+ * session (aal2); a password alone is not enough. Opt-in so it can be switched
+ * on only once the admin UI that prompts for the code is live - otherwise admins
+ * would get 403s with nowhere to enter it.
  */
 export function adminMfaSatisfied(authHeader: string | null): boolean {
-  if (Deno.env.get('ADMIN_MFA_REQUIRED')?.trim().toLowerCase() === 'false') return true;
+  if (Deno.env.get('ADMIN_MFA_REQUIRED')?.trim().toLowerCase() !== 'true') return true;
   return sessionAal(authHeader) === 'aal2';
 }
