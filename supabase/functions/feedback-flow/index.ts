@@ -187,16 +187,42 @@ Deno.serve(async (req) => {
     requesterId = myId;
   }
 
-  const [{ data: candProf }, { data: candPriv }, { data: reqProf }, { data: reqPriv }] = await Promise.all([
-    admin.from('profiles').select('first_name, reference_number').eq('id', candidateId).single(),
-    admin.from('member_private').select('surname').eq('profile_id', candidateId).maybeSingle(),
-    requesterId
-      ? admin.from('profiles').select('first_name, reference_number').eq('id', requesterId).single()
-      : Promise.resolve({ data: null }),
-    requesterId
-      ? admin.from('member_private').select('surname').eq('profile_id', requesterId).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const [{ data: existingFb }, { data: candProf }, { data: candPriv }, { data: reqProf }, { data: reqPriv }] =
+    await Promise.all([
+      admin
+        .from('feedback')
+        .select('id')
+        .eq('request_id', requestId)
+        .eq('candidate_id', candidateId)
+        .eq('direction', direction)
+        .limit(1)
+        .maybeSingle(),
+      admin.from('profiles').select('first_name, reference_number').eq('id', candidateId).single(),
+      admin.from('member_private').select('surname').eq('profile_id', candidateId).maybeSingle(),
+      requesterId
+        ? admin.from('profiles').select('first_name, reference_number').eq('id', requesterId).single()
+        : Promise.resolve({ data: null }),
+      requesterId
+        ? admin.from('member_private').select('surname').eq('profile_id', requesterId).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+  if (existingFb?.id) {
+    return jsonResponse({ error: 'already_submitted' }, req, 409);
+  }
+
+  if (tokenRowId) {
+    const { data: claimed, error: claimErr } = await admin
+      .from('feedback_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('id', tokenRowId)
+      .is('used_at', null)
+      .select('id')
+      .maybeSingle();
+    if (claimErr || !claimed) {
+      return jsonResponse({ error: 'token_used' }, req, 403);
+    }
+  }
 
   const label = (
     first: string | null | undefined,
@@ -235,11 +261,10 @@ Deno.serve(async (req) => {
     is_flagged,
   });
   if (insErr) {
+    if (tokenRowId) {
+      await admin.from('feedback_tokens').update({ used_at: null }).eq('id', tokenRowId);
+    }
     return jsonResponse({ error: insErr.message }, req, 500);
-  }
-
-  if (tokenRowId) {
-    await admin.from('feedback_tokens').update({ used_at: new Date().toISOString() }).eq('id', tokenRowId);
   }
 
   return jsonResponse({ ok: true }, req);

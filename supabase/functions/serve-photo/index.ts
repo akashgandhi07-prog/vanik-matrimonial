@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { adminMfaSatisfied, isUserAdmin } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
+import { hasMembershipAccess } from '../_shared/membership.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -36,21 +37,28 @@ Deno.serve(async (req) => {
 
   const { data: requester } = await admin
     .from('profiles')
-    .select('id, auth_user_id, status, membership_expires_at')
+    .select('id, auth_user_id, status, hidden_reason, membership_expires_at')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
 
   // Admin photo access needs the TOTP step too, same as the admin functions.
   const isAdmin = isUserAdmin(userData.user) && adminMfaSatisfied(authHeader);
+  const ownsTarget = Boolean(requester && requester.id === profileId);
 
   if (!isAdmin) {
     if (!requester) {
       return jsonResponse({ error: 'Profile required' }, req, 403);
     }
 
-    const ownsTarget = requester.id === profileId;
-
     if (!ownsTarget) {
+      if (
+        requester.status !== 'active' ||
+        requester.hidden_reason === 'admin' ||
+        !hasMembershipAccess(requester.membership_expires_at)
+      ) {
+        return jsonResponse({ error: 'Membership not active' }, req, 403);
+      }
+
       // Non-admin members may view photos of profiles they have requested, and
       // (mutual introductions) of members who have requested THEM.
       const { count } = await admin
@@ -81,6 +89,20 @@ Deno.serve(async (req) => {
     .eq('id', profileId)
     .single();
 
+  if (!target) {
+    return jsonResponse({ error: 'No photo' }, req, 404);
+  }
+
+  if (!isAdmin && !ownsTarget) {
+    if (
+      target.status === 'closed' ||
+      target.status === 'rejected' ||
+      target.hidden_reason === 'admin'
+    ) {
+      return jsonResponse({ error: 'Profile no longer available' }, req, 403);
+    }
+  }
+
   const { data: photoRows } = await admin
     .from('profile_photos')
     .select('storage_path, is_primary')
@@ -91,12 +113,13 @@ Deno.serve(async (req) => {
   const pathsFromTable =
     photoRows?.map((r) => r.storage_path).filter((p): p is string => typeof p === 'string' && p.length > 0) ?? [];
   const uniquePaths = [...new Set(pathsFromTable)];
-  const storagePaths =
+  const storagePaths = (
     uniquePaths.length > 0
       ? uniquePaths
       : target?.photo_url
         ? [target.photo_url]
-        : [];
+        : []
+  ).filter((p) => !p.includes('..') && !p.includes('\\'));
 
   if (!storagePaths.length) {
     return jsonResponse({ error: 'No photo' }, req, 404);

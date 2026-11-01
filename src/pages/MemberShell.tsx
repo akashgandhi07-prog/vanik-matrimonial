@@ -84,10 +84,14 @@ function ReferralBanner() {
 }
 
 function MemberLayoutBody() {
-  const { profile, loadAll } = useMemberArea();
+  const { profile, bookmarks, requestersOfMe, archivedRequests, feedbackBlocking, loadAll } = useMemberArea();
   const [searchParams, setSearchParams] = useSearchParams();
   const [renewalPaidNotice, setRenewalPaidNotice] = useState(false);
   const [unpausing, setUnpausing] = useState(false);
+
+  const activeRequestersCount = requestersOfMe.filter(
+    (r) => !archivedRequests.received.has(r.request_id)
+  ).length;
   useEffect(() => {
     if (searchParams.get('checkout') !== 'success') return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Stripe return URL triggers one-shot toast before params are stripped
@@ -227,15 +231,57 @@ function MemberLayoutBody() {
           <nav className="member-dashboard-nav" aria-label="Member dashboard">
             {(
               [
-                ['/dashboard/browse', 'Browse'],
-                ['/dashboard/saved', 'Saved profiles'],
-                ['/dashboard/requests', 'My requests'],
-                ['/dashboard/my-profile', 'My profile'],
-                ['/dashboard/referrals', 'Referrals'],
+                ['/dashboard/browse', 'Browse', null],
+                [
+                  '/dashboard/saved',
+                  bookmarks.length > 0 ? `Saved (${bookmarks.length})` : 'Saved profiles',
+                  null,
+                ],
+                [
+                  '/dashboard/requests',
+                  'My requests',
+                  activeRequestersCount > 0
+                    ? {
+                        count: activeRequestersCount,
+                        title: `${activeRequestersCount} ${activeRequestersCount === 1 ? 'member has' : 'members have'} requested your details`,
+                        urgent: false,
+                      }
+                    : feedbackBlocking
+                      ? {
+                          count: '!',
+                          title: 'Outstanding feedback required before new requests',
+                          urgent: true,
+                        }
+                      : null,
+                ],
+                ['/dashboard/my-profile', 'My profile', null],
+                ['/dashboard/referrals', 'Referrals', null],
               ] as const
-            ).map(([to, label]) => (
-              <NavLink key={to} to={to} className={navCls}>
-                {label}
+            ).map(([to, label, badge]) => (
+              <NavLink key={to} to={to} className={navCls} title={badge?.title}>
+                <span>{label}</span>
+                {badge && (
+                  <span
+                    aria-label={badge.title}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: 20,
+                      height: 20,
+                      padding: '0 6px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      background: badge.urgent ? 'var(--color-warning)' : 'var(--color-accent-soft)',
+                      color: badge.urgent ? '#fff' : 'var(--color-primary)',
+                      border: badge.urgent ? 'none' : '1px solid rgba(123, 46, 59, 0.25)',
+                    }}
+                  >
+                    {badge.count}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

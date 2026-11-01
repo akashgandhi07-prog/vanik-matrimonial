@@ -43,11 +43,12 @@ Deno.serve(async (req) => {
 
   const uid = userData.user.id;
 
-  let { data: profile, error: pErr } = await admin
+  const { data: initialProfile, error: pErr } = await admin
     .from('profiles')
     .select('*')
     .eq('auth_user_id', uid)
     .maybeSingle();
+  let profile = initialProfile;
 
   if (pErr) {
     console.error('member-bootstrap profile by auth_user_id', pErr.message);
@@ -84,13 +85,17 @@ Deno.serve(async (req) => {
         const currentAuth = p2.auth_user_id as string;
         if (currentAuth === uid) {
           profile = p2;
-        } else {
+        } else if (userData.user.email_confirmed_at) {
           let previousAuthGone = false;
           try {
             const { data: uOld, error: uOldErr } = await admin.auth.admin.getUserById(currentAuth);
-            previousAuthGone = !!uOldErr || !uOld?.user;
+            const isNotFoundErr =
+              !!uOldErr &&
+              ((uOldErr as { status?: number }).status === 404 ||
+                /user.*not.*found/i.test(uOldErr.message ?? ''));
+            previousAuthGone = (!uOldErr && !uOld?.user) || isNotFoundErr;
           } catch {
-            previousAuthGone = true;
+            previousAuthGone = false;
           }
 
           if (previousAuthGone) {

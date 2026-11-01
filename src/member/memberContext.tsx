@@ -14,6 +14,15 @@ import { isAdminUser } from "../lib/auth";
 import { profileNeedsMembershipExpiredRoute } from "../lib/memberStatus";
 import { newErrorCode, reportError } from "../lib/errorLog";
 import { invokeFunction, supabase } from "../lib/supabase";
+import {
+  computeMonthlyWindow,
+  computeTrayCapacity,
+  computeWeeklyWindow,
+  effectiveMonthlyCap,
+  effectiveWeeklyCap,
+  hasOutstandingFeedbackBlock,
+  type QuotaWindow,
+} from "./requestQuota";
 
 export type ProfileRow = {
   id: string;
@@ -36,14 +45,14 @@ export type ProfileRow = {
   town_country_of_origin: string | null;
   future_settlement_plans: string | null;
   hobbies: string | null;
-  photo_url: string | null;
-  pending_photo_url: string | null;
+  photo_url?: string | null;
+  pending_photo_url?: string | null;
   photo_status: string;
   status: string;
   /** Why this profile is off the register; null when listed. */
   hidden_reason: 'member_paused' | 'matched' | 'admin' | null;
   membership_expires_at: string | null;
-  rejection_reason: string | null;
+  rejection_reason?: string | null;
 };
 
 export type MemberPrivateRow = {
@@ -104,6 +113,17 @@ type MemberCtx = {
   reverseFeedbackKeys: Set<string>;
   /** request_ids this member archived, by direction ("made" / "received"). */
   archivedRequests: { made: Set<string>; received: Set<string> };
+  /** Candidate IDs currently in the member's introduction request tray (shared across Browse & Saved). */
+  tray: string[];
+  setTray: (next: string[] | ((prev: string[]) => string[])) => void;
+  toggleTray: (id: string) => void;
+  weeklyCap: number;
+  monthlyCap: number;
+  weeklyWindow: QuotaWindow;
+  monthlyWindow: QuotaWindow;
+  trayMax: number;
+  atTrayCapacity: boolean;
+  feedbackBlocking: boolean;
   notice: { type: 'error' | 'success'; text: string } | null;
   clearNotice: () => void;
   loadAll: () => Promise<void>;
@@ -147,6 +167,8 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
     made: new Set(),
     received: new Set(),
   });
+  const [rawTray, setRawTray] = useState<string[]>([]);
+  const trayHydratedForRef = useRef<string | null>(null);
   const [notice, setNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const mountedRef = useRef(false);
   /** Serialize loadAll - concurrent runs (Strict Mode + SIGNED_IN) could finish out of order and leave profile null. */
@@ -277,6 +299,22 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           return;
         }
         setProfile(p);
+        if (trayHydratedForRef.current !== p.id) {
+          trayHydratedForRef.current = p.id;
+          try {
+            const saved = sessionStorage.getItem(`vmr_request_tray_v1:${p.id}`);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) {
+                setRawTray(parsed.filter((x): x is string => typeof x === "string"));
+              }
+            } else {
+              setRawTray([]);
+            }
+          } catch {
+            setRawTray([]);
+          }
+        }
         setProfileConfirmedMissing(false);
         setErrorCode(null);
         if (privateFromBootstrap !== undefined) {
@@ -338,7 +376,9 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
           // browse_opposite_profiles: no hidden profiles in the browse list either way.
           const { data, error } = await supabase
             .from("profiles")
-            .select("*")
+            .select(
+              "id, reference_number, gender, seeking_gender, first_name, age, created_at, updated_at, education, job_title, height_cm, weight_kg, diet, religion, community, nationality, place_of_birth, town_country_of_origin, future_settlement_plans, hobbies, photo_status, status, hidden_reason, membership_expires_at, contact_request_quota_bonus"
+            )
             .neq("id", myId)
             .is("hidden_reason", null);
           if (error) {
@@ -545,11 +585,83 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
         setRequestersOfMe([]);
         setReverseFeedbackKeys(new Set());
         setArchivedRequests({ made: new Set(), received: new Set() });
+        setRawTray([]);
+        trayHydratedForRef.current = null;
         navigate("/", { replace: true });
       }
     });
     return () => sub.subscription.unsubscribe();
   }, [loadAll, navigate]);
+
+  const weeklyCap = useMemo(
+    () => effectiveWeeklyCap(privateRow?.contact_request_weekly_bonus ?? 0),
+    [privateRow?.contact_request_weekly_bonus],
+  );
+  const monthlyCap = useMemo(
+    () => effectiveMonthlyCap(privateRow?.contact_request_monthly_bonus ?? 0),
+    [privateRow?.contact_request_monthly_bonus],
+  );
+  const weeklyWindow = useMemo(
+    () => computeWeeklyWindow(requests, weeklyCap),
+    [requests, weeklyCap],
+  );
+  const monthlyWindow = useMemo(
+    () => computeMonthlyWindow(requests, monthlyCap),
+    [requests, monthlyCap],
+  );
+  const trayMax = useMemo(
+    () =>
+      computeTrayCapacity(
+        weeklyWindow.remaining,
+        monthlyWindow.remaining,
+        weeklyCap,
+        monthlyCap,
+      ),
+    [weeklyWindow.remaining, monthlyWindow.remaining, weeklyCap, monthlyCap],
+  );
+  const feedbackBlocking = useMemo(
+    () => hasOutstandingFeedbackBlock(requests, feedbackKeys),
+    [requests, feedbackKeys],
+  );
+
+  const requestedAndIntroducedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of requests) {
+      for (const cid of (r.candidate_ids as string[]) ?? []) ids.add(cid);
+    }
+    for (const r of requestersOfMe) ids.add(r.id);
+    return ids;
+  }, [requests, requestersOfMe]);
+
+  const tray = useMemo(() => {
+    const filtered = rawTray.filter((id) => !requestedAndIntroducedIds.has(id));
+    return filtered.slice(0, trayMax);
+  }, [rawTray, requestedAndIntroducedIds, trayMax]);
+
+  const atTrayCapacity = tray.length >= trayMax;
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    try {
+      sessionStorage.setItem(`vmr_request_tray_v1:${profile.id}`, JSON.stringify(tray));
+    } catch {
+      /* sessionStorage unavailable */
+    }
+  }, [profile?.id, tray]);
+
+  const toggleTray = useCallback(
+    (id: string) => {
+      setRawTray((prev) => {
+        const clean = prev.filter((x) => !requestedAndIntroducedIds.has(x)).slice(0, trayMax);
+        if (clean.includes(id)) {
+          return clean.filter((x) => x !== id);
+        }
+        if (feedbackBlocking || clean.length >= trayMax) return clean;
+        return [...clean, id];
+      });
+    },
+    [feedbackBlocking, requestedAndIntroducedIds, trayMax],
+  );
 
   const toggleBookmark = useCallback(
     async (id: string) => {
@@ -601,6 +713,16 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       requestersOfMe,
       reverseFeedbackKeys,
       archivedRequests,
+      tray,
+      setTray: setRawTray,
+      toggleTray,
+      weeklyCap,
+      monthlyCap,
+      weeklyWindow,
+      monthlyWindow,
+      trayMax,
+      atTrayCapacity,
+      feedbackBlocking,
       notice,
       clearNotice: () => setNotice(null),
       loadAll,
@@ -622,6 +744,15 @@ export function MemberDataProvider({ children }: { children: ReactNode }) {
       requestersOfMe,
       reverseFeedbackKeys,
       archivedRequests,
+      tray,
+      toggleTray,
+      weeklyCap,
+      monthlyCap,
+      weeklyWindow,
+      monthlyWindow,
+      trayMax,
+      atTrayCapacity,
+      feedbackBlocking,
       notice,
       loadAll,
       toggleBookmark,

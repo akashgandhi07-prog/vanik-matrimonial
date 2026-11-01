@@ -2,12 +2,15 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { isSupportAdmin, isUserAdmin, adminMfaSatisfied } from '../_shared/auth-admin.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
+import { stripHtml } from '../_shared/sanitize.ts';
 
-function randomPassword(len = 16): string {
+function randomPassword(len = 20): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  const bytes = new Uint32Array(len);
+  crypto.getRandomValues(bytes);
   let s = '';
   for (let i = 0; i < len; i++) {
-    s += chars[Math.floor(Math.random() * chars.length)];
+    s += chars[bytes[i]! % chars.length];
   }
   return s;
 }
@@ -52,11 +55,11 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Invalid JSON' }, req, 400);
   }
 
-  const email = String(body.email ?? '').trim().toLowerCase();
+  const email = stripHtml(String(body.email ?? ''), 254).trim().toLowerCase();
   if (!email) {
     return jsonResponse({ error: 'email is required' }, req, 400);
   }
-  const firstName = String(body.first_name ?? '').trim();
+  const firstName = stripHtml(String(body.first_name ?? ''), 80).trim();
   if (!firstName) {
     return jsonResponse({ error: 'first_name is required' }, req, 400);
   }
@@ -73,7 +76,9 @@ Deno.serve(async (req) => {
   }
   const userId = authData.user.id;
 
-  const status = String(body.status ?? 'active');
+  const allowedStatuses = new Set(['active', 'pending', 'expired', 'rejected', 'closed']);
+  const rawStatus = String(body.status ?? 'active').trim();
+  const status = allowedStatuses.has(rawStatus) ? rawStatus : 'active';
   const membershipExpiresAt = body.membership_expires_at
     ? String(body.membership_expires_at)
     : null;
@@ -97,17 +102,17 @@ Deno.serve(async (req) => {
       gender: genderNorm,
       seeking_gender: seekingGender,
       status,
-      community: body.community ? String(body.community) : null,
-      religion: body.religion ? String(body.religion) : null,
-      nationality: body.nationality ? String(body.nationality) : null,
-      place_of_birth: body.place_of_birth ? String(body.place_of_birth) : null,
-      town_country_of_origin: body.town_country_of_origin ? String(body.town_country_of_origin) : null,
-      education: body.education ? String(body.education) : null,
-      job_title: body.job_title ? String(body.job_title) : null,
+      community: body.community ? stripHtml(String(body.community), 120) : null,
+      religion: body.religion ? stripHtml(String(body.religion), 60) : null,
+      nationality: body.nationality ? stripHtml(String(body.nationality), 120) : null,
+      place_of_birth: body.place_of_birth ? stripHtml(String(body.place_of_birth), 200) : null,
+      town_country_of_origin: body.town_country_of_origin ? stripHtml(String(body.town_country_of_origin), 200) : null,
+      education: body.education ? stripHtml(String(body.education), 500) : null,
+      job_title: body.job_title ? stripHtml(String(body.job_title), 200) : null,
       height_cm: body.height_cm != null ? Number(body.height_cm) : null,
-      diet: body.diet ? String(body.diet) : null,
-      hobbies: body.hobbies ? String(body.hobbies) : null,
-      future_settlement_plans: body.future_settlement_plans ? String(body.future_settlement_plans) : null,
+      diet: body.diet ? stripHtml(String(body.diet), 40) : null,
+      hobbies: body.hobbies ? stripHtml(String(body.hobbies), 2000) : null,
+      future_settlement_plans: body.future_settlement_plans ? stripHtml(String(body.future_settlement_plans), 1000) : null,
       membership_expires_at: membershipExpiresAt,
       hidden_reason: listed ? null : 'admin',
     })
@@ -126,13 +131,13 @@ Deno.serve(async (req) => {
   const { error: privateErr } = await admin.from('member_private').insert({
     profile_id: profileId,
     email,
-    mobile_phone: body.mobile_phone ? String(body.mobile_phone) : null,
+    mobile_phone: body.mobile_phone ? stripHtml(String(body.mobile_phone), 40) : null,
     date_of_birth: body.date_of_birth ? String(body.date_of_birth) : null,
-    surname: body.surname ? String(body.surname) : null,
-    home_address_line1: body.home_address_line1 ? String(body.home_address_line1) : null,
-    home_address_city: body.city ? String(body.city) : null,
-    home_address_postcode: body.postcode ? String(body.postcode) : null,
-    home_address_country: body.country ? String(body.country) : 'UK',
+    surname: body.surname ? stripHtml(String(body.surname), 80) : null,
+    home_address_line1: body.home_address_line1 ? stripHtml(String(body.home_address_line1), 200) : null,
+    home_address_city: body.city ? stripHtml(String(body.city), 120) : null,
+    home_address_postcode: body.postcode ? stripHtml(String(body.postcode), 32) : null,
+    home_address_country: body.country ? stripHtml(String(body.country), 80) : 'UK',
   });
 
   if (privateErr) {

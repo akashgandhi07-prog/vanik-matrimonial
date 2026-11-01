@@ -219,8 +219,11 @@ export default function MembershipExpired() {
         renewal_success_path: '/renew-membership',
         renewal_cancel_path: path,
       })) as { url?: string };
-      if (res.url) window.location.href = res.url;
-      else throw new Error('No checkout URL returned');
+      if (res.url && res.url.startsWith('https://checkout.stripe.com/')) {
+        window.location.href = res.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'Could not start checkout');
     } finally {

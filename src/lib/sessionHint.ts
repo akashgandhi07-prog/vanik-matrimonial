@@ -17,3 +17,20 @@ export function certainlySignedOut(): boolean {
     return false;
   }
 }
+
+/** Wipes any saved registration form draft from browser storage (e.g. on sign-out). */
+export function clearRegistrationDraft(): void {
+  if (typeof window === 'undefined') return;
+  for (const key of ['vmr_registration_v1', 'vmr_registration_owner_v1']) {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  }
+}

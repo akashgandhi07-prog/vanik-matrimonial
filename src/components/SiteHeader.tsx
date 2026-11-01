@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { clearRegistrationDraft } from '../lib/sessionHint';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSiteSession } from './SessionContext';
 
@@ -28,6 +29,7 @@ export function SiteHeader() {
   }, [menuOpen]);
 
   async function signOut() {
+    clearRegistrationDraft();
     try {
       await supabase.auth.signOut();
     } catch {

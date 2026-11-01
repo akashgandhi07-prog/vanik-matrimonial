@@ -1,21 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { BrowseCardSkeleton } from '../components/BrowseCardSkeleton';
 import ProfileCard from '../components/ProfileCard';
 import { DualRangeSlider } from '../components/DualRangeSlider';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ProfileModal } from '../member/ProfileModal';
+import { RequestTrayBar } from '../member/RequestTrayBar';
 import { useMemberArea } from '../member/memberContext';
 import type { ProfileRow } from '../member/memberContext';
-import {
-  computeMonthlyWindow,
-  computeTrayCapacity,
-  computeWeeklyWindow,
-  effectiveMonthlyCap,
-  effectiveWeeklyCap,
-  hasOutstandingFeedbackBlock,
-  maxCandidatesPerSubmit,
-} from '../member/requestQuota';
+import { maxCandidatesPerSubmit } from '../member/requestQuota';
 import { IntroductionSteps } from '../member/IntroductionSteps';
 import {
   cmToFeetInches,
@@ -23,7 +16,7 @@ import {
   HEIGHT_CM_MAX,
   HEIGHT_CM_MIN,
 } from '../lib/heights';
-import { EdgeFunctionHttpError, invokeFunction, supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 const AGE_MIN = 18;
 const AGE_MAX = 80;
@@ -31,12 +24,14 @@ const DEFAULT_AGE: [number, number] = [18, 60];
 const DEFAULT_HEIGHT: [number, number] = [142, 198];
 const DIET_ALL = ['Veg', 'Non-veg', 'Vegan', 'Jain', 'Pescetarian'] as const;
 const RELIGION_ALL = ['Jain', 'Hindu', 'Other'] as const;
+const NEW_PROFILE_WINDOW_MS = 14 * 86400000;
 
 type BrowseFilters = {
   ageRange: [number, number];
   dietF: string[];
   religionF: string[];
   heightRange: [number, number];
+  keyword: string;
   sort: 'newest' | 'age';
 };
 
@@ -46,6 +41,7 @@ function defaultFilters(): BrowseFilters {
     dietF: [...DIET_ALL],
     religionF: [...RELIGION_ALL],
     heightRange: [...DEFAULT_HEIGHT],
+    keyword: '',
     sort: 'age',
   };
 }
@@ -56,6 +52,7 @@ function cloneFilters(filters: BrowseFilters): BrowseFilters {
     dietF: [...filters.dietF],
     religionF: [...filters.religionF],
     heightRange: [...filters.heightRange],
+    keyword: filters.keyword,
     sort: filters.sort,
   };
 }
@@ -72,6 +69,7 @@ function filtersEqual(a: BrowseFilters, b: BrowseFilters): boolean {
     a.heightRange[1] === b.heightRange[1] &&
     sameStringArray(a.dietF, b.dietF) &&
     sameStringArray(a.religionF, b.religionF) &&
+    a.keyword.trim().toLowerCase() === b.keyword.trim().toLowerCase() &&
     a.sort === b.sort
   );
 }
@@ -81,21 +79,58 @@ function inFilterSet(value: string, allowed: readonly string[]): boolean {
   return allowed.some((a) => a.toLowerCase() === v);
 }
 
+function matchesKeyword(c: ProfileRow, rawKeyword: string): boolean {
+  const q = rawKeyword.trim().toLowerCase();
+  if (!q) return true;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const haystack = [
+    c.place_of_birth,
+    c.town_country_of_origin,
+    c.future_settlement_plans,
+    c.nationality,
+    c.job_title,
+    c.education,
+    c.hobbies,
+    c.community,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function matchesBrowseFilters(c: ProfileRow, filters: BrowseFilters): boolean {
+  const { ageRange, dietF, religionF, heightRange, keyword } = filters;
+  if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
+  if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
+  if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
+  const h = c.height_cm;
+  if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
+  if (!matchesKeyword(c, keyword)) return false;
+  return true;
+}
+
 function effectiveSeeking(p: ProfileRow): 'Male' | 'Female' | 'Both' {
   return p.seeking_gender ?? (p.gender === 'Female' ? 'Male' : 'Female');
 }
 
 export default function MemberBrowse() {
-  const navigate = useNavigate();
   const {
     profile,
-    privateRow,
     candidates,
     bookmarks,
     toggleBookmark,
     requests,
-    feedbackKeys,
     requestersOfMe,
+    tray,
+    toggleTray,
+    weeklyCap,
+    monthlyCap,
+    weeklyWindow,
+    monthlyWindow,
+    trayMax,
+    atTrayCapacity,
+    feedbackBlocking,
     loadAll,
     notice,
     clearNotice,
@@ -104,19 +139,27 @@ export default function MemberBrowse() {
   const [draftFilters, setDraftFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [appliedFilters, setAppliedFilters] = useState<BrowseFilters>(() => defaultFilters());
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
-  const [tray, setTray] = useState<string[]>([]);
-  const [trayDrawerOpen, setTrayDrawerOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<ProfileRow | null>(null);
-  const [submitError, setSubmitError] = useState<{
-    type: 'weekly_limit' | 'monthly_limit' | 'feedback_required' | 'already_requested' | 'generic';
-    message: string;
-    requestIds?: string[];
-  } | null>(null);
   const [seekUpdating, setSeekUpdating] = useState(false);
   const [seekError, setSeekError] = useState<string | null>(null);
-  const [traySubmitting, setTraySubmitting] = useState(false);
   const isMobileFilters = useMediaQuery('(max-width: 639px)');
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
+  const [mountTimeMs] = useState(() => Date.now());
+
+  function updateDraftFilters(updater: (prev: BrowseFilters) => BrowseFilters) {
+    setDraftFilters((prev) => {
+      const next = updater(prev);
+      // On desktop, auto-apply valid filter changes immediately so the grid updates live.
+      if (
+        !isMobileFilters &&
+        next.ageRange[0] <= next.ageRange[1] &&
+        next.heightRange[0] <= next.heightRange[1]
+      ) {
+        setAppliedFilters(cloneFilters(next));
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!isMobileFilters || !filtersSheetOpen) return;
@@ -163,15 +206,8 @@ export default function MemberBrowse() {
 
   const attributeFiltered = useMemo(() => {
     if (!profile) return [];
-    const { ageRange, dietF, religionF, heightRange, sort } = appliedFilters;
-    let rows = candidates.filter((c) => {
-      if (c.age != null && (c.age < ageRange[0] || c.age > ageRange[1])) return false;
-      if (dietF.length && c.diet && !inFilterSet(c.diet, dietF)) return false;
-      if (religionF.length && c.religion && !inFilterSet(c.religion, religionF)) return false;
-      const h = c.height_cm;
-      if (h != null && h > 0 && (h < heightRange[0] || h > heightRange[1])) return false;
-      return true;
-    });
+    const { sort } = appliedFilters;
+    let rows = candidates.filter((c) => matchesBrowseFilters(c, appliedFilters));
     const requestedRank = (id: string) => (requestedCandidateIds.has(id) ? 1 : 0);
     rows = [...rows].sort((a, b) => {
       const byRequested = requestedRank(a.id) - requestedRank(b.id);
@@ -183,6 +219,14 @@ export default function MemberBrowse() {
     });
     return rows;
   }, [profile, candidates, appliedFilters, requestedCandidateIds]);
+
+  const draftMatchCount = useMemo(() => {
+    if (!profile) return 0;
+    const rows = candidates.filter((c) => matchesBrowseFilters(c, draftFilters));
+    if (browseScope === 'introduced') return rows.filter((c) => introducedIds.has(c.id)).length;
+    if (browseScope === 'new') return rows.filter((c) => !introducedIds.has(c.id)).length;
+    return rows.length;
+  }, [profile, candidates, draftFilters, browseScope, introducedIds]);
 
   const scopeCounts = useMemo(() => {
     let introduced = 0;
@@ -198,10 +242,8 @@ export default function MemberBrowse() {
 
   const filtersActive = useMemo(() => {
     const defaults = defaultFilters();
-    return (
-      !filtersEqual(appliedFilters, defaults)
-    );
-  }, [appliedFilters]);
+    return !filtersEqual(appliedFilters, defaults) || !filtersEqual(draftFilters, defaults);
+  }, [appliedFilters, draftFilters]);
 
   const pendingFilterChanges = useMemo(() => {
     return !filtersEqual(draftFilters, appliedFilters);
@@ -231,119 +273,7 @@ export default function MemberBrowse() {
         ? 'Minimum height cannot be greater than maximum height.'
         : null;
 
-  const weeklyCap = useMemo(
-    () => effectiveWeeklyCap(privateRow?.contact_request_weekly_bonus ?? 0),
-    [privateRow?.contact_request_weekly_bonus]
-  );
-  const monthlyCap = useMemo(
-    () => effectiveMonthlyCap(privateRow?.contact_request_monthly_bonus ?? 0),
-    [privateRow?.contact_request_monthly_bonus]
-  );
-  const weeklyWindow = useMemo(() => computeWeeklyWindow(requests, weeklyCap), [requests, weeklyCap]);
-  const monthlyWindow = useMemo(() => computeMonthlyWindow(requests, monthlyCap), [requests, monthlyCap]);
-  const trayMax = useMemo(
-    () => computeTrayCapacity(weeklyWindow.remaining, monthlyWindow.remaining, weeklyCap, monthlyCap),
-    [weeklyWindow.remaining, monthlyWindow.remaining, weeklyCap, monthlyCap]
-  );
-  const feedbackBlocking = useMemo(
-    () => hasOutstandingFeedbackBlock(requests, feedbackKeys),
-    [requests, feedbackKeys]
-  );
-
-  const atTrayCapacity = tray.length >= trayMax;
-
-  useEffect(() => {
-    if (tray.length > trayMax) setTray((t) => t.slice(0, trayMax));
-  }, [trayMax, tray.length]);
-
   if (!profile) return null;
-
-  function addTray(id: string) {
-    if (tray.includes(id)) {
-      setTray((t) => t.filter((x) => x !== id));
-      return;
-    }
-    if (feedbackBlocking || tray.length >= trayMax) return;
-    setTray((t) => [...t, id]);
-  }
-
-  async function submitTray() {
-    if (!profile || tray.length === 0 || feedbackBlocking || traySubmitting) return;
-    setSubmitError(null);
-    const candidate_ids = [...new Set(tray.map((id) => id.trim().toLowerCase()).filter(Boolean))];
-    if (candidate_ids.length === 0) {
-      setSubmitError({
-        type: 'generic',
-        message: 'No valid profiles selected. Refresh the page and add people from the list again.',
-      });
-      return;
-    }
-    setTraySubmitting(true);
-    try {
-      const res = (await invokeFunction('submit-contact-request', {
-        candidate_ids,
-      })) as {
-        error?: string;
-        message?: string;
-        request_id?: string;
-        request_ids?: string[];
-      };
-      if (res.error) {
-        throw new EdgeFunctionHttpError(res.message || String(res.error), {
-          code: typeof res.error === 'string' ? res.error : undefined,
-          requestIds: Array.isArray(res.request_ids)
-            ? (res.request_ids as string[]).filter((x): x is string => typeof x === 'string')
-            : undefined,
-        });
-      }
-      setTray([]);
-      setTrayDrawerOpen(false);
-      setSubmitError(null);
-      await loadAll();
-      navigate('/dashboard/requests', {
-        replace: true,
-        state: { fromBrowse: true, requestId: res.request_id ?? '' },
-      });
-    } catch (e) {
-      // Errors render inside the drawer - make sure it is open so a failed
-      // submit is never silent on mobile.
-      setTrayDrawerOpen(true);
-      if (e instanceof EdgeFunctionHttpError) {
-        const msg = e.message;
-        switch (e.code) {
-          case 'monthly_limit':
-            setSubmitError({ type: 'monthly_limit', message: msg, requestIds: e.requestIds });
-            return;
-          case 'weekly_limit':
-            setSubmitError({ type: 'weekly_limit', message: msg, requestIds: e.requestIds });
-            return;
-          case 'feedback_required':
-            setSubmitError({ type: 'feedback_required', message: msg, requestIds: e.requestIds });
-            return;
-          case 'already_requested_this_week':
-            setSubmitError({ type: 'already_requested', message: msg });
-            return;
-          default:
-            setSubmitError({ type: 'generic', message: msg });
-            return;
-        }
-      }
-      const msg = e instanceof Error ? e.message : 'Request failed';
-      if (msg.includes('monthly_limit') || msg.includes('Monthly limit')) {
-        setSubmitError({ type: 'monthly_limit', message: msg });
-      } else if (msg.includes('weekly_limit') || msg.includes('Weekly limit')) {
-        setSubmitError({ type: 'weekly_limit', message: msg });
-      } else if (msg.includes('feedback_required') || msg.includes('Outstanding feedback')) {
-        setSubmitError({ type: 'feedback_required', message: msg });
-      } else if (msg.includes('already_requested_this_week') || msg.includes('already requested this profile')) {
-        setSubmitError({ type: 'already_requested', message: msg });
-      } else {
-        setSubmitError({ type: 'generic', message: msg });
-      }
-    } finally {
-      setTraySubmitting(false);
-    }
-  }
 
   const trayPaddingBottom = tray.length > 0 ? 'var(--member-tray-height, 100px)' : undefined;
 
@@ -358,10 +288,10 @@ export default function MemberBrowse() {
             aria-controls="member-browse-filters-panel"
             onClick={() => setFiltersSheetOpen(true)}
           >
-            <span className="member-filters-mobile-trigger-title">Filters</span>
+            <span className="member-filters-mobile-trigger-title">Filters &amp; search</span>
             <span className="member-filters-mobile-trigger-meta">
               {filtered.length} profile{filtered.length === 1 ? '' : 's'}
-              {pendingFilterChanges ? ' · unsaved changes' : ''}
+              {pendingFilterChanges ? ` · ${draftMatchCount} match unsaved changes` : ''}
               {!pendingFilterChanges ? ' · tap to edit' : ''}
             </span>
           </button>
@@ -388,19 +318,22 @@ export default function MemberBrowse() {
         {isMobileFilters && filtersSheetOpen ? (
           <div className="member-filters-sheet-toolbar">
             <h2 id="member-filters-sheet-title" className="member-filters-sheet-toolbar-title">
-              Filters
+              Filters &amp; search
             </h2>
             <button
               type="button"
               className="btn btn-secondary member-filters-sheet-done"
-              onClick={() => setFiltersSheetOpen(false)}
+              onClick={() => {
+                applyFilters();
+                setFiltersSheetOpen(false);
+              }}
             >
               Done
             </button>
           </div>
         ) : null}
         <div className="member-browse-filters-head">
-          <h2 className="member-browse-filters-title">Filters</h2>
+          <h2 className="member-browse-filters-title">Filters &amp; search</h2>
         </div>
 
         <div className="member-browse-filters-grid">
@@ -436,6 +369,37 @@ export default function MemberBrowse() {
             )}
           </div>
 
+          <div className="member-filter-section member-filter-section--full">
+            <label
+              htmlFor="browse-keyword"
+              className="member-filter-section-label member-filter-section-label--field"
+            >
+              Location, profession or keyword
+            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="browse-keyword"
+                type="search"
+                placeholder="e.g. London, Leicester, doctor, music..."
+                value={draftFilters.keyword}
+                onChange={(e) => {
+                  const keyword = e.target.value;
+                  updateDraftFilters((prev) => ({ ...prev, keyword }));
+                }}
+              />
+              {draftFilters.keyword.trim() !== '' && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '8px 12px', fontSize: 13, flexShrink: 0 }}
+                  onClick={() => updateDraftFilters((prev) => ({ ...prev, keyword: '' }))}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="member-browse-filters-ranges" aria-label="Range filters">
             <div className="member-filter-section">
               <div className="member-filter-range-heading">
@@ -453,7 +417,7 @@ export default function MemberBrowse() {
                   max={AGE_MAX}
                   step={1}
                   value={draftFilters.ageRange}
-                  onChange={(ageRange) => setDraftFilters((prev) => ({ ...prev, ageRange }))}
+                  onChange={(ageRange) => updateDraftFilters((prev) => ({ ...prev, ageRange }))}
                   formatValue={(n) => String(n)}
                   minLabel={String(AGE_MIN)}
                   maxLabel="80+"
@@ -504,7 +468,7 @@ export default function MemberBrowse() {
                   max={HEIGHT_CM_MAX}
                   step={1}
                   value={draftFilters.heightRange}
-                  onChange={(heightRange) => setDraftFilters((prev) => ({ ...prev, heightRange }))}
+                  onChange={(heightRange) => updateDraftFilters((prev) => ({ ...prev, heightRange }))}
                   formatValue={(cm) => formatHeightForFilter(cm, heightUnit)}
                   minLabel={formatHeightForFilter(HEIGHT_CM_MIN, heightUnit)}
                   maxLabel={formatHeightForFilter(HEIGHT_CM_MAX, heightUnit)}
@@ -536,7 +500,7 @@ export default function MemberBrowse() {
                     }
                     aria-pressed={draftFilters.dietF.includes(o)}
                     onClick={() =>
-                      setDraftFilters((prev) => ({
+                      updateDraftFilters((prev) => ({
                         ...prev,
                         dietF: prev.dietF.includes(o)
                           ? prev.dietF.filter((x) => x !== o)
@@ -566,7 +530,7 @@ export default function MemberBrowse() {
                     }
                     aria-pressed={draftFilters.religionF.includes(o)}
                     onClick={() =>
-                      setDraftFilters((prev) => ({
+                      updateDraftFilters((prev) => ({
                         ...prev,
                         religionF: prev.religionF.includes(o)
                           ? prev.religionF.filter((x) => x !== o)
@@ -605,22 +569,25 @@ export default function MemberBrowse() {
                 id="browse-sort"
                 className="member-filter-select"
                 value={draftFilters.sort}
-                onChange={(e) =>
-                  setDraftFilters((prev) => ({ ...prev, sort: e.target.value as BrowseFilters['sort'] }))
-                }
+                onChange={(e) => {
+                  const sort = e.target.value as BrowseFilters['sort'];
+                  updateDraftFilters((prev) => ({ ...prev, sort }));
+                }}
               >
                 <option value="age">Age</option>
                 <option value="newest">Newest profiles</option>
               </select>
             </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!pendingFilterChanges || !!draftFilterError}
-              onClick={onApplyFiltersClick}
-            >
-              Apply filters
-            </button>
+            {(isMobileFilters || pendingFilterChanges) && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={(!isMobileFilters && !pendingFilterChanges) || !!draftFilterError}
+                onClick={onApplyFiltersClick}
+              >
+                {`Show ${draftMatchCount} profile${draftMatchCount === 1 ? '' : 's'}`}
+              </button>
+            )}
           </div>
         </div>
         {draftFilterError && (
@@ -679,8 +646,6 @@ export default function MemberBrowse() {
       <IntroductionSteps
         weeklyCap={weeklyCap}
         monthlyCap={monthlyCap}
-        // Live tray capacity while there is some, so the step matches the button;
-        // the full batch size once quota is spent, to avoid "add up to 0 people".
         batchSize={trayMax > 0 ? trayMax : maxCandidatesPerSubmit(weeklyCap, monthlyCap)}
         defaultOpen={requests.length === 0}
       />
@@ -798,227 +763,127 @@ export default function MemberBrowse() {
           ) : (
             <>
               {filtered.length === 0 && (
-            <div className="member-browse-empty" style={{ gridColumn: '1 / -1' }}>
-              <p className="member-browse-empty-title">
-                {candidates.length === 0 ? 'Nothing to browse yet' : 'No matching profiles'}
-              </p>
-              {candidates.length === 0 ? (
-                <>
-                  <p className="member-browse-empty-desc">
-                    There are no profiles to show right now. Try changing <strong>Show profiles of</strong> above, widen
-                    your filters, or check back later as new members join. If you think this is wrong, contact{' '}
-                    <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
+                <div className="member-browse-empty" style={{ gridColumn: '1 / -1' }}>
+                  <p className="member-browse-empty-title">
+                    {candidates.length === 0 ? 'Nothing to browse yet' : 'No matching profiles'}
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="member-browse-empty-desc">
-                    Widen your age or height range, or turn diet / religion options back on (all selected shows
-                    everyone in those groups).
-                  </p>
-                  <div className="member-browse-empty-actions">
-                    <button type="button" className="btn btn-primary" onClick={clearFilters}>
-                      Reset all filters
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-              )}
-            {filtered.map((c) => {
-              const inTray = tray.includes(c.id);
-              const blocked = requestedCandidateIds.has(c.id);
-              const requestedMe = requesterIds.has(c.id);
-              const note = requestedMe ? (
-                'Has requested your details - you already have each other’s contact details.'
-              ) : blocked ? (
-                'Opens their card in My requests (photo and contact details).'
-              ) : feedbackBlocking ? (
-                <span className="profile-card-note--warn">
-                  Request unavailable until pending feedback is submitted.
-                </span>
-              ) : trayMax === 0 ? (
-                <span className="profile-card-note--warn">
-                  Request unavailable while weekly/monthly quota is full.
-                </span>
-              ) : null;
-              return (
-                <ProfileCard
-                  key={c.id}
-                  age={c.age}
-                  gender={c.gender}
-                  profession={c.job_title}
-                  height={c.height_cm != null ? cmToFeetInches(c.height_cm) : null}
-                  diet={c.diet}
-                  location={c.place_of_birth}
-                  religion={c.religion}
-                  nationality={c.nationality}
-                  settlement={c.future_settlement_plans}
-                  onOpen={() => setSelectedProfile(c)}
-                  note={note}
-                  actions={
+                  {candidates.length === 0 ? (
+                    <p className="member-browse-empty-desc">
+                      There are no profiles to show right now. Try changing <strong>Show profiles of</strong> above, widen
+                      your filters, or check back later as new members join. If you think this is wrong, contact{' '}
+                      <a href="mailto:matrimonial@vanikcouncil.uk">matrimonial@vanikcouncil.uk</a>.
+                    </p>
+                  ) : (
                     <>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={(e) => { e.stopPropagation(); void toggleBookmark(c.id); }}
-                      >
-                        {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
-                      </button>
-                      {requestedMe ? (
-                        <Link
-                          to="/dashboard/requests"
-                          state={{ tab: 'interested', focusProfileId: c.id }}
-                          className="btn btn-primary"
-                          style={{ textDecoration: 'none' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          View introduction
-                        </Link>
-                      ) : blocked ? (
-                        <Link
-                          to="/dashboard/requests"
-                          state={{ focusProfileId: c.id }}
-                          className="btn btn-primary"
-                          style={{ textDecoration: 'none' }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Already requested
-                        </Link>
-                      ) : (
+                      <p className="member-browse-empty-desc">
+                        Widen your age or height range, clear your search keyword, or turn diet / religion options back
+                        on (all selected shows everyone in those groups).
+                      </p>
+                      <div className="member-browse-empty-actions">
+                        <button type="button" className="btn btn-primary" onClick={clearFilters}>
+                          Reset all filters
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {filtered.map((c) => {
+                const inTray = tray.includes(c.id);
+                const blocked = requestedCandidateIds.has(c.id);
+                const requestedMe = requesterIds.has(c.id);
+                const createdMs = new Date(c.created_at).getTime();
+                const isNew =
+                  !blocked &&
+                  !requestedMe &&
+                  !Number.isNaN(createdMs) &&
+                  mountTimeMs - createdMs <= NEW_PROFILE_WINDOW_MS;
+                const note = requestedMe ? (
+                  'Has requested your details - you already have each other’s contact details.'
+                ) : blocked ? (
+                  'Opens their card in My requests (photo and contact details).'
+                ) : feedbackBlocking ? (
+                  <span className="profile-card-note--warn">
+                    Request unavailable until pending feedback is submitted.
+                  </span>
+                ) : trayMax === 0 ? (
+                  <span className="profile-card-note--warn">
+                    Request unavailable while weekly/monthly quota is full.
+                  </span>
+                ) : null;
+                return (
+                  <ProfileCard
+                    key={c.id}
+                    age={c.age}
+                    gender={c.gender}
+                    profession={c.job_title}
+                    height={c.height_cm != null ? cmToFeetInches(c.height_cm) : null}
+                    diet={c.diet}
+                    location={c.place_of_birth}
+                    religion={c.religion}
+                    nationality={c.nationality}
+                    education={c.education}
+                    hobbies={c.hobbies}
+                    settlement={c.future_settlement_plans}
+                    isNew={isNew}
+                    onOpen={() => setSelectedProfile(c)}
+                    note={note}
+                    actions={
+                      <>
                         <button
                           type="button"
-                          className="btn btn-primary"
-                          disabled={!inTray && (atTrayCapacity || feedbackBlocking)}
-                          onClick={(e) => { e.stopPropagation(); addTray(c.id); }}
+                          className="btn btn-secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void toggleBookmark(c.id);
+                          }}
                         >
-                          {inTray ? '✕ Remove' : '+ Request'}
+                          {bookmarks.includes(c.id) ? '★ Saved' : '☆ Save'}
                         </button>
-                      )}
-                    </>
-                  }
-                />
-              );
-            })}
+                        {requestedMe ? (
+                          <Link
+                            to="/dashboard/requests"
+                            state={{ tab: 'interested', focusProfileId: c.id }}
+                            className="btn btn-primary"
+                            style={{ textDecoration: 'none' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            View introduction
+                          </Link>
+                        ) : blocked ? (
+                          <Link
+                            to="/dashboard/requests"
+                            state={{ focusProfileId: c.id }}
+                            className="btn btn-primary"
+                            style={{ textDecoration: 'none' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Already requested
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={!inTray && (atTrayCapacity || feedbackBlocking)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTray(c.id);
+                            }}
+                          >
+                            {inTray ? '✕ Remove' : '+ Request'}
+                          </button>
+                        )}
+                      </>
+                    }
+                  />
+                );
+              })}
             </>
           )}
         </div>
-        </section>
+      </section>
 
-      {tray.length > 0 && (
-        <div className="member-request-tray">
-          <p className="member-tray-hint">
-            {tray.length === 1 ? '1 person selected' : `${tray.length} people selected`} - not requested yet
-          </p>
-          <p className="member-tray-notice">
-            On submit we email {tray.length === 1 ? 'them' : 'each of them'} straight away to say you asked, and share
-            your name, profile and contact details. You get {tray.length === 1 ? 'theirs' : 'their details'} too.
-          </p>
-          <div className="member-tray-collapsed-row">
-            <button
-              type="button"
-              className="btn btn-secondary member-tray-toggle"
-              aria-expanded={trayDrawerOpen}
-              aria-controls="member-tray-panel"
-              onClick={() => setTrayDrawerOpen((o) => !o)}
-            >
-              {tray.length}/{trayMax}{trayDrawerOpen ? ' - hide' : ' - review'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary member-tray-submit-cta"
-              disabled={feedbackBlocking || trayMax === 0 || traySubmitting}
-              onClick={() => void submitTray()}
-            >
-              {traySubmitting ? 'Submitting…' : 'Submit request'}
-            </button>
-          </div>
-          <div
-            id="member-tray-panel"
-            className={`member-tray-panel ${trayDrawerOpen ? 'member-tray-panel--open' : ''}`}
-          >
-            <div className="member-tray-chips">
-              {tray.map((id) => {
-                const c = candidates.find((x) => x.id === id);
-                return (
-                  <div key={id} className="member-tray-chip">
-                    <div className="member-tray-chip-meta">
-                      <span className="member-tray-chip-name">
-                        {[c?.gender, c?.age != null ? `Age ${c.age}` : null].filter(Boolean).join(' · ') || 'Selected'}
-                      </span>
-                      <button
-                        type="button"
-                        className="member-tray-chip-remove"
-                        title="Remove from request"
-                        onClick={() => addTray(id)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-              A request is a two-way introduction. Everyone you request is emailed as soon as you submit, telling
-              them you asked and sharing your name, photo, profile and contact details. Their details are emailed to
-              you and listed under My requests. Nobody has to accept first - the introduction happens straight away.
-            </p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={feedbackBlocking || trayMax === 0 || traySubmitting}
-              onClick={() => void submitTray()}
-            >
-              {traySubmitting ? 'Submitting…' : `Request contact details (${tray.length})`}
-            </button>
-            {feedbackBlocking && (
-              <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--color-warning)' }}>
-                Complete outstanding feedback on{' '}
-                <Link to="/dashboard/requests" style={{ fontWeight: 600, color: 'inherit' }}>
-                  My requests
-                </Link>{' '}
-                before submitting.
-              </p>
-            )}
-            {submitError && (
-              <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 13,
-                background: submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.12)' : 'rgba(220,38,38,0.08)',
-                color: submitError.type === 'feedback_required' ? 'var(--color-warning)' : 'var(--color-danger)',
-                border: `1px solid ${submitError.type === 'feedback_required' ? 'rgba(217,119,6,0.3)' : 'rgba(220,38,38,0.2)'}` }}>
-                {submitError.type === 'feedback_required' && (
-                  <><strong>Feedback required before new requests.</strong> Please visit{' '}
-                    <a href="/dashboard/requests" style={{ color: 'inherit', fontWeight: 600 }}>My requests</a> to submit outstanding feedback.</>
-                )}
-                {submitError.type === 'already_requested' && (
-                  <><strong>Already requested.</strong> {submitError.message}</>
-                )}
-                {submitError.type === 'weekly_limit' && (
-                  <><strong>7-day limit reached.</strong> You can add up to {weeklyCap} new {weeklyCap === 1 ? 'person' : 'people'} in any rolling 7-day period (your current allowance). The counters at the top of this page show when the next slot opens.</>
-                )}
-                {submitError.type === 'monthly_limit' && (
-                  <><strong>Month limit reached.</strong> You can request up to {monthlyCap} distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (your current allowance). Counts reset on the 1st (UTC).</>
-                )}
-                {submitError.type === 'generic' && (
-                  <>
-                    <p style={{ margin: 0 }}>{submitError.message}</p>
-                    <div style={{ marginTop: 12 }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        disabled={traySubmitting || feedbackBlocking || trayMax === 0}
-                        onClick={() => void submitTray()}
-                      >
-                        Retry request
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <RequestTrayBar />
 
       {selectedProfile && (
         <ProfileModal
@@ -1026,7 +891,7 @@ export default function MemberBrowse() {
           anonymous={!requesterIds.has(selectedProfile.id)}
           contactDetails={(() => {
             const r = requestersOfMe.find((x) => x.id === selectedProfile.id);
-            return r?.mobile ? { mobile: r.mobile } : undefined;
+            return r?.mobile ? { mobile: r.mobile, linkedin_url: r.linkedin_url } : undefined;
           })()}
           inTray={tray.includes(selectedProfile.id)}
           trayFull={atTrayCapacity}
@@ -1037,10 +902,9 @@ export default function MemberBrowse() {
           bookmarked={bookmarks.includes(selectedProfile.id)}
           onClose={() => setSelectedProfile(null)}
           onToggleBookmark={() => void toggleBookmark(selectedProfile.id)}
-          onToggleTray={() => addTray(selectedProfile.id)}
+          onToggleTray={() => toggleTray(selectedProfile.id)}
         />
       )}
-
     </div>
   );
 }

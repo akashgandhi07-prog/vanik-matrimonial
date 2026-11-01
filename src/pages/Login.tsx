@@ -14,7 +14,9 @@ export default function Login() {
   const resetOk = params.get('reset') === '1';
   const nextRaw = params.get('next');
   const nextPath =
-    nextRaw && nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/dashboard/browse';
+    nextRaw && /^\/(?!\/|\\)/.test(nextRaw) && !nextRaw.includes('\\')
+      ? nextRaw
+      : '/dashboard/browse';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

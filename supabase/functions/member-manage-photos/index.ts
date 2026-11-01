@@ -79,11 +79,14 @@ Deno.serve(async (req) => {
 
   const { data: profile, error: profileErr } = await admin
     .from('profiles')
-    .select('id, auth_user_id, gender')
+    .select('id, auth_user_id, gender, status')
     .eq('auth_user_id', userData.user.id)
     .maybeSingle();
   if (profileErr || !profile?.id) {
     return jsonResponse({ error: 'Profile required' }, req, 403);
+  }
+  if (profile.status === 'closed' || profile.status === 'rejected') {
+    return jsonResponse({ error: 'Profile is not active' }, req, 403);
   }
   const profileId = profile.id as string;
   const authUserId = userData.user.id;
@@ -115,7 +118,12 @@ Deno.serve(async (req) => {
     // Only accept an object the caller uploaded under their own prefix, and confirm it
     // actually exists in the bucket - never trust an arbitrary client-supplied path.
     const expectedPhotoPrefix = `${gender}/${authUserId}/`;
-    if (!storagePath.startsWith(expectedPhotoPrefix)) {
+    if (
+      !storagePath.startsWith(expectedPhotoPrefix) ||
+      storagePath.includes('..') ||
+      storagePath.includes('\\') ||
+      !/\.(jpe?g|png)$/i.test(storagePath)
+    ) {
       return jsonResponse({ error: 'Upload path is invalid for this account.' }, req, 400);
     }
     if (!(await verifyObjectExists(admin, 'profile-photos', storagePath))) {

@@ -14,6 +14,8 @@ type ProfileRow = {
   id: string;
   first_name: string;
   reference_number: string | null;
+  status?: string | null;
+  hidden_reason?: string | null;
 };
 
 type MemberPrivateRow = {
@@ -63,13 +65,17 @@ Deno.serve(async (req) => {
 
   const { data: requester, error: requesterErr } = await admin
     .from('profiles')
-    .select('id, status, membership_expires_at')
+    .select('id, status, hidden_reason, membership_expires_at')
     .eq('auth_user_id', userData.user.id)
     .single();
   if (requesterErr || !requester) {
     return jsonResponse({ error: 'Profile not found' }, req, 400);
   }
-  if (requester.status !== 'active' || !hasMembershipAccess(requester.membership_expires_at)) {
+  if (
+    requester.status !== 'active' ||
+    requester.hidden_reason === 'admin' ||
+    !hasMembershipAccess(requester.membership_expires_at)
+  ) {
     return jsonResponse({ error: 'Membership not active' }, req, 403);
   }
 
@@ -99,21 +105,29 @@ Deno.serve(async (req) => {
 
   const { data: profileRows, error: profileErr } = await admin
     .from('profiles')
-    .select('id, first_name, reference_number')
+    .select('id, first_name, reference_number, status, hidden_reason')
     .in('id', candidateIds);
   if (profileErr) {
     return jsonResponse({ error: profileErr.message }, req, 500);
   }
 
-  const { data: privateRows, error: privateErr } = await admin
-    .from('member_private')
-    .select('profile_id, surname, mobile_phone, email, linkedin_url')
-    .in('profile_id', candidateIds);
+  const allowedProfileRows = ((profileRows ?? []) as ProfileRow[]).filter(
+    (p) => p.status !== 'closed' && p.status !== 'rejected' && p.hidden_reason !== 'admin'
+  );
+  const allowedCandidateIds = allowedProfileRows.map((p) => p.id);
+
+  const { data: privateRows, error: privateErr } =
+    allowedCandidateIds.length > 0
+      ? await admin
+          .from('member_private')
+          .select('profile_id, surname, mobile_phone, email, linkedin_url')
+          .in('profile_id', allowedCandidateIds)
+      : { data: [], error: null };
   if (privateErr) {
     return jsonResponse({ error: privateErr.message }, req, 500);
   }
 
-  const profileById = new Map((profileRows ?? []).map((p) => [p.id as string, p as ProfileRow]));
+  const profileById = new Map(allowedProfileRows.map((p) => [p.id, p]));
   const privateById = new Map(
     (privateRows ?? []).map((m) => [m.profile_id as string, m as MemberPrivateRow])
   );
@@ -122,10 +136,12 @@ Deno.serve(async (req) => {
   // and the admin sharing preview (_shared/introduction.ts).
   const contactsByRequest: Record<string, ContactDetail[]> = {};
   for (const row of rows) {
-    contactsByRequest[row.id] = (row.candidate_ids ?? []).map((candidateId) => ({
-      ...buildContactDetail(profileById.get(candidateId), privateById.get(candidateId)),
-      profile_id: candidateId,
-    }));
+    contactsByRequest[row.id] = (row.candidate_ids ?? [])
+      .filter((candidateId) => profileById.has(candidateId))
+      .map((candidateId) => ({
+        ...buildContactDetail(profileById.get(candidateId), privateById.get(candidateId)),
+        profile_id: candidateId,
+      }));
   }
 
   return jsonResponse({ contacts_by_request: contactsByRequest }, req);

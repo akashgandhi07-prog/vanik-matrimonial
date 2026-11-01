@@ -16,11 +16,39 @@ export async function collectMemberStoragePaths(
   if (profileIds.length === 0) return { byProfile };
   const [galleryRes, profRes, privRes] = await Promise.all([
     admin.from('profile_photos').select('profile_id, storage_path').in('profile_id', profileIds),
-    admin.from('profiles').select('id, photo_url, pending_photo_url').in('id', profileIds),
+    admin.from('profiles').select('id, auth_user_id, gender, photo_url, pending_photo_url').in('id', profileIds),
     admin.from('member_private').select('profile_id, id_document_url').in('profile_id', profileIds),
   ]);
   const err = galleryRes.error ?? profRes.error ?? privRes.error;
   if (err) return { byProfile, error: err.message };
+
+  const ownerByProfile = new Map<string, { authUserId: string; gender: string }>();
+  for (const row of profRes.data ?? []) {
+    const r = row as { id: string; auth_user_id?: string | null; gender?: string | null };
+    if (r.id && r.auth_user_id) {
+      ownerByProfile.set(r.id, {
+        authUserId: r.auth_user_id,
+        gender: r.gender === 'Female' ? 'Female' : 'Male',
+      });
+    }
+  }
+
+  const ownsPhotoPath = (profileId: string, p: string): boolean => {
+    const owner = ownerByProfile.get(profileId);
+    if (!owner || !p || p.includes('..') || p.includes('\\')) return false;
+    return (
+      p.startsWith(`${owner.gender}/${owner.authUserId}/`) ||
+      p.startsWith(`Male/${owner.authUserId}/`) ||
+      p.startsWith(`Female/${owner.authUserId}/`) ||
+      p.startsWith(`${owner.authUserId}/`)
+    );
+  };
+
+  const ownsIdDocPath = (profileId: string, p: string): boolean => {
+    const owner = ownerByProfile.get(profileId);
+    if (!owner || !p || p.includes('..') || p.includes('\\')) return false;
+    return p.startsWith(`${owner.authUserId}/`);
+  };
 
   const sets = new Map<string, { photos: Set<string>; idDocuments: Set<string> }>();
   const entry = (pid: string) => {
@@ -30,16 +58,22 @@ export async function collectMemberStoragePaths(
   };
   for (const row of galleryRes.data ?? []) {
     const r = row as { profile_id: string; storage_path?: string | null };
-    if (r.storage_path) entry(r.profile_id).photos.add(r.storage_path);
+    if (r.storage_path && ownsPhotoPath(r.profile_id, r.storage_path)) {
+      entry(r.profile_id).photos.add(r.storage_path);
+    }
   }
   for (const row of profRes.data ?? []) {
     const r = row as { id: string; photo_url?: string | null; pending_photo_url?: string | null };
-    if (r.photo_url) entry(r.id).photos.add(r.photo_url);
-    if (r.pending_photo_url) entry(r.id).photos.add(r.pending_photo_url);
+    if (r.photo_url && ownsPhotoPath(r.id, r.photo_url)) entry(r.id).photos.add(r.photo_url);
+    if (r.pending_photo_url && ownsPhotoPath(r.id, r.pending_photo_url)) {
+      entry(r.id).photos.add(r.pending_photo_url);
+    }
   }
   for (const row of privRes.data ?? []) {
     const r = row as { profile_id: string; id_document_url?: string | null };
-    if (r.id_document_url) entry(r.profile_id).idDocuments.add(r.id_document_url);
+    if (r.id_document_url && ownsIdDocPath(r.profile_id, r.id_document_url)) {
+      entry(r.profile_id).idDocuments.add(r.id_document_url);
+    }
   }
   for (const [pid, e] of sets) byProfile.set(pid, { photos: [...e.photos], idDocuments: [...e.idDocuments] });
   return { byProfile };

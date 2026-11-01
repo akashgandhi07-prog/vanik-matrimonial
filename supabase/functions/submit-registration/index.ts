@@ -6,10 +6,11 @@ import { letterHtml } from '../_shared/resend.ts';
 import { isTransactionalMailConfigured, sendTransactionalMail } from '../_shared/transactional-mail.ts';
 import { publicSiteBaseUrl } from '../_shared/site-url.ts';
 import { resolvedPrivacyPolicyVersionId } from '../_shared/privacy-policy-version.ts';
-import { stripHtml } from '../_shared/sanitize.ts';
+import { escapeHtmlEmail, stripHtml } from '../_shared/sanitize.ts';
 import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 import { hashRegistrationSubmitIp } from '../_shared/registration-consent-ip-hash.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
+import { allowFunctionRateLimit, clientIp } from '../_shared/function-rate-limit.ts';
 
 async function checkRateLimit(
   admin: ReturnType<typeof getAdminClient>,
@@ -50,6 +51,7 @@ async function checkRateLimit(
 }
 
 function pathExtensionOk(path: string, kind: 'photo' | 'id'): boolean {
+  if (!path || path.includes('..') || path.includes('\\')) return false;
   const lower = path.toLowerCase();
   if (kind === 'photo') {
     return lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png');
@@ -141,12 +143,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
-  const forwarded = req.headers.get('x-forwarded-for');
-  const ip = (forwarded?.split(',')[0] ?? req.headers.get('cf-connecting-ip') ?? 'unknown').trim();
+  const ip = clientIp(req);
 
   const admin = getAdminClient();
-  const okLimit = await checkRateLimit(admin, ip);
-  if (!okLimit) {
+  const [okLimit, okAtomicLimit] = await Promise.all([
+    checkRateLimit(admin, ip),
+    allowFunctionRateLimit(admin, {
+      scope: 'submit_registration',
+      rateKey: ip,
+      maxAttempts: 20,
+      windowMs: 60 * 60 * 1000,
+    }),
+  ]);
+  if (!okLimit || !okAtomicLimit) {
     return jsonResponse({ error: 'Too many attempts. Try again later.' }, req, 429);
   }
 
@@ -290,6 +299,26 @@ Deno.serve(async (req) => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Payment verification failed';
       return jsonResponse({ error: msg }, req, 400);
+    }
+    const { data: existingSessionRow } = await admin
+      .from('stripe_checkout_sessions')
+      .select('auth_user_id, profile_id, consumed_at, refund_id')
+      .eq('checkout_session_id', sid)
+      .maybeSingle();
+    if (existingSessionRow) {
+      if (existingSessionRow.auth_user_id && existingSessionRow.auth_user_id !== userData.user.id) {
+        return jsonResponse({ error: 'Checkout session belongs to a different account' }, req, 403);
+      }
+      if (existingSessionRow.refund_id) {
+        return jsonResponse({ error: 'This payment was refunded and cannot be used.' }, req, 400);
+      }
+      if (
+        existingSessionRow.consumed_at &&
+        existingSessionRow.profile_id &&
+        existingSessionRow.profile_id !== existing?.id
+      ) {
+        return jsonResponse({ error: 'This payment session has already been used.' }, req, 400);
+      }
     }
     stripeCheckoutSessionId = sid;
   }
@@ -552,8 +581,8 @@ Deno.serve(async (req) => {
       const html = letterHtml(
         isResubmit ? 'Resubmitted registration' : 'New registration',
         `${adminLead}
-         <p><strong>Name:</strong> ${firstName} ${surname}<br/>
-         <strong>Email:</strong> ${email}</p>
+         <p><strong>Name:</strong> ${escapeHtmlEmail(firstName)} ${escapeHtmlEmail(surname)}<br/>
+         <strong>Email:</strong> ${escapeHtmlEmail(email)}</p>
          <p><a href="${publicSiteBaseUrl()}/admin/members/${profileId}">Review in admin</a> (reference and full details are in the dashboard.)</p>`
       );
       await sendTransactionalMail({

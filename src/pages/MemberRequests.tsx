@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { ProfileRow } from '../member/memberContext';
@@ -14,9 +15,16 @@ import {
 } from '../member/requestQuota';
 import { IntroductionSteps } from '../member/IntroductionSteps';
 import { newErrorCode, reportError } from '../lib/errorLog';
+import { normalizeLinkedInUrl } from '../lib/linkedin';
 import { isProfileListedOnRegister } from '../lib/memberStatus';
-import { invokeFunction, supabase } from '../lib/supabase';
-import { whatsappUrlFromPhone } from '../lib/whatsapp';
+import { sanitizeText } from '../lib/sanitize';
+import { invokeFunction, postFunctionOptionalAuth, supabase } from '../lib/supabase';
+import {
+  familyShareSummaryText,
+  whatsappIntroText,
+  whatsappShareUrl,
+  whatsappUrlFromPhone,
+} from '../lib/whatsapp';
 import { telHref } from '../lib/profileLabels';
 
 type ContactDetailRow = {
@@ -253,7 +261,12 @@ export default function MemberRequests() {
           setProfilesById(fromCandidates);
           return;
         }
-        const { data } = await supabase.from('profiles').select('*').in('id', missing);
+        const { data } = await supabase
+          .from('profiles')
+          .select(
+            'id, reference_number, gender, seeking_gender, first_name, age, created_at, updated_at, education, job_title, height_cm, weight_kg, diet, religion, community, nationality, place_of_birth, town_country_of_origin, future_settlement_plans, hobbies, photo_status, status, hidden_reason, membership_expires_at, contact_request_quota_bonus'
+          )
+          .in('id', missing);
         if (cancelled) return;
         const merged: Record<string, ProfileRow> = { ...fromCandidates };
         for (const row of (data ?? []) as ProfileRow[]) merged[row.id] = row;
@@ -335,12 +348,234 @@ export default function MemberRequests() {
     () => new Map(feedbackOutstanding.map((item) => [item.requestId, item])),
     [feedbackOutstanding]
   );
+  const requestedByMeIds = useMemo(
+    () =>
+      new Set(
+        requests.flatMap((r) => (Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : []))
+      ),
+    [requests]
+  );
+  const requestersOfMeIds = useMemo(
+    () => new Set(requestersOfMe.map((r) => r.id)),
+    [requestersOfMe]
+  );
+  const isMobile = useMediaQuery('(max-width: 720px)');
+
+  const [feedbackModal, setFeedbackModal] = useState<{
+    requestId: string;
+    candidateId: string;
+    candidateName: string;
+    direction: 'made' | 'received';
+    archiveAfter: boolean;
+  } | null>(null);
+  const [fbContact, setFbContact] = useState<'yes' | 'no' | null>(null);
+  const [fbRec, setFbRec] = useState<'yes' | 'no' | null>(null);
+  const [fbNotes, setFbNotes] = useState('');
+  const [fbFlagged, setFbFlagged] = useState(false);
+  const [fbBusy, setFbBusy] = useState(false);
+  const [fbError, setFbError] = useState<string | null>(null);
+
+  function openFeedbackModal(opts: {
+    requestId: string;
+    candidateId: string;
+    candidateName: string;
+    direction: 'made' | 'received';
+    archiveAfter?: boolean;
+  }) {
+    setFeedbackModal({
+      requestId: opts.requestId,
+      candidateId: opts.candidateId,
+      candidateName: opts.candidateName,
+      direction: opts.direction,
+      archiveAfter: !!opts.archiveAfter,
+    });
+    setFbContact(null);
+    setFbRec(null);
+    setFbNotes('');
+    setFbFlagged(false);
+    setFbError(null);
+  }
+
+  async function submitInlineFeedback(e: React.FormEvent) {
+    e.preventDefault();
+    if (!feedbackModal || !profile) return;
+    if (fbContact === null || fbRec === null) {
+      setFbError('Please answer both questions.');
+      return;
+    }
+    setFbBusy(true);
+    setFbError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const tok = sessionData.session?.access_token ?? null;
+      await postFunctionOptionalAuth(
+        'feedback-flow',
+        {
+          request_id: feedbackModal.requestId,
+          candidate_id: feedbackModal.candidateId,
+          ...(feedbackModal.direction === 'received' ? { direction: 'candidate_on_requester' } : {}),
+          made_contact: fbContact === 'yes',
+          recommend_retain: fbRec === 'yes',
+          notes: sanitizeText(fbNotes, 2000),
+          is_flagged: fbFlagged,
+        },
+        tok
+      );
+      if (feedbackModal.archiveAfter) {
+        await supabase.from('member_archived_requests').insert({
+          member_id: profile.id,
+          request_id: feedbackModal.requestId,
+          direction: feedbackModal.direction,
+        });
+      }
+      await loadAll();
+      setFeedbackModal(null);
+    } catch (err) {
+      const code = newErrorCode();
+      reportError(
+        code,
+        'feedback_submit_inline',
+        {
+          request_id: feedbackModal.requestId,
+          candidate_id: feedbackModal.candidateId,
+          direction: feedbackModal.direction,
+        },
+        err instanceof Error ? err.message : String(err)
+      );
+      setFbError(err instanceof Error ? err.message : `Could not submit feedback (ref ${code}).`);
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
   const nameForCandidate = (requestId: string, candidateId: string) =>
     (contactsByRequest[requestId] ?? []).find((row) => row.profile_id === candidateId)?.first_name ||
     candidates.find((c) => c.id === candidateId)?.first_name ||
     'this person';
 
   if (!profile) return null;
+
+  const feedbackModalNode = feedbackModal && (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="inline-fb-title"
+      className="modal-backdrop"
+      onClick={() => !fbBusy && setFeedbackModal(null)}
+    >
+      <div
+        className="card modal-panel"
+        style={{ maxWidth: 460 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 id="inline-fb-title" style={{ marginTop: 0, marginBottom: 6 }}>
+          Admin-only feedback: {feedbackModal.candidateName}
+        </h3>
+        <div
+          style={{
+            marginBottom: 14,
+            padding: '10px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-surface-muted)',
+            fontSize: 13,
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.5,
+          }}
+        >
+          <strong style={{ color: 'var(--color-text)' }}>Seen by the register team only</strong> - never shown to{' '}
+          {feedbackModal.candidateName}. Takes 10 seconds.
+        </div>
+        <form onSubmit={(e) => void submitInlineFeedback(e)}>
+          <p className="label" style={{ marginBottom: 6 }}>
+            Did you make contact with {feedbackModal.candidateName}?
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <button
+              type="button"
+              className={`btn ${fbContact === 'yes' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFbContact('yes')}
+              style={{ flex: 1 }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className={`btn ${fbContact === 'no' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFbContact('no')}
+              style={{ flex: 1 }}
+            >
+              No
+            </button>
+          </div>
+          <p className="label" style={{ marginBottom: 6 }}>
+            Would you recommend retaining them on the register?
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <button
+              type="button"
+              className={`btn ${fbRec === 'yes' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFbRec('yes')}
+              style={{ flex: 1 }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className={`btn ${fbRec === 'no' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setFbRec('no')}
+              style={{ flex: 1 }}
+            >
+              No
+            </button>
+          </div>
+          <label className="label" htmlFor="inline-fb-notes">
+            Optional notes for admin
+          </label>
+          <textarea
+            id="inline-fb-notes"
+            value={fbNotes}
+            onChange={(e) => setFbNotes(e.target.value)}
+            maxLength={2000}
+            rows={2}
+            placeholder="Optional context for the register team"
+            style={{ marginBottom: 10 }}
+          />
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              checked={fbFlagged}
+              onChange={(e) => setFbFlagged(e.target.checked)}
+              style={{ width: 16, height: 16 }}
+            />
+            Flag for urgent admin review
+          </label>
+          {fbError && (
+            <p role="alert" style={{ color: 'var(--color-danger)', fontSize: 13, margin: '0 0 10px' }}>
+              {fbError}
+            </p>
+          )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={fbBusy}
+              onClick={() => setFeedbackModal(null)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={fbBusy}>
+              {fbBusy
+                ? 'Submitting…'
+                : feedbackModal.archiveAfter
+                  ? 'Submit & archive'
+                  : 'Submit feedback'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 
   const tabsBar = (
     <div role="tablist" aria-label="Requests" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -390,7 +625,23 @@ export default function MemberRequests() {
                   return aArch - bArch;
                 })
                 .map((r) => {
-                const wa = r.mobile ? whatsappUrlFromPhone(r.mobile) : null;
+                const wa = r.mobile
+                  ? whatsappUrlFromPhone(r.mobile, whatsappIntroText(r.first_name, profile.first_name))
+                  : null;
+                const familyShareHref = whatsappShareUrl(
+                  familyShareSummaryText({
+                    first_name: r.first_name,
+                    age: r.age,
+                    job_title: r.job_title,
+                    education: r.education,
+                    place_of_birth: r.place_of_birth,
+                    town_country_of_origin: r.town_country_of_origin,
+                    diet: r.diet,
+                    religion: r.religion,
+                    hobbies: r.hobbies,
+                  })
+                );
+                const isMutual = requestedByMeIds.has(r.id);
                 const isArchived = archivedRequests.received.has(r.request_id);
                 const openProfile = () =>
                   setSelectedProfile({
@@ -437,6 +688,11 @@ export default function MemberRequests() {
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
                         {r.full_name || r.first_name}
+                        {isMutual && (
+                          <span className="badge badge-success" style={{ marginLeft: 8, fontWeight: 600, fontSize: 11 }}>
+                            Mutual request
+                          </span>
+                        )}
                         {isArchived && (
                           <span className="badge badge-muted" style={{ marginLeft: 8, fontWeight: 500, fontSize: 11 }}>
                             Archived
@@ -473,15 +729,16 @@ export default function MemberRequests() {
                             target="_blank"
                             rel="noopener noreferrer"
                             aria-label={`WhatsApp ${r.first_name}`}
+                            title="Opens WhatsApp with a warm starter message"
                             style={{ padding: '4px 10px', fontSize: 12 }}
                           >
                             WhatsApp
                           </a>
                         ) : null}
-                        {r.linkedin_url ? (
+                        {r.linkedin_url && normalizeLinkedInUrl(r.linkedin_url) ? (
                           <a
                             className="btn btn-secondary"
-                            href={r.linkedin_url}
+                            href={normalizeLinkedInUrl(r.linkedin_url)!}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{ padding: '4px 10px', fontSize: 12 }}
@@ -489,6 +746,16 @@ export default function MemberRequests() {
                             LinkedIn
                           </a>
                         ) : null}
+                        <a
+                          className="btn btn-secondary"
+                          href={familyShareHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          title="Share a clean profile summary with parents or family on WhatsApp"
+                        >
+                          Share with family
+                        </a>
                         <button
                           type="button"
                           className="btn btn-primary"
@@ -505,14 +772,22 @@ export default function MemberRequests() {
                             ✓ Feedback given
                           </span>
                         ) : (
-                          <Link
-                            to={`/feedback/${r.request_id}/${r.id}?direction=received`}
+                          <button
+                            type="button"
                             className="btn btn-secondary"
-                            style={{ padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
                             title="Admin-only feedback about this member. Reviewed by the register team and never shown to them. Entirely optional."
+                            onClick={() =>
+                              openFeedbackModal({
+                                requestId: r.request_id,
+                                candidateId: r.id,
+                                candidateName: r.first_name,
+                                direction: 'received',
+                              })
+                            }
                           >
                             Give admin-only feedback
-                          </Link>
+                          </button>
                         )}
                         {isArchived ? (
                           <button
@@ -535,14 +810,23 @@ export default function MemberRequests() {
                             Archive
                           </button>
                         ) : (
-                          <Link
-                            to={`/feedback/${r.request_id}/${r.id}?direction=received&archive=1`}
+                          <button
+                            type="button"
                             className="btn btn-secondary"
-                            style={{ padding: '4px 10px', fontSize: 12, textDecoration: 'none' }}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
                             title="Give brief admin-only feedback, then this introduction moves to the bottom of your list."
+                            onClick={() =>
+                              openFeedbackModal({
+                                requestId: r.request_id,
+                                candidateId: r.id,
+                                candidateName: r.first_name,
+                                direction: 'received',
+                                archiveAfter: true,
+                              })
+                            }
                           >
                             Feedback &amp; archive
-                          </Link>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -552,6 +836,7 @@ export default function MemberRequests() {
             </div>
           )}
         </div>
+        {feedbackModalNode}
         {selectedProfile && (
           <ProfileModal
             candidate={selectedProfile.profile}
@@ -613,6 +898,311 @@ export default function MemberRequests() {
     );
   }
 
+  const sortedRequests = [...requests].sort((a, b) => {
+    const aArch = archivedRequests.made.has(a.id) ? 1 : 0;
+    const bArch = archivedRequests.made.has(b.id) ? 1 : 0;
+    return aArch - bArch;
+  });
+
+  const renderCandidateCard = (rId: string, id: string) => {
+    const c = candidates.find((x) => x.id === id);
+    const candidateProfile = profilesById[id] ?? c;
+    const contacts = contactsByRequest[rId] ?? [];
+    const details = contacts.find((row) => row.profile_id === id);
+    const firstName = details?.first_name || candidateProfile?.first_name || 'Member';
+    const displayName = details?.full_name || (candidateProfile ? candidateProfile.first_name : `Member ${id.slice(0, 8)}...`);
+    const wa = details?.mobile
+      ? whatsappUrlFromPhone(details.mobile, whatsappIntroText(firstName, profile.first_name))
+      : null;
+    const familyShareHref = candidateProfile
+      ? whatsappShareUrl(
+          familyShareSummaryText({
+            first_name: firstName,
+            age: candidateProfile.age,
+            job_title: candidateProfile.job_title,
+            education: candidateProfile.education,
+            place_of_birth: candidateProfile.place_of_birth,
+            town_country_of_origin: candidateProfile.town_country_of_origin,
+            diet: candidateProfile.diet,
+            religion: candidateProfile.religion,
+            hobbies: candidateProfile.hobbies,
+          })
+        )
+      : null;
+    const isMutual = requestersOfMeIds.has(id);
+    const hasContactDetails = !!details?.mobile;
+    const noLongerListed = !!candidateProfile && !isProfileListedOnRegister(candidateProfile);
+    const openProfile = candidateProfile
+      ? () =>
+          setSelectedProfile({
+            profile: candidateProfile,
+            contactDetails: details
+              ? {
+                  mobile: details.mobile,
+                  linkedin_url: details.linkedin_url,
+                }
+              : undefined,
+          })
+      : undefined;
+
+    return (
+      <div
+        key={id}
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          padding: 8,
+          borderRadius: 10,
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-surface)',
+          cursor: openProfile ? 'pointer' : undefined,
+        }}
+        onClick={openProfile}
+        role={openProfile ? 'button' : undefined}
+        tabIndex={openProfile ? 0 : undefined}
+        onKeyDown={
+          openProfile
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openProfile();
+                }
+              }
+            : undefined
+        }
+        aria-label={openProfile ? `View full profile for ${displayName}` : undefined}
+      >
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 8,
+            overflow: 'hidden',
+            flexShrink: 0,
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          <ProfileThumb profileId={id} firstName={firstName} />
+        </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
+            {displayName}
+            {isMutual && (
+              <span className="badge badge-success" style={{ marginLeft: 8, fontWeight: 600, fontSize: 11 }}>
+                Mutual request
+              </span>
+            )}
+            {noLongerListed && (
+              <span
+                className="badge"
+                title="This member has since paused or left the register. The contact details you already received stay here for your records."
+                style={{
+                  marginLeft: 8,
+                  fontWeight: 500,
+                  background: 'var(--color-surface-muted)',
+                  color: 'var(--color-text-secondary)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                No longer on the register
+              </span>
+            )}
+          </div>
+          {hasContactDetails ? (
+            <>
+              {details?.mobile ? (
+                <div style={{ marginTop: 4, fontSize: 13 }}>
+                  <a
+                    href={telHref(details.mobile)}
+                    style={{ fontWeight: 600 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {details.mobile}
+                  </a>
+                </div>
+              ) : null}
+              <div
+                style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {details.mobile ? (
+                  <a className="btn btn-secondary" href={telHref(details.mobile)} style={{ padding: '4px 10px', fontSize: 12 }}>
+                    Call
+                  </a>
+                ) : null}
+                {wa ? (
+                  <a
+                    className="btn-whatsapp"
+                    href={wa}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`WhatsApp ${firstName}`}
+                    title="Opens WhatsApp with a warm starter message"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                  >
+                    WhatsApp
+                  </a>
+                ) : null}
+                {details.linkedin_url && normalizeLinkedInUrl(details.linkedin_url) ? (
+                  <a
+                    className="btn btn-secondary"
+                    href={normalizeLinkedInUrl(details.linkedin_url)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                  >
+                    LinkedIn
+                  </a>
+                ) : null}
+                {familyShareHref ? (
+                  <a
+                    className="btn btn-secondary"
+                    href={familyShareHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                    title="Share a clean profile summary with parents or family on WhatsApp"
+                  >
+                    Share with family
+                  </a>
+                ) : null}
+                {openProfile ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ padding: '4px 10px', fontSize: 12 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openProfile();
+                    }}
+                  >
+                    View full profile
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              {contactsLoading ? 'Loading contact details…' : 'Contact details not yet available.'}
+              {openProfile && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openProfile();
+                  }}
+                >
+                  View profile
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderFeedbackItems = (rId: string, candidateIds: string[]) => {
+    const contacts = contactsByRequest[rId] ?? [];
+    return (
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {candidateIds.map((cid) => {
+          const key = `${rId}:${cid}`;
+          const c = candidates.find((x) => x.id === cid);
+          const details = contacts.find((row) => row.profile_id === cid);
+          const name = details?.first_name || c?.first_name || cid.slice(0, 8) + '…';
+          if (removedCandidateKeys.has(key)) {
+            return (
+              <li key={key} style={{ marginBottom: 4 }}>
+                Former member: <span className="badge badge-muted">Left the register - no feedback needed</span>
+              </li>
+            );
+          }
+          if (feedbackKeys.has(key)) {
+            return (
+              <li key={key} style={{ marginBottom: 4 }}>
+                {name}: <span className="badge badge-success">✓ Submitted</span>
+              </li>
+            );
+          }
+          const outstanding = feedbackDueByRequest.get(rId);
+          return (
+            <li key={key} style={{ marginBottom: 6 }}>
+              {name}:{' '}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: '2px 8px', fontSize: 12 }}
+                title="Admin-only feedback. Reviewed by the register team and never sent to candidates."
+                onClick={() =>
+                  openFeedbackModal({
+                    requestId: rId,
+                    candidateId: cid,
+                    candidateName: name,
+                    direction: 'made',
+                  })
+                }
+              >
+                Give admin-only feedback
+              </button>
+              {outstanding && (
+                <span style={{ display: 'block', marginTop: 3, fontSize: 12 }}>
+                  {outstanding.blocking ? (
+                    <span className="badge badge-warning">Overdue - blocking new requests</span>
+                  ) : (
+                    <span style={{ color: 'var(--color-text-secondary)' }}>
+                      Due by {new Date(outstanding.dueAt).toLocaleDateString('en-GB')}
+                    </span>
+                  )}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
+  const renderArchiveAction = (rId: string, isArchived: boolean, allFeedbackGiven: boolean) => {
+    if (isArchived) {
+      return (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ padding: '4px 10px', fontSize: 12 }}
+          disabled={archiveBusy === `made:${rId}`}
+          onClick={() => void restoreArchived(rId, 'made')}
+        >
+          Restore
+        </button>
+      );
+    }
+    if (allFeedbackGiven) {
+      return (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={{ padding: '4px 10px', fontSize: 12 }}
+          disabled={archiveBusy === `made:${rId}`}
+          onClick={() => void archiveDirect(rId, 'made')}
+        >
+          Archive
+        </button>
+      );
+    }
+    return (
+      <span
+        style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}
+        title="Give feedback for everyone in this request first, then you can archive it."
+      >
+        Feedback needed to archive
+      </span>
+    );
+  };
+
   return (
     <div>
     {tabsBar}
@@ -666,19 +1256,30 @@ export default function MemberRequests() {
           were introduced to.
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
             {feedbackOverdue.map((item) =>
-              item.candidateIds.map((cid) => (
-                <li key={`${item.requestId}:${cid}`} style={{ marginBottom: 4 }}>
-                  {nameForCandidate(item.requestId, cid)}, requested{' '}
-                  {new Date(item.createdAt).toLocaleDateString('en-GB')}{' '}
-                  <Link
-                    to={`/feedback/${item.requestId}/${cid}`}
-                    className="btn btn-secondary"
-                    style={{ padding: '2px 8px', fontSize: 12 }}
-                  >
-                    Give feedback
-                  </Link>
-                </li>
-              ))
+              item.candidateIds.map((cid) => {
+                const cName = nameForCandidate(item.requestId, cid);
+                return (
+                  <li key={`${item.requestId}:${cid}`} style={{ marginBottom: 4 }}>
+                    {cName}, requested{' '}
+                    {new Date(item.createdAt).toLocaleDateString('en-GB')}{' '}
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ padding: '2px 8px', fontSize: 12 }}
+                      onClick={() =>
+                        openFeedbackModal({
+                          requestId: item.requestId,
+                          candidateId: cid,
+                          candidateName: cName,
+                          direction: 'made',
+                        })
+                      }
+                    >
+                      Give feedback
+                    </button>
+                  </li>
+                );
+              })
             )}
           </ul>
         </div>
@@ -706,7 +1307,7 @@ export default function MemberRequests() {
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <strong>Limits:</strong> up to <strong>{weeklyCap}</strong> new {weeklyCap === 1 ? 'person' : 'people'} per rolling 7 days, and{' '}
         <strong>{monthlyCap}</strong> distinct {monthlyCap === 1 ? 'person' : 'people'} per calendar month (UTC). Outstanding
-        feedback can block new requests; see the Feedback column below.
+        feedback can block new requests; see the Feedback section below.
       </p>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '8px 0 0' }}>
         <details>
@@ -771,291 +1372,119 @@ export default function MemberRequests() {
           {contactsError} Existing request history is still shown below.
         </p>
       )}
-      <div className="table-scroll">
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
-            <th style={{ padding: 8 }}>Date</th>
-            <th style={{ padding: 8 }}>Candidates</th>
-            <th style={{ padding: 8 }}>Feedback</th>
-            <th style={{ padding: 8, width: 96 }} />
-          </tr>
-        </thead>
-        <tbody>
-          {[...requests]
-            .sort((a, b) => {
-              // Archived requests sit beneath the active ones.
-              const aArch = archivedRequests.made.has(a.id) ? 1 : 0;
-              const bArch = archivedRequests.made.has(b.id) ? 1 : 0;
-              return aArch - bArch;
-            })
-            .map((r) => {
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {sortedRequests.map((r) => {
             const candidateIds = Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [];
-            const allFeedbackGiven = candidateIds.every((cid) =>
-              feedbackKeys.has(`${r.id}:${cid}`)
-            );
+            const allFeedbackGiven = candidateIds.every((cid) => feedbackKeys.has(`${r.id}:${cid}`));
             const isArchived = archivedRequests.made.has(r.id);
-            const contacts = contactsByRequest[r.id] ?? [];
             return (
-              <tr
+              <div
                 key={r.id}
                 style={{
-                  borderBottom: '1px solid var(--color-border)',
+                  padding: 12,
+                  borderRadius: 12,
+                  border: '1px solid var(--color-border)',
                   background: isArchived
                     ? 'var(--color-surface-muted)'
                     : allFeedbackGiven
-                      ? undefined
+                      ? 'var(--color-surface)'
                       : 'rgba(217, 119, 6, 0.04)',
                   opacity: isArchived ? 0.75 : 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
                 }}
               >
-                <td style={{ padding: 8, whiteSpace: 'nowrap' }}>
-                  {new Date(r.created_at).toLocaleDateString('en-GB')}
-                  {isArchived && (
-                    <span className="badge badge-muted" style={{ display: 'block', marginTop: 4, fontSize: 11 }}>
-                      Archived
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: 8, minWidth: 0 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {candidateIds.map((id) => {
-                      const c = candidates.find((x) => x.id === id);
-                      const candidateProfile = profilesById[id];
-                      const details = contacts.find((row) => row.profile_id === id);
-                      const displayName = details?.full_name || (c ? c.first_name : `Member ${id.slice(0, 8)}...`);
-                      const wa = details?.mobile ? whatsappUrlFromPhone(details.mobile) : null;
-                      const hasContactDetails = !!details?.mobile;
-                      const noLongerListed = !!candidateProfile && !isProfileListedOnRegister(candidateProfile);
-                      const openProfile = candidateProfile
-                        ? () =>
-                            setSelectedProfile({
-                              profile: candidateProfile,
-                              contactDetails: details
-                                ? {
-                                    mobile: details.mobile,
-                                    linkedin_url: details.linkedin_url,
-                                  }
-                                : undefined,
-                            })
-                        : undefined;
-
-                      return (
-                        <div
-                          key={id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: 10,
-                            padding: 8,
-                            borderRadius: 10,
-                            border: '1px solid var(--color-border)',
-                            background: 'var(--color-surface)',
-                            cursor: openProfile ? 'pointer' : undefined,
-                          }}
-                          onClick={openProfile}
-                          role={openProfile ? 'button' : undefined}
-                          tabIndex={openProfile ? 0 : undefined}
-                          onKeyDown={openProfile ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openProfile(); } } : undefined}
-                          aria-label={openProfile ? `View full profile for ${displayName}` : undefined}
-                        >
-                          <div
-                            style={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: 8,
-                              overflow: 'hidden',
-                              flexShrink: 0,
-                              border: '1px solid var(--color-border)',
-                            }}
-                          >
-                            <ProfileThumb profileId={id} firstName={c?.first_name ?? 'Member'} />
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>
-                              {displayName}
-                              {noLongerListed && (
-                                <span
-                                  className="badge"
-                                  title="This member has since paused or left the register. The contact details you already received stay here for your records."
-                                  style={{
-                                    marginLeft: 8,
-                                    fontWeight: 500,
-                                    background: 'var(--color-surface-muted)',
-                                    color: 'var(--color-text-secondary)',
-                                    border: '1px solid var(--color-border)',
-                                  }}
-                                >
-                                  No longer on the register
-                                </span>
-                              )}
-                            </div>
-                            {hasContactDetails ? (
-                              <>
-                                {details?.mobile ? (
-                                  <div style={{ marginTop: 4, fontSize: 13 }}>
-                                    <a
-                                      href={telHref(details.mobile)}
-                                      style={{ fontWeight: 600 }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {details.mobile}
-                                    </a>
-                                  </div>
-                                ) : null}
-                                <div
-                                  style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {details.mobile ? (
-                                    <a className="btn btn-secondary" href={telHref(details.mobile)} style={{ padding: '4px 10px', fontSize: 12 }}>
-                                      Call
-                                    </a>
-                                  ) : null}
-                                  {wa ? (
-                                    <a
-                                      className="btn-whatsapp"
-                                      href={wa}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      aria-label={`WhatsApp ${details.first_name}`}
-                                      style={{ padding: '4px 10px', fontSize: 12 }}
-                                    >
-                                      WhatsApp
-                                    </a>
-                                  ) : null}
-                                  {details.linkedin_url ? (
-                                    <a
-                                      className="btn btn-secondary"
-                                      href={details.linkedin_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      style={{ padding: '4px 10px', fontSize: 12 }}
-                                    >
-                                      LinkedIn
-                                    </a>
-                                  ) : null}
-                                  {openProfile ? (
-                                    <button
-                                      type="button"
-                                      className="btn btn-primary"
-                                      style={{ padding: '4px 10px', fontSize: 12 }}
-                                      onClick={(e) => { e.stopPropagation(); openProfile(); }}
-                                    >
-                                      View full profile
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </>
-                            ) : (
-                              <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                {contactsLoading ? 'Loading contact details…' : 'Contact details not yet available.'}
-                                {openProfile && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary"
-                                    style={{ marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
-                                    onClick={(e) => { e.stopPropagation(); openProfile(); }}
-                                  >
-                                    View profile
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                    Requested {new Date(r.created_at).toLocaleDateString('en-GB')}
+                    {isArchived && (
+                      <span className="badge badge-muted" style={{ marginLeft: 8, fontSize: 11 }}>
+                        Archived
+                      </span>
+                    )}
                   </div>
-                </td>
-                <td style={{ padding: 8, fontSize: 13 }}>
-                  <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    For admin &amp; safeguarding purposes only - never seen by candidates.
+                  {renderArchiveAction(r.id, isArchived, allFeedbackGiven)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {candidateIds.map((id) => renderCandidateCard(r.id, id))}
+                </div>
+                <div
+                  style={{
+                    paddingTop: 8,
+                    borderTop: '1px solid var(--color-border)',
+                    fontSize: 13,
+                  }}
+                >
+                  <p style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    Admin-only feedback (never seen by candidates):
                   </p>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {candidateIds.map((cid) => {
-                      const key = `${r.id}:${cid}`;
-                      const c = candidates.find((x) => x.id === cid);
-                      const details = contacts.find((row) => row.profile_id === cid);
-                      const name = details?.first_name || c?.first_name || cid.slice(0, 8) + '…';
-                      if (removedCandidateKeys.has(key)) {
-                        return (
-                          <li key={key} style={{ marginBottom: 4 }}>
-                            Former member: <span className="badge badge-muted">Left the register - no feedback needed</span>
-                          </li>
-                        );
-                      }
-                      if (feedbackKeys.has(key)) {
-                        return (
-                          <li key={key} style={{ marginBottom: 4 }}>
-                            {name}: <span className="badge badge-success">✓ Submitted</span>
-                          </li>
-                        );
-                      }
-                      const outstanding = feedbackDueByRequest.get(r.id);
-                      return (
-                        <li key={key} style={{ marginBottom: 6 }}>
-                          {name}:{' '}
-                          <Link
-                            to={`/feedback/${r.id}/${cid}`}
-                            className="btn btn-secondary"
-                            style={{ padding: '2px 8px', fontSize: 12 }}
-                            title="Admin-only feedback. Reviewed by the register team and never sent to candidates."
-                          >
-                            Give admin-only feedback
-                          </Link>
-                          {outstanding && (
-                            <span style={{ display: 'block', marginTop: 3, fontSize: 12 }}>
-                              {outstanding.blocking ? (
-                                <span className="badge badge-warning">Overdue - blocking new requests</span>
-                              ) : (
-                                <span style={{ color: 'var(--color-text-secondary)' }}>
-                                  Due by {new Date(outstanding.dueAt).toLocaleDateString('en-GB')}
-                                </span>
-                              )}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </td>
-                <td style={{ padding: 8, verticalAlign: 'top' }}>
-                  {isArchived ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: 12 }}
-                      disabled={archiveBusy === `made:${r.id}`}
-                      onClick={() => void restoreArchived(r.id, 'made')}
-                    >
-                      Restore
-                    </button>
-                  ) : allFeedbackGiven ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 10px', fontSize: 12 }}
-                      disabled={archiveBusy === `made:${r.id}`}
-                      onClick={() => void archiveDirect(r.id, 'made')}
-                    >
-                      Archive
-                    </button>
-                  ) : (
-                    <span
-                      style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}
-                      title="Give feedback for everyone in this request first, then you can archive it."
-                    >
-                      Feedback needed to archive
-                    </span>
-                  )}
-                </td>
-              </tr>
+                  {renderFeedbackItems(r.id, candidateIds)}
+                </div>
+              </div>
             );
           })}
-        </tbody>
-      </table>
-      </div>
+        </div>
+      ) : (
+        <div className="table-scroll">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>
+                <th style={{ padding: 8 }}>Date</th>
+                <th style={{ padding: 8 }}>Candidates</th>
+                <th style={{ padding: 8 }}>Feedback</th>
+                <th style={{ padding: 8, width: 96 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRequests.map((r) => {
+                const candidateIds = Array.isArray(r.candidate_ids) ? (r.candidate_ids as string[]) : [];
+                const allFeedbackGiven = candidateIds.every((cid) => feedbackKeys.has(`${r.id}:${cid}`));
+                const isArchived = archivedRequests.made.has(r.id);
+                return (
+                  <tr
+                    key={r.id}
+                    style={{
+                      borderBottom: '1px solid var(--color-border)',
+                      background: isArchived
+                        ? 'var(--color-surface-muted)'
+                        : allFeedbackGiven
+                          ? undefined
+                          : 'rgba(217, 119, 6, 0.04)',
+                      opacity: isArchived ? 0.75 : 1,
+                    }}
+                  >
+                    <td style={{ padding: 8, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      {new Date(r.created_at).toLocaleDateString('en-GB')}
+                      {isArchived && (
+                        <span className="badge badge-muted" style={{ display: 'block', marginTop: 4, fontSize: 11 }}>
+                          Archived
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding: 8, minWidth: 0, verticalAlign: 'top' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {candidateIds.map((id) => renderCandidateCard(r.id, id))}
+                      </div>
+                    </td>
+                    <td style={{ padding: 8, fontSize: 13, verticalAlign: 'top' }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                        For admin &amp; safeguarding purposes only - never seen by candidates.
+                      </p>
+                      {renderFeedbackItems(r.id, candidateIds)}
+                    </td>
+                    <td style={{ padding: 8, verticalAlign: 'top' }}>
+                      {renderArchiveAction(r.id, isArchived, allFeedbackGiven)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {feedbackModalNode}
       {selectedProfile && (
         <ProfileModal
           candidate={selectedProfile.profile}

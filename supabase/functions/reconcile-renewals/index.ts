@@ -43,17 +43,17 @@ async function webhookEndpointProblems(secret: string): Promise<string[]> {
     data?: { id: string; url: string; status: string; enabled_events: string[] }[];
     error?: { message?: string };
   };
-  if (!res.ok) return [`Could not read Stripe webhook endpoints: ${json.error?.message ?? res.status}`];
+  if (!res.ok) return [`Could not read Stripe webhook endpoints: ${escapeAlertText(String(json.error?.message ?? res.status))}`];
   const ours = (json.data ?? []).filter((e) => e.url.endsWith('/functions/v1/stripe-webhook'));
   if (ours.length === 0) return ['There is no Stripe webhook endpoint for stripe-webhook.'];
   const problems: string[] = [];
   for (const e of ours) {
     if (e.status !== 'enabled') {
-      problems.push(`Stripe has <strong>${e.status}</strong> webhook endpoint ${e.id}. Stripe does this after repeated failed deliveries: check stripe-webhook logs, then re-enable it in Stripe.`);
+      problems.push(`Stripe has <strong>${escapeAlertText(String(e.status))}</strong> webhook endpoint ${escapeAlertText(String(e.id))}. Stripe does this after repeated failed deliveries: check stripe-webhook logs, then re-enable it in Stripe.`);
     }
     for (const needed of ['checkout.session.completed', 'charge.refunded']) {
       if (!e.enabled_events.includes('*') && !e.enabled_events.includes(needed)) {
-        problems.push(`Webhook endpoint ${e.id} is not listening for ${needed}.`);
+        problems.push(`Webhook endpoint ${escapeAlertText(String(e.id))} is not listening for ${needed}.`);
       }
     }
   }
@@ -61,6 +61,9 @@ async function webhookEndpointProblems(secret: string): Promise<string[]> {
 }
 
 Deno.serve(async (req) => {
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, req, 405);
+  }
   const denied = cronUnauthorized(req);
   if (denied) return denied;
 

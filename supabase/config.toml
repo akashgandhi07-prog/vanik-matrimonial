@@ -14,7 +14,6 @@ additional_redirect_urls = [
   "https://matrimonial.vanikcouncil.uk/**",
   "http://localhost:3000/**",
   "http://localhost:5173/**",
-  "https://*.vercel.app/**",
 ]
 
 [auth.email]
@@ -146,4 +145,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-inactivity-nudges]
+verify_jwt = false
+
+[functions.admin-sharing-preview]
+verify_jwt = false
+
+[functions.member-manage-photos]
 verify_jwt = false

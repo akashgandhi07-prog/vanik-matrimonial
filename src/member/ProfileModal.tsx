@@ -4,9 +4,14 @@ import { useProfilePhotoDisplayUrls } from './ProfileThumb';
 import { cmToFeetInches } from '../lib/heights';
 import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import type { ProfileRow } from './memberContext';
-import { linkedInDisplay } from '../lib/linkedin';
+import { linkedInDisplay, normalizeLinkedInUrl } from '../lib/linkedin';
 import { dietLabel, religionLabel, telHref } from '../lib/profileLabels';
-import { whatsappUrlFromPhone } from '../lib/whatsapp';
+import {
+  familyShareSummaryText,
+  whatsappIntroText,
+  whatsappShareUrl,
+  whatsappUrlFromPhone,
+} from '../lib/whatsapp';
 
 type Props = {
   candidate: ProfileRow;
@@ -16,6 +21,10 @@ type Props = {
   };
   /** When true the modal is opened before contact details are shared (browse/saved). No photo is shown; title is anonymous. */
   anonymous?: boolean;
+  /** When true, hides bookmark/request actions (e.g. member previewing their own profile). */
+  previewOnly?: boolean;
+  /** Optional photo URLs to use directly (e.g. when previewing own profile in My Profile). */
+  overridePhotoUrls?: string[];
   inTray: boolean;
   trayFull: boolean;
   /** Max profiles allowed in the tray (0-3). Used for clearer “full” tooltips when limits are below 3. */
@@ -36,6 +45,8 @@ export function ProfileModal({
   candidate: c,
   contactDetails,
   anonymous = false,
+  previewOnly = false,
+  overridePhotoUrls,
   inTray,
   trayFull,
   trayCapacity,
@@ -49,13 +60,38 @@ export function ProfileModal({
   onToggleTray,
 }: Props) {
   const [photoLightboxOpen, setPhotoLightboxOpen] = useState(false);
-  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoCursor, setPhotoCursor] = useState<{ id: string; index: number }>({
+    id: c.id,
+    index: 0,
+  });
   const [copied, setCopied] = useState(false);
-  const photoUrls = useProfilePhotoDisplayUrls(c.id, c.first_name, !anonymous);
+  const [icebreakerCopied, setIcebreakerCopied] = useState(false);
+  const [summaryCopied, setSummaryCopied] = useState(false);
+  const fetchedPhotoUrls = useProfilePhotoDisplayUrls(
+    c.id,
+    c.first_name,
+    !anonymous && !overridePhotoUrls
+  );
+  const photoUrls = overridePhotoUrls ?? fetchedPhotoUrls;
   const gallerySize = !anonymous ? photoUrls.length : 0;
   const hasMultiPhotos = gallerySize > 1;
+  const photoIndex =
+    photoCursor.id === c.id && (gallerySize === 0 || photoCursor.index < gallerySize)
+      ? photoCursor.index
+      : 0;
   const safeIndex = gallerySize > 0 ? Math.min(photoIndex, gallerySize - 1) : 0;
   const currentPhotoUrl = !anonymous ? photoUrls[safeIndex] : null;
+  const setPhotoIndex = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      setPhotoCursor((prev) => {
+        const base =
+          prev.id === c.id && (gallerySize === 0 || prev.index < gallerySize) ? prev.index : 0;
+        const resolved = typeof next === 'function' ? next(base) : next;
+        return { id: c.id, index: resolved };
+      });
+    },
+    [c.id, gallerySize]
+  );
 
   const goPrevPhoto = useCallback(
     (e?: MouseEvent) => {
@@ -63,7 +99,7 @@ export function ProfileModal({
       if (gallerySize <= 1) return;
       setPhotoIndex((i) => (i - 1 + gallerySize) % gallerySize);
     },
-    [gallerySize]
+    [gallerySize, setPhotoIndex]
   );
 
   const goNextPhoto = useCallback(
@@ -72,18 +108,8 @@ export function ProfileModal({
       if (gallerySize <= 1) return;
       setPhotoIndex((i) => (i + 1) % gallerySize);
     },
-    [gallerySize]
+    [gallerySize, setPhotoIndex]
   );
-
-  useEffect(() => {
-    setPhotoIndex(0);
-  }, [c.id]);
-
-  useEffect(() => {
-    if (photoIndex >= gallerySize && gallerySize > 0) {
-      setPhotoIndex(0);
-    }
-  }, [photoIndex, gallerySize]);
 
   // Close on Escape (lightbox first, then modal); arrow keys cycle photos when gallery has multiple.
   useEffect(() => {
@@ -135,7 +161,12 @@ export function ProfileModal({
     { label: 'Plans to settle', value: c.future_settlement_plans ? sentenceCaseIfAllCaps(c.future_settlement_plans) : null },
   ].filter((d): d is { label: string; value: string } => !!d.value);
 
-  const whatsappUrl = contactDetails?.mobile ? whatsappUrlFromPhone(contactDetails.mobile) : null;
+  const introMessage = whatsappIntroText(c.first_name);
+  const whatsappUrl = contactDetails?.mobile
+    ? whatsappUrlFromPhone(contactDetails.mobile, introMessage)
+    : null;
+  const familySummary = familyShareSummaryText(c);
+  const familyWhatsappUrl = whatsappShareUrl(familySummary);
 
   async function copyNumber(phone: string) {
     try {
@@ -144,6 +175,26 @@ export function ProfileModal({
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard can be blocked (e.g. insecure context); the number is still shown and tappable.
+    }
+  }
+
+  async function copyIcebreaker() {
+    try {
+      await navigator.clipboard.writeText(introMessage);
+      setIcebreakerCopied(true);
+      window.setTimeout(() => setIcebreakerCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function copyFamilySummary() {
+    try {
+      await navigator.clipboard.writeText(familySummary);
+      setSummaryCopied(true);
+      window.setTimeout(() => setSummaryCopied(false), 2000);
+    } catch {
+      /* ignore */
     }
   }
 
@@ -318,13 +369,13 @@ export function ProfileModal({
                       WhatsApp
                     </a>
                   )}
-                  {contactDetails.linkedin_url && (
+                  {contactDetails.linkedin_url && normalizeLinkedInUrl(contactDetails.linkedin_url) && (
                     <a
                       className="profile-modal-contact-btn"
-                      href={contactDetails.linkedin_url}
+                      href={normalizeLinkedInUrl(contactDetails.linkedin_url)!}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={linkedInDisplay(contactDetails.linkedin_url)}
+                      title={linkedInDisplay(normalizeLinkedInUrl(contactDetails.linkedin_url)!)}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <rect x="3" y="7" width="18" height="13" rx="2" />
@@ -337,9 +388,23 @@ export function ProfileModal({
                 {contactDetails.mobile && (
                   <div className="profile-modal-contact-number">
                     <a href={telHref(contactDetails.mobile)}>{contactDetails.mobile}</a>
-                    <button type="button" className="profile-modal-link-btn" onClick={() => void copyNumber(contactDetails.mobile!)}>
-                      {copied ? 'Copied' : 'Copy'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="profile-modal-link-btn"
+                        title="Copy a polite starter message to send by SMS or WhatsApp"
+                        onClick={() => void copyIcebreaker()}
+                      >
+                        {icebreakerCopied ? 'Icebreaker copied!' : 'Copy starter message'}
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-modal-link-btn"
+                        onClick={() => void copyNumber(contactDetails.mobile!)}
+                      >
+                        {copied ? 'Copied' : 'Copy number'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </section>
@@ -371,47 +436,92 @@ export function ProfileModal({
               </dl>
             )}
 
-            {/* Action buttons */}
-            <div className="profile-modal-actions">
-              <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
-                {bookmarked ? '★ Saved' : '☆ Save profile'}
-              </button>
-              {allowRequestAction ? (
-                blocked ? (
-                  <Link
-                    to="/dashboard/requests"
-                    state={{ focusProfileId: c.id }}
-                    className="btn btn-primary"
-                    style={{ textAlign: 'center', textDecoration: 'none' }}
-                    onClick={onClose}
+            {!anonymous && !previewOnly && (
+              <section
+                aria-label="Share with family"
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface-muted)',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', flex: '1 1 200px' }}>
+                  <strong style={{ color: 'var(--color-text)', display: 'block', marginBottom: 2 }}>
+                    Discussing with parents or family?
+                  </strong>
+                  Share a clean text summary of {titleCaseIfAllCaps(c.first_name)}&apos;s profile on WhatsApp.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <a
+                    href={familyWhatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: 13 }}
                   >
-                    Already requested
-                  </Link>
-                ) : (
+                    Share on WhatsApp
+                  </a>
                   <button
                     type="button"
-                    className="btn btn-primary"
-                    disabled={!inTray && (trayFull || feedbackRequiredBeforeRequests)}
-                    title={requestTrayTitle}
-                    onClick={onToggleTray}
+                    className="btn btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: 13 }}
+                    onClick={() => void copyFamilySummary()}
                   >
-                    {inTray ? '✕ Remove from request' : 'Request contact details'}
+                    {summaryCopied ? 'Copied!' : 'Copy summary'}
                   </button>
-                )
-              ) : null}
-            </div>
-            {allowRequestAction && !blocked && (
+                </div>
+              </section>
+            )}
+
+            {/* Action buttons */}
+            {!previewOnly && (
+              <div className="profile-modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={onToggleBookmark}>
+                  {bookmarked ? '★ Saved' : '☆ Save profile'}
+                </button>
+                {allowRequestAction ? (
+                  blocked ? (
+                    <Link
+                      to="/dashboard/requests"
+                      state={{ focusProfileId: c.id }}
+                      className="btn btn-primary"
+                      style={{ textAlign: 'center', textDecoration: 'none' }}
+                      onClick={onClose}
+                    >
+                      Already requested
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={!inTray && (trayFull || feedbackRequiredBeforeRequests)}
+                      title={requestTrayTitle}
+                      onClick={onToggleTray}
+                    >
+                      {inTray ? '✕ Remove from request' : 'Request contact details'}
+                    </button>
+                  )
+                ) : null}
+              </div>
+            )}
+            {!previewOnly && allowRequestAction && !blocked && (
               <p className="profile-modal-footnote">
                 A request is a two-way introduction. When you submit, this member is emailed straight away to say you
                 asked, and given your name, profile and contact details. You get theirs at the same time.
               </p>
             )}
-            {!allowRequestAction && showRequestFromBrowseHint && (
+            {!previewOnly && !allowRequestAction && showRequestFromBrowseHint && (
               <p className="profile-modal-footnote">
                 To request contact details, open this profile from Browse and add it to your request tray.
               </p>
             )}
-            {blocked && allowRequestAction && (
+            {!previewOnly && blocked && allowRequestAction && (
               <p className="profile-modal-footnote" style={{ color: 'var(--color-warning)' }}>
                 You already requested this profile. Use the button above to open their card in My requests (photo and
                 contacts).

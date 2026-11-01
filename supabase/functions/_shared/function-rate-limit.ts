@@ -22,6 +22,18 @@ export async function allowFunctionRateLimit(
     return false;
   }
 
+  if (depth === 0) {
+    const { data: rpcAllowed, error: rpcErr } = await admin.rpc('check_function_rate_limit', {
+      p_scope: scope,
+      p_rate_key: rateKey,
+      p_max: maxAttempts,
+      p_window_ms: windowMs,
+    });
+    if (!rpcErr && typeof rpcAllowed === 'boolean') {
+      return rpcAllowed;
+    }
+  }
+
   const { data: row } = await admin
     .from('function_rate_limits')
     .select('attempt_count, window_started_at')
@@ -41,7 +53,7 @@ export async function allowFunctionRateLimit(
     }
     if (insErr) {
       console.error('function_rate_limits insert', insErr.message);
-      return true;
+      return false;
     }
     return true;
   }
@@ -70,6 +82,19 @@ export async function allowFunctionRateLimit(
 }
 
 export function clientIp(req: Request): string {
+  const cfIp = req.headers.get('cf-connecting-ip')?.trim();
+  if (cfIp) return cfIp;
+  const realIp = req.headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
   const forwarded = req.headers.get('x-forwarded-for');
-  return (forwarded?.split(',')[0] ?? req.headers.get('cf-connecting-ip') ?? 'unknown').trim();
+  if (forwarded) {
+    const parts = forwarded
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts[parts.length - 1];
+    }
+  }
+  return 'unknown';
 }

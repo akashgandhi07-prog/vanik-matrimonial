@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import imageCompression from 'browser-image-compression';
+import ProfileCard from '../components/ProfileCard';
+import { ProfileModal } from '../member/ProfileModal';
 import { ProfileThumb } from '../member/ProfileThumb';
 import type { MemberPrivateRow, ProfileRow } from '../member/memberContext';
 import { useMemberArea } from '../member/memberContext';
@@ -39,6 +41,7 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
   const [height, setHeight] = useState<number | ''>(p.height_cm ?? '');
   const [diet, setDiet] = useState(p.diet ?? 'Veg');
   const [linkedin, setLinkedin] = useState(privateRow.linkedin_url ?? '');
+  const [pwCurr, setPwCurr] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwConf, setPwConf] = useState('');
   const [pwStatus, setPwStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -233,6 +236,10 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
     setPwError('');
+    if (!pwCurr) {
+      setPwError('Please enter your current password.');
+      return;
+    }
     if (pwNew.length < 8) {
       setPwError('New password must be at least 8 characters.');
       return;
@@ -242,6 +249,21 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
       return;
     }
     setPwStatus('saving');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const emailForReauth = (user?.email ?? privateRow.email ?? '').trim();
+    if (emailForReauth) {
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({
+        email: emailForReauth,
+        password: pwCurr,
+      });
+      if (reauthErr) {
+        setPwStatus('error');
+        setPwError(userFacingAuthError({ message: 'reauth_current_password' }));
+        return;
+      }
+    }
     const { error } = await supabase.auth.updateUser({ password: pwNew });
     if (error) {
       setPwStatus('error');
@@ -249,6 +271,7 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
       return;
     }
     setPwStatus('saved');
+    setPwCurr('');
     setPwNew('');
     setPwConf('');
     // Sign out after password change for security
@@ -372,6 +395,28 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
     () => photos.find((x) => x.is_primary) ?? photos[0] ?? null,
     [photos]
   );
+  const [previewCardOpen, setPreviewCardOpen] = useState(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+
+  const liveCandidate = useMemo<ProfileRow>(
+    () => ({
+      ...p,
+      education: education.trim() || p.education,
+      job_title: jobTitle.trim() || p.job_title,
+      hobbies: hobbies.trim() || p.hobbies,
+      future_settlement_plans: future.trim() || p.future_settlement_plans,
+      nationality: nationality.trim() || p.nationality,
+      town_country_of_origin: town.trim() || p.town_country_of_origin,
+      height_cm: heightCm,
+      diet,
+    }),
+    [p, education, jobTitle, hobbies, future, nationality, town, heightCm, diet]
+  );
+
+  const signedPhotoUrls = useMemo(
+    () => photos.map((ph) => ph.signed_url).filter((u): u is string => !!u),
+    [photos]
+  );
 
   return (
     <div className="member-my-profile-grid">
@@ -382,9 +427,60 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
           profileId={p.id}
           firstName={p.first_name}
         />
-        <p style={{ marginTop: 12 }}>
+        <p style={{ marginTop: 12, marginBottom: 8 }}>
           {p.first_name}, {p.age}
         </p>
+        <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '0 0 10px', lineHeight: 1.5 }}>
+          In <strong>Browse</strong>, your card is anonymous (no name, photo, or contact details). Once an introduction
+          is made, the other member sees your full profile, photos, and contact details.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: 13, padding: '6px 12px' }}
+            onClick={() => setPreviewCardOpen((v) => !v)}
+          >
+            {previewCardOpen ? 'Hide Browse card preview' : 'Preview my Browse card'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: 13, padding: '6px 12px' }}
+            onClick={() => setPreviewModalOpen(true)}
+          >
+            Preview full profile &amp; photos
+          </button>
+        </div>
+        {previewCardOpen && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 12,
+              background: 'var(--color-surface-muted)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
+            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              <strong>Anonymous Browse card preview</strong> (updates live as you edit your details):
+            </p>
+            <ProfileCard
+              age={liveCandidate.age}
+              gender={liveCandidate.gender}
+              profession={liveCandidate.job_title}
+              height={liveCandidate.height_cm ? cmToFeetInches(liveCandidate.height_cm) : null}
+              diet={liveCandidate.diet}
+              location={liveCandidate.place_of_birth}
+              religion={liveCandidate.religion}
+              nationality={liveCandidate.nationality}
+              education={liveCandidate.education}
+              hobbies={liveCandidate.hobbies}
+              settlement={liveCandidate.future_settlement_plans}
+              onOpen={() => setPreviewModalOpen(true)}
+            />
+          </div>
+        )}
 
         <h3 style={{ margin: '20px 0 0', fontSize: 17 }}>Your photos</h3>
         <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: '6px 0 12px', lineHeight: 1.5 }}>
@@ -519,8 +615,8 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
                     </p>
                     <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                       {photo.is_primary
-                        ? 'Shown on your card in browse and as the first image in your profile.'
-                        : 'Shown only in your full profile gallery.'}
+                        ? 'First image shown in your profile after an introduction (photos are never shown on browse cards).'
+                        : 'Shown in your full profile gallery after an introduction.'}
                     </p>
                     <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--color-text-secondary)' }}>
                       Drag this row to reorder.
@@ -881,6 +977,18 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
           For security, you&apos;ll be signed out after changing your password.
         </p>
         <form onSubmit={(e) => void changePassword(e)} style={{ display: 'grid', gap: 8 }}>
+          <label className="label" htmlFor="mp-pw-curr">
+            Current password
+          </label>
+          <input
+            id="mp-pw-curr"
+            type="password"
+            autoComplete="current-password"
+            value={pwCurr}
+            onChange={(e) => setPwCurr(e.target.value)}
+            required
+            disabled={pwStatus === 'saving' || pwStatus === 'saved'}
+          />
           <label className="label" htmlFor="mp-pw-new">
             New password
           </label>
@@ -986,6 +1094,27 @@ function MemberMyProfileForm({ profile: p, privateRow, loadAll }: FormProps) {
             )}
           </div>
         </div>
+      )}
+
+      {previewModalOpen && (
+        <ProfileModal
+          candidate={liveCandidate}
+          contactDetails={{
+            mobile: privateRow.mobile_phone,
+            linkedin_url: normalizeLinkedInUrl(linkedin) || privateRow.linkedin_url,
+          }}
+          inTray={false}
+          trayFull={false}
+          blocked
+          bookmarked={false}
+          allowRequestAction={false}
+          showRequestFromBrowseHint={false}
+          previewOnly
+          overridePhotoUrls={signedPhotoUrls}
+          onClose={() => setPreviewModalOpen(false)}
+          onToggleBookmark={() => {}}
+          onToggleTray={() => {}}
+        />
       )}
     </div>
   );

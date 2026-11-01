@@ -54,10 +54,15 @@ function isLocalHttpDevOrigin(origin: string): boolean {
   }
 }
 
-function envFlagEnabled(name: string, defaultTrue = true): boolean {
+function envFlagEnabled(name: string, defaultTrue = false): boolean {
   const raw = (Deno.env.get(name) ?? '').trim().toLowerCase();
   if (!raw) return defaultTrue;
   return !['0', 'false', 'off', 'no'].includes(raw);
+}
+
+function isHostedProductionSupabase(): boolean {
+  const sbUrl = (Deno.env.get('SUPABASE_URL') ?? '').trim().toLowerCase();
+  return sbUrl.includes('.supabase.co') && !envFlagEnabled('ALLOW_LOCALHOST_CORS', false);
 }
 
 function isVercelPreviewOrigin(origin: string): boolean {
@@ -96,10 +101,10 @@ export function checkoutRedirectBase(clientOrigin: unknown): string {
   const candidate = normalizeHttpOrigin(clientOrigin.trim());
   if (!candidate) return fallback;
   const lower = candidate.toLowerCase();
-  if (allow.has(lower) || isLocalHttpDevOrigin(candidate)) {
+  if (allow.has(lower) || (!isHostedProductionSupabase() && isLocalHttpDevOrigin(candidate))) {
     return candidate.replace(/\/$/, '');
   }
-  if (envFlagEnabled('CORS_ALLOW_VERCEL', true) && isVercelPreviewOrigin(candidate)) {
+  if (envFlagEnabled('CORS_ALLOW_VERCEL', false) && isVercelPreviewOrigin(candidate)) {
     return candidate.replace(/\/$/, '');
   }
   return fallback;

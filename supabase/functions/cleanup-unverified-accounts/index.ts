@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
+import { isUserAdmin } from '../_shared/auth-admin.ts';
+import { jsonResponse } from '../_shared/cors.ts';
 import { cronUnauthorized } from '../_shared/cron-guard.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
@@ -22,12 +23,28 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: error.message }, req, 500);
     }
     const users = data.users;
-    for (const u of users) {
-      if (u.email_confirmed_at) continue;
+    const candidates = users.filter((u) => {
+      if (u.email_confirmed_at) return false;
+      if (isUserAdmin(u)) return false;
       const created = u.created_at ? new Date(u.created_at) : new Date();
-      if (created > cutoff) continue;
-      const { error: delErr } = await admin.auth.admin.deleteUser(u.id);
-      if (!delErr) deleted++;
+      return created <= cutoff;
+    });
+
+    if (candidates.length > 0) {
+      const candidateIds = candidates.map((u) => u.id);
+      const [{ data: profRows }, { data: payRows }] = await Promise.all([
+        admin.from('profiles').select('auth_user_id').in('auth_user_id', candidateIds),
+        admin.from('stripe_checkout_sessions').select('auth_user_id').in('auth_user_id', candidateIds),
+      ]);
+      const keepIds = new Set<string>([
+        ...(profRows ?? []).map((r) => String(r.auth_user_id ?? '')),
+        ...(payRows ?? []).map((r) => String(r.auth_user_id ?? '')),
+      ]);
+      for (const u of candidates) {
+        if (keepIds.has(u.id)) continue;
+        const { error: delErr } = await admin.auth.admin.deleteUser(u.id);
+        if (!delErr) deleted++;
+      }
     }
     if (users.length < perPage) break;
     page++;

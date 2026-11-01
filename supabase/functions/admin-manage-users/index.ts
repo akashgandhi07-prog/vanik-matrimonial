@@ -204,7 +204,10 @@ function introductionFeedbackFromRows(
 
 function csvEscapeCell(v: unknown): string {
   if (v === null || v === undefined) return '';
-  const s = String(v);
+  let s = String(v);
+  if (/^[=+\-@\t\r]/.test(s) && !/^-\d+(\.\d+)?$/.test(s)) {
+    s = `'${s}`;
+  }
   if (/[\r\n",]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -573,7 +576,7 @@ Deno.serve(async (req) => {
           const idLower = idPath.toLowerCase();
           const idIsImage =
             idLower.endsWith('.jpg') || idLower.endsWith('.jpeg') || idLower.endsWith('.png');
-          if (idPath) {
+          if (idPath && !isSupportAdmin(userData.user)) {
             const { data: s } = await admin.storage.from('id-documents').createSignedUrl(idPath, ttl);
             idSigned = s?.signedUrl ?? null;
           }
@@ -617,6 +620,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'export_members_csv') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot export member data' }, req, 403);
+    }
     const f = typeof body.filter === 'string' ? body.filter : 'all';
     const rawCols = Array.isArray(body.columns) ? body.columns : null;
     let selectedColumns: ExportMemberColumn[];
@@ -824,6 +830,9 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'export_emails') {
+    if (isSupportAdmin(userData.user)) {
+      return jsonResponse({ error: 'Support admin role cannot export member emails' }, req, 403);
+    }
     const rawStatuses = Array.isArray(body.statuses) ? body.statuses : [];
     const allowed = new Set([
       'active',
@@ -2396,7 +2405,7 @@ Deno.serve(async (req) => {
       const { data: s } = await admin.storage.from('profile-photos').createSignedUrl(prof.pending_photo_url, 900);
       signedUrls.pending_photo = s?.signedUrl ?? null;
     }
-    if (priv.id_document_url) {
+    if (priv.id_document_url && !isSupportAdmin(userData.user)) {
       const { data: s } = await admin.storage.from('id-documents').createSignedUrl(priv.id_document_url, 3600);
       signedUrls.id_document = s?.signedUrl ?? null;
     }
@@ -2602,8 +2611,11 @@ Deno.serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(limit);
     if (search) {
-      const like = `%${search.replace(/[%_,()]/g, '')}%`;
-      q = q.or(`error_code.ilike.${like},user_email.ilike.${like},area.ilike.${like}`);
+      const clean = search.replace(/[^a-zA-Z0-9@._\s-]/g, '').trim();
+      if (clean) {
+        const like = `"%${clean}%"`;
+        q = q.or(`error_code.ilike.${like},user_email.ilike.${like},area.ilike.${like}`);
+      }
     }
     const { data, error } = await q;
     if (error) return jsonResponse({ error: error.message }, req, 500);

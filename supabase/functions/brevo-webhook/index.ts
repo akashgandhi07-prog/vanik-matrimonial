@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
+import { timingSafeEqualStrings } from '../_shared/cron-guard.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
 
 // Brevo transactional webhook -> email_log delivery statuses.
@@ -65,8 +66,11 @@ Deno.serve(async (req) => {
   if (!expected) {
     return jsonResponse({ error: 'Webhook not configured' }, req, 500);
   }
-  const token = new URL(req.url).searchParams.get('token') ?? '';
-  if (token !== expected) {
+  const token =
+    req.headers.get('x-brevo-webhook-token')?.trim() ||
+    new URL(req.url).searchParams.get('token') ||
+    '';
+  if (!token || !timingSafeEqualStrings(token, expected)) {
     return jsonResponse({ error: 'Unauthorized' }, req, 401);
   }
 
@@ -83,8 +87,9 @@ Deno.serve(async (req) => {
 
   for (const ev of events) {
     const mapped = ev.event ? mapEvent(ev.event) : null;
-    const email = ev.email?.trim().toLowerCase();
-    if (!mapped || !email) continue;
+    const rawEmail = ev.email?.trim().toLowerCase() ?? '';
+    const email = rawEmail.replace(/[%_\\]/g, '');
+    if (!mapped || !email || !email.includes('@')) continue;
 
     const messageId = ev['message-id']?.trim() || null;
     const reason = ev.reason?.trim() || null;

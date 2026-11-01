@@ -6,7 +6,7 @@ import { PublicLayout } from '../components/Layout';
 import { ageFromDob, isAdminUser, publicAuthUrl, userFacingAuthError } from '../lib/auth';
 import { HEIGHT_OPTIONS } from '../lib/heights';
 import { sanitizeText } from '../lib/sanitize';
-import { certainlySignedOut } from '../lib/sessionHint';
+import { certainlySignedOut, clearRegistrationDraft } from '../lib/sessionHint';
 import { titleCaseIfAllCaps, sentenceCaseIfAllCaps } from '../lib/displayCase';
 import {
   isValidInternationalPhone,
@@ -132,7 +132,9 @@ const defaultState: FormState = {
 
 function loadState(): FormState {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = sessionStorage.getItem(LS_KEY) ?? localStorage.getItem(LS_KEY);
+    // Clean up any legacy cleartext draft left in persistent localStorage.
+    localStorage.removeItem(LS_KEY);
     if (!raw) return { ...defaultState };
     return { ...defaultState, ...JSON.parse(raw) };
   } catch {
@@ -324,7 +326,11 @@ export default function Register() {
   }, [location.pathname]);
 
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(form));
+    try {
+      sessionStorage.setItem(LS_KEY, JSON.stringify(form));
+    } catch {
+      /* ignore */
+    }
   }, [form]);
 
   useEffect(() => {
@@ -385,17 +391,14 @@ export default function Register() {
     if (!uid || isAdmin) return;
     let owner: string | null = null;
     try {
-      owner = localStorage.getItem(LS_OWNER_KEY);
+      owner = sessionStorage.getItem(LS_OWNER_KEY) ?? localStorage.getItem(LS_OWNER_KEY);
+      localStorage.removeItem(LS_OWNER_KEY);
     } catch {
       return;
     }
     if (owner === uid) return;
     if (owner) {
-      try {
-        localStorage.removeItem(LS_KEY);
-      } catch {
-        /* storage unavailable: the in-memory reset below still applies */
-      }
+      clearRegistrationDraft();
       // The recommend-a-friend code identifies the referrer, not the person who
       // typed this draft, so it survives - it came from the link this visitor
       // followed, and the prefill effect has already run and will not run again.
@@ -407,7 +410,7 @@ export default function Register() {
       setFieldErrors({});
     }
     try {
-      localStorage.setItem(LS_OWNER_KEY, uid);
+      sessionStorage.setItem(LS_OWNER_KEY, uid);
     } catch {
       /* ignore */
     }
@@ -626,8 +629,11 @@ export default function Register() {
         purpose: 'registration',
         client_origin: window.location.origin,
       })) as { url?: string };
-      if (res.url) window.location.href = res.url;
-      else throw new Error('No checkout URL returned');
+      if (res.url && res.url.startsWith('https://checkout.stripe.com/')) {
+        window.location.href = res.url;
+      } else {
+        throw new Error('No checkout URL returned');
+      }
     } catch (e) {
       console.error('create-checkout-session:', e);
       setActionNotice({
@@ -686,7 +692,7 @@ export default function Register() {
       return;
     }
     clearFieldError('id_document_path');
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const ext = file.type === 'image/png' ? 'png' : 'jpg';
     const path = `${session.user.id}/id-${Date.now()}.${ext}`;
     setIdUploading(true);
     setIdProgress(0.2);
@@ -695,7 +701,7 @@ export default function Register() {
     }, 200);
     const { error } = await supabase.storage.from('id-documents').upload(path, file, {
       upsert: true,
-      contentType: file.type,
+      contentType: file.type === 'image/png' ? 'image/png' : 'image/jpeg',
     });
     clearInterval(timer);
     setIdUploading(false);
@@ -869,8 +875,7 @@ export default function Register() {
       };
       await invokeFunction('submit-registration', payload);
       sessionStorage.setItem('vmr_pending_email', session.user.email);
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(LS_OWNER_KEY);
+      clearRegistrationDraft();
       localStorage.removeItem(REFERRAL_LS_KEY);
       window.location.href = '/registration-pending';
     } catch (err) {

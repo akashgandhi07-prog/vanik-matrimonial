@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     const { data: requester, error: reErr } = await admin
       .from('profiles')
       .select(
-        'id, first_name, gender, seeking_gender, reference_number, status, membership_expires_at, age, job_title, education, religion, community, nationality, place_of_birth, height_cm'
+        'id, first_name, gender, seeking_gender, reference_number, status, hidden_reason, membership_expires_at, age, job_title, education, religion, community, nationality, place_of_birth, height_cm'
       )
       .eq('auth_user_id', userData.user.id)
       .single();
@@ -112,6 +112,14 @@ Deno.serve(async (req) => {
 
     if (requester.status !== 'active' || !hasMembershipAccess(requester.membership_expires_at)) {
       return jsonErr(req, 403, 'membership_not_active', 'Membership not active');
+    }
+    if ((requester as { hidden_reason?: string | null }).hidden_reason != null) {
+      return jsonErr(
+        req,
+        403,
+        'profile_hidden',
+        'Your profile is currently paused or not listed. Unpause your profile before requesting contact details.'
+      );
     }
 
     const cutoff = new Date(Date.now() - 21 * 864e5).toISOString();

@@ -34,10 +34,15 @@ function isVercelOrigin(origin: string): boolean {
 }
 
 function isProductionEnv(): boolean {
+  if (envFlag('ALLOW_LOCALHOST_CORS', false)) return false;
   const denoEnv = (Deno.env.get('DENO_ENV') ?? '').toLowerCase().trim();
   const nodeEnv = (Deno.env.get('NODE_ENV') ?? '').toLowerCase().trim();
   const appEnv = (Deno.env.get('APP_ENV') ?? '').toLowerCase().trim();
-  return denoEnv === 'production' || nodeEnv === 'production' || appEnv === 'production';
+  if (denoEnv === 'production' || nodeEnv === 'production' || appEnv === 'production') {
+    return true;
+  }
+  const sbUrl = (Deno.env.get('SUPABASE_URL') ?? '').toLowerCase().trim();
+  return sbUrl.includes('.supabase.co');
 }
 
 function collectAllowedOrigins(): Set<string> {

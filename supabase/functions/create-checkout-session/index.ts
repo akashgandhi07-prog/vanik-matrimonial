@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { getAdminClient } from '../_shared/dispatch-email.ts';
+import { allowFunctionRateLimit } from '../_shared/function-rate-limit.ts';
 import { checkoutRedirectBase } from '../_shared/site-url.ts';
 import { formatLondonDate, londonDaysBetween } from '../_shared/membership.ts';
 
@@ -62,6 +63,16 @@ Deno.serve(async (req) => {
 
   const admin = getAdminClient();
   const uid = userData.user.id;
+
+  const rateOk = await allowFunctionRateLimit(admin, {
+    scope: 'create_checkout_session',
+    rateKey: uid,
+    maxAttempts: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rateOk) {
+    return jsonResponse({ error: 'Too many checkout attempts. Please wait a few minutes and try again.' }, req, 429);
+  }
 
   let profileId: string | null = null;
   let renewalProfile: { status: string; membership_expires_at: string | null } | null = null;

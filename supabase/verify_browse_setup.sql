@@ -40,8 +40,11 @@ WHERE n.nspname = 'public'
   AND p.proname = 'create_contact_request_atomic'
   AND pg_get_function_identity_arguments(p.oid) = 'uuid, uuid[]';
 
--- 2e) Viewer helper should require a non-null membership expiry for the viewer.
-SELECT pg_get_functiondef('public.viewer_can_browse_gender(uuid, text)'::regprocedure) LIKE '%membership_expires_at IS NOT NULL%'
+-- 2e) Viewer helper should require a current membership (including grace period) for the viewer.
+SELECT (
+    pg_get_functiondef('public.viewer_can_browse_gender(uuid, text)'::regprocedure) LIKE '%membership_is_current%'
+    OR pg_get_functiondef('public.viewer_can_browse_gender(uuid, text)'::regprocedure) LIKE '%membership_expires_at IS NOT NULL%'
+  )
   AS viewer_membership_not_null_guard_present;
 
 -- 3) How many male profiles are listable by data alone (postgres role bypasses RLS).
@@ -51,8 +54,7 @@ FROM public.profiles
 WHERE gender = 'Male'
   AND status = 'active'
   AND hidden_reason IS NULL
-  AND membership_expires_at IS NOT NULL
-  AND membership_expires_at > now();
+  AND public.membership_is_current(membership_expires_at);
 
 -- 3b) List eligible *candidates* for someone who seeks men (same rules as app RLS for “male” listings).
 --    IMPORTANT: filter on profiles.gender = 'Male'. Do NOT filter on seeking_gender here - that column is
@@ -62,8 +64,7 @@ FROM public.profiles
 WHERE gender = 'Male'
   AND status = 'active'
   AND hidden_reason IS NULL
-  AND membership_expires_at IS NOT NULL
-  AND membership_expires_at > now()
+  AND public.membership_is_current(membership_expires_at)
 ORDER BY reference_number
 LIMIT 50;
 
@@ -72,8 +73,7 @@ SELECT gender, count(*) AS n
 FROM public.profiles
 WHERE status = 'active'
   AND hidden_reason IS NULL
-  AND membership_expires_at IS NOT NULL
-  AND membership_expires_at > now()
+  AND public.membership_is_current(membership_expires_at)
 GROUP BY gender
 ORDER BY gender;
 

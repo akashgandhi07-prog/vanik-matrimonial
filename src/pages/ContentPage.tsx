@@ -19,7 +19,7 @@ function useInternalLinkClicks() {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = (e.target as HTMLElement).closest('a');
     const href = a?.getAttribute('href');
-    if (!href || !href.startsWith('/') || href.startsWith('//')) return;
+    if (!href || !/^\/(?!\/|\\)/.test(href) || href.includes('\\')) return;
     e.preventDefault();
     navigate(href);
     window.scrollTo(0, 0);

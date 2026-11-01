@@ -1,3 +1,4 @@
+import DOMPurify from 'isomorphic-dompurify';
 import { Marked, type Links, type Token, type Tokens, type TokensList } from 'marked';
 
 /**
@@ -127,7 +128,7 @@ function extractFaq(tokens: Token[], md: Marked): FaqItem[] {
   const flush = () => {
     if (question && parts.length) {
       const answer: TokensList = Object.assign(answerTokens, { links: {} as Links });
-      out.push({ question, answer: parts.join(' '), html: md.parser(answer) });
+      out.push({ question, answer: parts.join(' '), html: DOMPurify.sanitize(md.parser(answer)) });
     }
     question = null;
     parts = [];
@@ -179,7 +180,7 @@ function build(files: Record<string, string>, kind: ContentKind): ContentEntry[]
       const { md, idFor } = markdownFor();
       const all = md.lexer(body);
       const { body: bodyTokens, faq: faqTokens } = splitFaqSection(all);
-      const html = md.parser(Object.assign(bodyTokens, { links: all.links }));
+      const html = DOMPurify.sanitize(md.parser(Object.assign(bodyTokens, { links: all.links })));
       const seen = new Map<string, number>();
       const toc = bodyTokens
         .filter((t): t is Tokens.Heading => t.type === 'heading' && (t as Tokens.Heading).depth === 2)

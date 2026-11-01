@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   const admin = getAdminClient();
   const { data: profile, error: pe } = await admin
     .from('profiles')
-    .select('id, photo_url, pending_photo_url')
+    .select('id, auth_user_id, gender, photo_url, pending_photo_url')
     .eq('id', profileId)
     .single();
   if (pe || !profile?.pending_photo_url) {
@@ -62,6 +62,24 @@ Deno.serve(async (req) => {
 
   const pendingPath = profile.pending_photo_url as string;
   const oldPath = profile.photo_url as string | null;
+  const authUid = String(profile.auth_user_id ?? '');
+  const genderFolder = profile.gender === 'Female' ? 'Female' : 'Male';
+  const validOwnerPrefix =
+    Boolean(authUid) &&
+    !pendingPath.includes('..') &&
+    !pendingPath.includes('\\') &&
+    (pendingPath.startsWith(`${genderFolder}/${authUid}/`) ||
+      pendingPath.startsWith(`Male/${authUid}/`) ||
+      pendingPath.startsWith(`Female/${authUid}/`) ||
+      pendingPath.startsWith(`${authUid}/`));
+
+  if (!validOwnerPrefix) {
+    await admin
+      .from('profiles')
+      .update({ pending_photo_url: null, photo_status: 'approved' })
+      .eq('id', profileId);
+    return jsonResponse({ error: 'Pending photo path does not belong to this member; cleared.' }, req, 400);
+  }
 
   if (action === 'approve') {
     // Promote the approved photo in profile_photos as well - serve-photo and the

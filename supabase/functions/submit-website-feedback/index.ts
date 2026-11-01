@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeadersFor, jsonResponse } from '../_shared/cors.ts';
 import { dispatchEmail, getAdminClient } from '../_shared/dispatch-email.ts';
+import { allowFunctionRateLimit, clientIp } from '../_shared/function-rate-limit.ts';
 import { stripHtml } from '../_shared/sanitize.ts';
 import { normalizeMailRecipients } from '../_shared/transactional-mail.ts';
 
@@ -64,6 +65,16 @@ Deno.serve(async (req) => {
   }
 
   const admin = getAdminClient();
+  const ip = clientIp(req);
+  const allowed = await allowFunctionRateLimit(admin, {
+    scope: 'submit_website_feedback',
+    rateKey: ip,
+    maxAttempts: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!allowed) {
+    return jsonResponse({ error: 'Too many feedback submissions. Please try again later.' }, req, 429);
+  }
   const userClient = createClient(supabaseUrl, anon, {
     global: { headers: { Authorization: authHeader } },
   });

@@ -63,6 +63,26 @@ Deno.serve(async (req) => {
   const admin = getAdminClient();
   const now = new Date().toISOString();
 
+  const STATUS_RANK: Record<string, number> = {
+    sent: 0,
+    deferred: 1,
+    delivered: 2,
+    failed: 3,
+    bounced: 3,
+  };
+  const { data: currentRow } = await admin
+    .from('email_log')
+    .select('status')
+    .eq('resend_message_id', emailId)
+    .maybeSingle();
+  if (currentRow?.status) {
+    const curRank = STATUS_RANK[String(currentRow.status)] ?? 0;
+    const nextRank = STATUS_RANK[status] ?? 0;
+    if (nextRank < curRank) {
+      return jsonResponse({ ok: true, ignored_downgrade: true }, req);
+    }
+  }
+
   const { error } = await admin
     .from('email_log')
     .update({

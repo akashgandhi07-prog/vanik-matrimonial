@@ -11,8 +11,14 @@ export type ProfileCardProps = {
   location?: string | null;
   religion?: string | null;
   nationality?: string | null;
+  /** Education summary shown as a brief snippet on the card. */
+  education?: string | null;
+  /** Hobbies & interests snippet so personality comes through in anonymous browse. */
+  hobbies?: string | null;
   /** Free-text "Future settlement plans" (e.g. "Want to stay in London"). */
   settlement?: string | null;
+  /** Optional badge when a profile joined recently. */
+  isNew?: boolean;
   /** Click handler for the whole card (e.g. open detail). */
   onOpen?: () => void;
   /** Action buttons rendered at the foot of the card. */
@@ -30,7 +36,10 @@ export default function ProfileCard({
   location,
   religion,
   nationality,
+  education,
+  hobbies,
   settlement,
+  isNew,
   onOpen,
   actions,
   note,
@@ -44,6 +53,8 @@ export default function ProfileCard({
     height,
     nationality ? titleCaseIfAllCaps(nationality) : null,
   ].filter((t): t is string => !!t);
+  const educationText = education?.trim() ? titleCaseIfAllCaps(education.trim()) : null;
+  const hobbiesText = hobbies?.trim() ? sentenceCaseIfAllCaps(hobbies.trim()) : null;
   const settlementText = settlement?.trim() ? sentenceCaseIfAllCaps(settlement.trim()) : null;
 
   const clickable = typeof onOpen === 'function';
@@ -66,7 +77,14 @@ export default function ProfileCard({
       }
     >
       <div className="profile-card-head">
-        <h3 className="profile-card-name">{title}</h3>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <h3 className="profile-card-name">{title}</h3>
+          {isNew && (
+            <span className="profile-tag profile-tag--new" title="Joined recently">
+              New
+            </span>
+          )}
+        </div>
         {subline ? (
           <p className="profile-card-subline">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -98,6 +116,18 @@ export default function ProfileCard({
           </li>
         ))}
       </ul>
+
+      {educationText ? (
+        <p className="profile-card-snippet">
+          <span>Education:</span> {educationText}
+        </p>
+      ) : null}
+
+      {hobbiesText ? (
+        <p className="profile-card-snippet">
+          <span>Interests:</span> {hobbiesText}
+        </p>
+      ) : null}
 
       {settlementText ? (
         <p className="profile-card-settlement">

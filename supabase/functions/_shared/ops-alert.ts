@@ -14,7 +14,8 @@ export async function sendOpsAlert(subject: string, lines: string[]): Promise<vo
     Deno.env.get('OPS_ALERT_EMAIL')?.trim() ||
     Deno.env.get('ADMIN_NOTIFY_EMAIL')?.trim() ||
     'mahesh.gandhi@vanikcouncil.uk';
-  const items = lines.map((l) => `<li>${l}</li>`).join('');
+  const safeLines = lines.map((l) => (/[<>]/.test(l) ? escapeAlertText(l) : l));
+  const items = safeLines.map((l) => `<li>${l}</li>`).join('');
   const html = letterHtml(
     'System alert',
     `<p>Something needs a look on the Vanik Matrimonial Register:</p>
@@ -30,5 +31,10 @@ export async function sendOpsAlert(subject: string, lines: string[]): Promise<vo
 }
 
 export function escapeAlertText(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
