@@ -414,8 +414,9 @@ export default function MemberRequests() {
           request_id: feedbackModal.requestId,
           candidate_id: feedbackModal.candidateId,
           ...(feedbackModal.direction === 'received' ? { direction: 'candidate_on_requester' } : {}),
-          made_contact: fbContact === 'yes',
-          recommend_retain: fbRec === 'yes',
+          // feedback-flow (and the feedback CHECK constraints) take the answer strings, not booleans.
+          made_contact: fbContact,
+          recommend_retain: fbRec,
           notes: sanitizeText(fbNotes, 2000),
           is_flagged: fbFlagged,
         },
@@ -442,7 +443,12 @@ export default function MemberRequests() {
         },
         err instanceof Error ? err.message : String(err)
       );
-      setFbError(err instanceof Error ? err.message : `Could not submit feedback (ref ${code}).`);
+      const msg = err instanceof Error ? err.message : '';
+      setFbError(
+        msg === 'already_submitted'
+          ? 'You have already sent feedback for this person.'
+          : `Could not submit feedback (ref ${code}).`
+      );
     } finally {
       setFbBusy(false);
     }

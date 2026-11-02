@@ -9,6 +9,14 @@ export function MfaEnroll({ onDone }: { onDone: () => void }) {
 
   async function start() {
     setErr(null);
+    // A QR shown earlier but never confirmed leaves an unverified factor with the same
+    // friendly name, and Supabase then refuses a second enrol. Clear those first.
+    const { data: existing } = await supabase.auth.mfa.listFactors();
+    for (const f of existing?.all ?? []) {
+      if (f.factor_type === 'totp' && f.status !== 'verified') {
+        await supabase.auth.mfa.unenroll({ factorId: f.id });
+      }
+    }
     const { data, error } = await supabase.auth.mfa.enroll({
       factorType: 'totp',
       friendlyName: 'Admin authenticator',
