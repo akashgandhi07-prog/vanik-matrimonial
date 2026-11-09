@@ -133,7 +133,31 @@ Deno.serve(async (req) => {
   }
 
   if (!profile) {
-    return jsonResponse({ profile: null, member_private: null }, req);
+    // The register page only learns of a payment from Stripe's return URL, so an applicant who
+    // paid and then lost that page would otherwise be charged again. Hand back their earliest
+    // paid, unused checkout; submit-registration still verifies it with Stripe.
+    const { data: unusedCheckout, error: checkoutErr } = await admin
+      .from('stripe_checkout_sessions')
+      .select('checkout_session_id')
+      .eq('auth_user_id', uid)
+      .eq('purpose', 'registration')
+      .eq('payment_status', 'paid')
+      .is('consumed_at', null)
+      .is('refund_id', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (checkoutErr) {
+      console.error('member-bootstrap unused checkout lookup', checkoutErr.message);
+    }
+    return jsonResponse(
+      {
+        profile: null,
+        member_private: null,
+        unused_registration_checkout_session_id: unusedCheckout?.checkout_session_id ?? null,
+      },
+      req
+    );
   }
 
   const { data: member_private, error: mErr } = await admin

@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
 import { letterHtml } from './resend.ts';
 import { sendTransactionalMail } from './transactional-mail.ts';
 import { publicSiteBaseUrl } from './site-url.ts';
-import { stripHtml } from './sanitize.ts';
+import { escapeHtmlEmail, stripHtml } from './sanitize.ts';
 import { contactDetailsEmailContent, introductionReceivedEmailContent } from './introduction.ts';
 import { formatLondonDate, graceEndsAt, londonDaysBetween } from './membership.ts';
 
@@ -30,10 +30,6 @@ export type EmailType =
   | 'rejection_followup'
   | 'inactivity_nudge'
   | 'website_feedback_submission';
-
-function escapeHtmlEmail(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 function feedbackEmailSection(title: string, text: string): string {
   const body = escapeHtmlEmail(text.trim() || '-');

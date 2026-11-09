@@ -16,3 +16,8 @@ export function stripHtml(input: string | null | undefined, maxLen?: number): st
   if (maxLen != null && s.length > maxLen) s = s.slice(0, maxLen);
   return s;
 }
+
+/** Escape text for interpolation into an HTML email body. */
+export function escapeHtmlEmail(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}

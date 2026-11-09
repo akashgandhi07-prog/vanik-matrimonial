@@ -445,9 +445,15 @@ export default function Register() {
         try {
           const boot = (await invokeFunction('member-bootstrap', {}, { idempotent: true })) as {
             profile?: { status?: string } | null;
+            unused_registration_checkout_session_id?: string | null;
           };
           const st = boot.profile?.status;
           if (st) status = st;
+          // Already paid but lost the Stripe return page: don't ask for the fee again.
+          const unusedCheckout = boot.unused_registration_checkout_session_id;
+          if (unusedCheckout?.startsWith('cs_')) {
+            setStripeCheckoutSessionId((current) => current ?? unusedCheckout);
+          }
         } catch {
           /* edge unavailable or not deployed */
         }
