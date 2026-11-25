@@ -10,6 +10,7 @@ import { escapeHtmlEmail, stripHtml } from '../_shared/sanitize.ts';
 import { normalizeLinkedInUrl } from '../_shared/linkedin.ts';
 import { hashRegistrationSubmitIp } from '../_shared/registration-consent-ip-hash.ts';
 import { verifyPaidCheckoutSession } from '../_shared/stripe.ts';
+import { registrationFeeDue } from '../_shared/registration-fee.ts';
 import { allowFunctionRateLimit, clientIp } from '../_shared/function-rate-limit.ts';
 
 async function checkRateLimit(
@@ -278,7 +279,7 @@ Deno.serve(async (req) => {
   }
 
   const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')?.trim();
-  const paymentRequired = !!stripeSecret && !couponValid && !isResubmit;
+  const paymentRequired = registrationFeeDue({ billingEnabled: !!stripeSecret, couponValid, isResubmit });
   let stripeCheckoutSessionId: string | null = null;
   let paidSession: { amount_total: number | null; currency: string | null } | null = null;
   if (paymentRequired) {

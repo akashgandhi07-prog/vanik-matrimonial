@@ -17,6 +17,7 @@ import {
   isValidUkPostcode,
 } from '../lib/registerValidation';
 import { invokeFunction, invokePublicFunction, supabase } from '../lib/supabase';
+import { registrationFeeDue } from '../../supabase/functions/_shared/registration-fee.ts';
 import { rejectionGuideFromReason } from '../lib/rejectionGuidance';
 import { friendlyUploadError } from '../lib/uploadError';
 import { normalizeLinkedInUrl } from '../lib/linkedin';
@@ -579,13 +580,19 @@ export default function Register() {
     return ageFromDob(form.date_of_birth);
   }, [form.date_of_birth]);
 
+  const feeDue = registrationFeeDue({
+    billingEnabled,
+    couponValid: form.coupon_hint === 'valid',
+    isResubmit: resubmitMode,
+  });
+
   /** Why "Submit registration" is still greyed out. Without this the last step silently blocks. */
   const submitBlockers = useMemo(() => {
     const out: string[] = [];
     if (!form.consent_contact || !form.consent_age || !form.consent_privacy) {
       out.push('tick all three consent boxes above');
     }
-    if (billingEnabled && form.coupon_hint !== 'valid' && !stripeCheckoutSessionId) {
+    if (feeDue && !stripeCheckoutSessionId) {
       out.push('pay the £10 membership fee above (or enter a valid coupon code on the previous step)');
     }
     return out;
@@ -593,8 +600,7 @@ export default function Register() {
     form.consent_contact,
     form.consent_age,
     form.consent_privacy,
-    form.coupon_hint,
-    billingEnabled,
+    feeDue,
     stripeCheckoutSessionId,
   ]);
 
@@ -1551,7 +1557,7 @@ export default function Register() {
                     Invalid or expired code
                   </p>
                 )}
-                {form.coupon_hint !== 'valid' && (
+                {form.coupon_hint !== 'valid' && !resubmitMode && (
                   <p className="field-hint" style={{ marginBottom: 0 }}>
                     {billingEnabled
                       ? 'Membership fee: £10/year. You will pay securely online before submitting your application (final step).'
@@ -2033,7 +2039,7 @@ export default function Register() {
                   </div>
                 )}
               </div>
-              {billingEnabled && form.coupon_hint !== 'valid' && (
+              {feeDue && (
                 <div
                   id="reg-payment-fee"
                   className="register-fieldset"
@@ -2153,7 +2159,7 @@ export default function Register() {
                     !form.consent_contact ||
                     !form.consent_age ||
                     !form.consent_privacy ||
-                    (billingEnabled && form.coupon_hint !== 'valid' && !stripeCheckoutSessionId)
+                    (feeDue && !stripeCheckoutSessionId)
                   }
                 >
                   {submitting ? 'Submitting…' : 'Submit registration'}
